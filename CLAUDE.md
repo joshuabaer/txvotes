@@ -99,3 +99,9 @@ cd worker && npx vitest run
 - Audit runner supports 4 providers: ChatGPT, Gemini, Claude, Grok
 - After deploying, always check `/data-quality` and `/audit` pages for regressions
 - Cron automations stop after election day
+
+## README
+
+- **Always update README.md** when making changes that affect architecture, file structure, test counts, features, or deployment
+- Keep test count (`1232+ tests across 16 test files`) current after adding/removing tests
+- Keep file structure tree current after adding/removing source files
