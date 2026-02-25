@@ -1,4 +1,4 @@
-# Texas Votes
+# US Votes
 
 ## Deployment
 
@@ -16,10 +16,10 @@ After deploying, users may need to visit `https://txvotes.app/app/clear` to flus
 
 | Site | Worker | Config |
 |------|--------|--------|
-| **txvotes.app** (primary) | `txvotes-api` | `wrangler.txvotes.toml` |
+| **txvotes.app** (primary) | `usvotes-api` | `wrangler.txvotes.toml` |
 | **atxvotes.app** (legacy) | `atxvotes-api` | `wrangler.toml` |
 
-Both workers share the same `ELECTION_DATA` KV namespace. Daily cron runs on `atxvotes-api` only; `txvotes-api` reads the same data.
+Both workers share the same `ELECTION_DATA` KV namespace. Daily cron runs on `usvotes-api`; `atxvotes-api` only handles redirects.
 
 ### Secrets (txvotes.app)
 
@@ -35,7 +35,7 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 - **worker/src/pwa.js** — Single-file PWA: HTML, CSS, and JS served inline from the worker
 - **worker/src/pwa-guide.js** — Claude API integration for personalized voting guide generation
 - **worker/src/county-seeder.js** — Data population pipeline for county races/info via Claude + web_search
-- **worker/src/updater.js** — Daily updater cron (runs on atxvotes-api only)
+- **worker/src/updater.js** — Daily updater cron (runs on usvotes-api)
 - **worker/src/audit-runner.js** — Automated AI audit runner (submits methodology export to ChatGPT, Gemini, Grok, Claude APIs for bias scoring)
 - **worker/src/balance-check.js** — API balance/quota checker (`/api/balance-check` endpoint)
 

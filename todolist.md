@@ -244,6 +244,10 @@ _From memory management review (Feb 22). 13 issues found across localStorage, se
 - [x] Cap update and audit log retention — both updater.js and audit-runner.js now delete logs older than 14 days after writing new ones
 - [x] Expand manifest with election-cycle metadata — added electionCycle, electionDate, schemaVersion fields (backward compatible)
 
+### Infrastructure
+
+- [ ] Replace atxvotes-api worker with Cloudflare redirect rule — atxvotes.app only does 301 redirects to txvotes.app now (cron moved to usvotes-api). Replace the worker with a Cloudflare Bulk Redirect rule to eliminate the redundant worker entirely.
+
 ---
 
 ## Done

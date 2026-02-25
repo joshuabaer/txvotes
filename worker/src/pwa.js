@@ -86,7 +86,7 @@ export function handlePWA_Manifest() {
 // MARK: - Service Worker
 
 var SERVICE_WORKER = [
-  "var CACHE='txvotes-v2';",
+  "var CACHE='usvotes-v2';",
   "self.addEventListener('install',function(e){",
   "  self.skipWaiting();",
   "});",

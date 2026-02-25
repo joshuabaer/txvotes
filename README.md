@@ -1,6 +1,6 @@
-# Texas Votes
+# US Votes
 
-**[txvotes.app](https://txvotes.app)** — A personalized AI voting guide for Texas. Walks any voter through a quick interview about their values, looks up their specific ballot, researches every candidate, and generates personalized recommendations with a printable cheat sheet.
+**[txvotes.app](https://txvotes.app)** — A personalized AI voting guide for US elections. Walks any voter through a quick interview about their values, looks up their specific ballot, researches every candidate, and generates personalized recommendations with a printable cheat sheet.
 
 ## How It Works
 
@@ -53,10 +53,10 @@ cd worker && npx wrangler deploy -c wrangler.txvotes.toml
 
 | Site | Worker | Config |
 |------|--------|--------|
-| **txvotes.app** (primary) | `txvotes-api` | `wrangler.txvotes.toml` |
+| **txvotes.app** (primary) | `usvotes-api` | `wrangler.txvotes.toml` |
 | **atxvotes.app** (legacy) | `atxvotes-api` | `wrangler.toml` |
 
-Both workers share the same `ELECTION_DATA` KV namespace. Daily cron runs on `atxvotes-api` only; `txvotes-api` reads the same data.
+Both workers share the same `ELECTION_DATA` KV namespace. Daily cron runs on `usvotes-api`; `atxvotes-api` only handles redirects.
 
 ## Setup
 

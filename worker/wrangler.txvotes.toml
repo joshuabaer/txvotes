@@ -1,4 +1,4 @@
-name = "txvotes-api"
+name = "usvotes-api"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
@@ -20,11 +20,11 @@ id = "1b02b19492f243c8b503d99d0ff11761"
 # Analytics Engine for custom event tracking
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
-dataset = "txvotes_events"
+dataset = "usvotes_events"
 
-# No cron — relies on atxvotes-api's daily updater via shared KV
-# [triggers]
-# crons = ["0 12 * * *"]
+# Daily update cron: 12:00 UTC = 6:00 AM CT
+[triggers]
+crons = ["0 12 * * *"]
 
 # Environment variables (public, non-secret)
 [vars]
