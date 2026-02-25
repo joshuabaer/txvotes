@@ -100,6 +100,13 @@ cd worker && npx vitest run
 - After deploying, always check `/data-quality` and `/audit` pages for regressions
 - Cron automations stop after election day
 
+## Contributing Workflow
+
+- **Branch protection** is enabled on `main` — all changes require a PR with passing CI and 1 approving review
+- **CI** runs via GitHub Actions (`.github/workflows/test.yml`) on every PR and push to main
+- Feature branches → PR → passing tests → review → merge
+- Never push directly to `main` (admins can bypass in emergencies)
+
 ## README
 
 - **Always update README.md** when making changes that affect architecture, file structure, test counts, features, or deployment

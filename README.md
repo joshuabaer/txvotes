@@ -73,6 +73,19 @@ npx wrangler secret put ANTHROPIC_API_KEY -c wrangler.txvotes.toml
 npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 ```
 
+## Contributing
+
+**Branch protection is enabled on `main`.** All changes require a pull request with passing CI and at least one approving review.
+
+**Workflow:**
+1. Create a feature branch: `git checkout -b my-feature`
+2. Make changes and run tests locally: `cd worker && npx vitest run`
+3. Push and open a PR: `git push -u origin my-feature && gh pr create`
+4. CI runs automatically — tests must pass before merging
+5. Get a review, then merge
+
+**CI** runs on every PR and push to main via GitHub Actions (`.github/workflows/test.yml`).
+
 ## Testing
 
 ```bash

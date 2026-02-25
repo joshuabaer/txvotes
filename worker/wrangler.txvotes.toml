@@ -1,4 +1,4 @@
-name = "usvotes-api"
+name = "txvotes-api"  # TODO: rename to usvotes-api after unassigning routes in Cloudflare dashboard
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 

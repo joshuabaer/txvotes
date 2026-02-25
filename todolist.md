@@ -247,6 +247,25 @@ _From memory management review (Feb 22). 13 issues found across localStorage, se
 ### Infrastructure
 
 - [ ] Replace atxvotes-api worker with Cloudflare redirect rule — atxvotes.app only does 301 redirects to txvotes.app now (cron moved to usvotes-api). Replace the worker with a Cloudflare Bulk Redirect rule to eliminate the redundant worker entirely.
+- [ ] Rename txvotes-api worker to usvotes-api in Cloudflare dashboard — config already uses `usvotes-api` but deploying requires the old name since `txvotes-api` owns the routes. Unassign routes from `txvotes-api` in the dashboard, then deploy with `usvotes-api` name. Temporarily reverted in wrangler.txvotes.toml to keep deploys working.
+
+### Collaboration Readiness
+
+#### Branch Protection (P0)
+- [x] Enable branch protection on `main` — require pull requests (no direct pushes), require at least 1 review before merging, require status checks to pass
+
+#### CI / Automated Testing (P0)
+- [x] Add GitHub Actions workflow (`.github/workflows/test.yml`) — runs `vitest run` on every PR and push to main. Blocks merge if tests fail.
+
+#### Secrets Audit (P1)
+- [ ] Add `.env*` to `.gitignore` — repo is public, no `.env` entry exists yet. Prevents accidental secret commits.
+- [ ] Verify `CF_BEACON_TOKEN` in `wrangler.toml` is acceptable to have in plaintext — it's a low-risk analytics beacon token, but confirm it's not sensitive. All real secrets go through `wrangler secret put`.
+
+#### Contributor Onboarding Docs (P1)
+- [ ] Add CONTRIBUTING.md or expand README with partner onboarding — how to get Cloudflare/Anthropic API keys for local dev, which wrangler config to use (`-c wrangler.txvotes.toml` footgun), PR workflow (feature branches → PR → review → merge), how to run tests locally.
+
+#### Deploy Process (P2)
+- [ ] Agree on deploy rules — who can deploy, deploy from main only, manual vs CI-triggered deploys. Currently anyone with `npx wrangler deploy` access can push to production. Consider adding a deploy step to GitHub Actions that triggers on merge to main.
 
 ---
 
