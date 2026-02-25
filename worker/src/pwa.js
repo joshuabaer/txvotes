@@ -2258,7 +2258,7 @@ var APP_JS = [
     "var idx=-1;for(var i=0;i<allRaces.length;i++){if(allRaces[i].office===race.office&&allRaces[i].district===race.district){idx=i;break}}" +
     "var label=race.office+(race.district?' \\u2014 '+race.district:'')+(race.recommendation?' \\u2014 Recommended: '+race.recommendation.candidateName:'');" +
     "var _streamClass=race._streamed?' stream-card-in':'';" +
-    "var _pendingClass=(!race.recommendation&&S._streaming)?' stream-pending':'';" +
+    "var _pendingClass=(!race._streamed&&S._streaming)?' stream-pending':'';" +
     "var h='<div class=\"card card-touch'+_streamClass+_pendingClass+'\" data-action=\"nav\" data-to=\"#/race/'+idx+'\" role=\"link\" aria-label=\"'+esc(label)+'\" tabindex=\"0\">';" +
     // Row 1: office title + badge + chevron
     "h+='<div style=\"display:flex;justify-content:space-between;align-items:center;gap:6px\">';" +
@@ -2306,7 +2306,8 @@ var APP_JS = [
     "var recClass='badge-warn';" +
     "if(prop.recommendation==='Lean Yes')recClass='badge-ok';" +
     "if(prop.recommendation==='Lean No')recClass='badge-bad';" +
-    "var h='<div class=\"card\">';" +
+    "var _pPending=(!prop._streamed&&S._streaming)?' stream-pending':'';" +
+    "var h='<div class=\"card'+_pPending+'\">';" +
     "h+='<div class=\"prop-header\"><div class=\"prop-title\">Prop '+prop.number+': '+esc(prop.title)+'</div>';" +
     "h+='<span class=\"badge '+recClass+'\">'+t(prop.recommendation)+'</span></div>';" +
     "if(LANG==='es'){var tt=t(prop.title);if(tt!==prop.title)h+='<div class=\"prop-trans\">'+esc(tt)+'</div>'}" +
