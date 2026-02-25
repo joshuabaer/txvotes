@@ -82,9 +82,13 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 2. Make changes and run tests locally: `cd worker && npx vitest run`
 3. Push and open a PR: `git push -u origin my-feature && gh pr create`
 4. CI runs automatically — tests must pass before merging
-5. Get a review, then merge
+5. Get a review, then merge — auto-deploy to txvotes.app on merge
 
-**CI** runs on every PR and push to main via GitHub Actions (`.github/workflows/test.yml`).
+**Automation:**
+- **CI** — tests run on every PR and push to main (`.github/workflows/test.yml`)
+- **Auto-deploy** — merges to main deploy to txvotes.app automatically (`.github/workflows/deploy.yml`)
+- **Auto-merge** — PRs merge automatically once CI passes and review is approved
+- **Auto-delete branches** — head branches are cleaned up after merge
 
 ## Testing
 

@@ -2,8 +2,9 @@
 
 ## Deployment
 
-Primary deployment target is **txvotes.app**:
+Primary deployment target is **txvotes.app**. Deploys happen automatically when PRs merge to `main` via GitHub Actions (`.github/workflows/deploy.yml`).
 
+Manual deploy (if needed):
 ```bash
 cd worker && npx wrangler deploy -c wrangler.txvotes.toml
 ```
@@ -104,8 +105,21 @@ cd worker && npx vitest run
 
 - **Branch protection** is enabled on `main` — all changes require a PR with passing CI and 1 approving review
 - **CI** runs via GitHub Actions (`.github/workflows/test.yml`) on every PR and push to main
-- Feature branches → PR → passing tests → review → merge
+- **Auto-deploy** runs via GitHub Actions (`.github/workflows/deploy.yml`) on push to main — deploys to txvotes.app automatically
+- **Auto-merge** is enabled — PRs merge automatically once CI passes and review is approved
+- **Auto-delete branches** — head branches are deleted after PR merge
+- Feature branches → PR → passing tests → review → merge → auto-deploy
 - Never push directly to `main` (admins can bypass in emergencies)
+
+### Claude Code workflow
+
+When making code changes, ALWAYS use the feature branch workflow:
+
+1. Create a feature branch: `git checkout -b descriptive-branch-name`
+2. Make changes and run tests: `cd worker && npx vitest run`
+3. Commit to the feature branch (never directly to `main`)
+4. Push and open a PR: `git push -u origin <branch> && gh pr create`
+5. Do NOT push directly to `main` — branch protection will reject it
 
 ## README
 
