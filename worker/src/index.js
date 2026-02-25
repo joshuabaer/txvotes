@@ -1,6 +1,6 @@
 import { runDailyUpdate, ERROR_LOG_PREFIX, seedBaseline, BASELINE_KEY_PREFIX, BASELINE_LOG_KEY } from "./updater.js";
 import { handlePWA, handlePWA_SW, handlePWA_Manifest, handlePWA_Clear } from "./pwa.js";
-import { handlePWA_Guide, handlePWA_Summary, handleSeedTranslations, buildCondensedBallotDescription } from "./pwa-guide.js";
+import { handlePWA_Guide, handlePWA_GuideStream, handlePWA_Summary, handleSeedTranslations, buildCondensedBallotDescription } from "./pwa-guide.js";
 import { seedFullCounty, seedCountyInfo, seedCountyBallot, seedPrecinctMap, resetProgress as resetSeedProgress } from "./county-seeder.js";
 import { runAudit } from "./audit-runner.js";
 import { checkBallotBalance, formatBalanceSummary } from "./balance-check.js";
@@ -6506,6 +6506,12 @@ export default {
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_Guide(request, env);
+    }
+    if (url.pathname === "/app/api/guide-stream") {
+      const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+      const rl = await checkRateLimit(env, ip, "guide", 10, 60);
+      if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
+      return handlePWA_GuideStream(request, env);
     }
     if (url.pathname === "/app/api/summary") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";

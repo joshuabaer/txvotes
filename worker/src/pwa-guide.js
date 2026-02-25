@@ -1452,4 +1452,741 @@ function scorePartisanBalance(guideResponse, ballot) {
   };
 }
 
-export { sortOrder, parseResponse, filterBallotToDistricts, buildUserPrompt, mergeRecommendations, buildCondensedBallotDescription, callLLM, VALID_LLMS, scorePartisanBalance, CONFIDENCE_SCORES, loadCachedTranslations, hashGuideKey, repairTruncatedGuide };
+// MARK: - Incremental JSON Parser for Streaming
+
+/**
+ * Creates an incremental parser that extracts complete JSON objects from a
+ * streaming text buffer. Uses balanced-brace tracking (same algorithm as
+ * repairTruncatedGuide) to detect complete race/proposition objects.
+ *
+ * @param {object} callbacks - { onProfileSummary(str), onRace(obj), onProposition(obj) }
+ * @returns {object} - { feed(chunk), flush() }
+ */
+function createIncrementalParser(callbacks) {
+  var buffer = "";
+  var phase = "pre"; // pre | races | between | propositions | done
+  var emittedRaces = 0;
+  var emittedProps = 0;
+  var profileEmitted = false;
+  var searchPos = 0;
+
+  function tryExtractProfileSummary() {
+    if (profileEmitted) return;
+    var match = buffer.match(/"profileSummary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (match) {
+      profileEmitted = true;
+      // Unescape JSON string
+      try {
+        var val = JSON.parse('"' + match[1] + '"');
+        callbacks.onProfileSummary(val);
+      } catch (e) {
+        callbacks.onProfileSummary(match[1]);
+      }
+    }
+  }
+
+  function extractObjects(startPos) {
+    var objects = [];
+    var pos = startPos;
+    while (pos < buffer.length) {
+      // Skip whitespace and commas
+      while (pos < buffer.length && /[\s,]/.test(buffer[pos])) pos++;
+      if (pos >= buffer.length || buffer[pos] === "]") break;
+      if (buffer[pos] !== "{") break;
+
+      // Find complete object using balanced-brace tracking
+      var depth = 0;
+      var inString = false;
+      var escaped = false;
+      var objEnd = -1;
+
+      for (var i = pos; i < buffer.length; i++) {
+        var ch = buffer[i];
+        if (escaped) { escaped = false; continue; }
+        if (ch === "\\") { escaped = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) { objEnd = i; break; }
+        }
+      }
+
+      if (objEnd === -1) break; // Incomplete — wait for more data
+
+      var objText = buffer.slice(pos, objEnd + 1);
+      try {
+        var obj = JSON.parse(objText);
+        objects.push({ obj: obj, endPos: objEnd + 1 });
+      } catch (e) {
+        break; // Malformed — stop
+      }
+      pos = objEnd + 1;
+    }
+    return objects;
+  }
+
+  function process() {
+    tryExtractProfileSummary();
+
+    if (phase === "pre" || phase === "races") {
+      // Look for "races":[
+      if (phase === "pre") {
+        var racesIdx = buffer.indexOf('"races"', searchPos);
+        if (racesIdx === -1) return;
+        var arrStart = buffer.indexOf("[", racesIdx);
+        if (arrStart === -1) return;
+        phase = "races";
+        searchPos = arrStart + 1;
+      }
+
+      // Extract complete race objects
+      var raceResults = extractObjects(searchPos);
+      for (var r = 0; r < raceResults.length; r++) {
+        if (raceResults[r].obj.office) {
+          emittedRaces++;
+          callbacks.onRace(raceResults[r].obj);
+        }
+        searchPos = raceResults[r].endPos;
+      }
+
+      // Check if races array is closed
+      var afterRaces = buffer.indexOf("]", searchPos);
+      if (afterRaces !== -1 && raceResults.length === 0) {
+        // The ] might be end of races array — check if no more { before it
+        var nextBrace = buffer.indexOf("{", searchPos);
+        if (nextBrace === -1 || nextBrace > afterRaces) {
+          phase = "between";
+          searchPos = afterRaces + 1;
+        }
+      }
+    }
+
+    if (phase === "between" || phase === "propositions") {
+      if (phase === "between") {
+        var propsIdx = buffer.indexOf('"propositions"', searchPos);
+        if (propsIdx === -1) return;
+        var propArrStart = buffer.indexOf("[", propsIdx);
+        if (propArrStart === -1) return;
+        phase = "propositions";
+        searchPos = propArrStart + 1;
+      }
+
+      var propResults = extractObjects(searchPos);
+      for (var p = 0; p < propResults.length; p++) {
+        if (propResults[p].obj.number !== undefined) {
+          emittedProps++;
+          callbacks.onProposition(propResults[p].obj);
+        }
+        searchPos = propResults[p].endPos;
+      }
+    }
+  }
+
+  return {
+    feed: function(chunk) {
+      buffer += chunk;
+      process();
+    },
+    flush: function() {
+      process();
+      return { buffer: buffer, emittedRaces: emittedRaces, emittedProps: emittedProps };
+    },
+    getBuffer: function() { return buffer; },
+  };
+}
+
+// MARK: - Streaming Claude API Call
+
+/**
+ * Call the Anthropic streaming API. Reads content_block_delta events and
+ * feeds text to the provided onText callback.
+ *
+ * @param {object} env - Worker environment
+ * @param {string} system - System prompt
+ * @param {string} userMessage - User prompt
+ * @param {string} lang - Language code
+ * @param {function} onText - Called with each text chunk
+ * @returns {object} { fullText, stopReason }
+ */
+async function callClaudeStreaming(env, system, userMessage, lang, onText) {
+  var maxTokens = lang === "es" ? 8192 : (lang === "es_cached" ? 4096 : 2048);
+
+  for (var i = 0; i < MODELS.length; i++) {
+    var model = MODELS[i];
+    for (var attempt = 0; attempt <= 1; attempt++) {
+      var res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: model,
+          max_tokens: maxTokens,
+          stream: true,
+          system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+          messages: [{ role: "user", content: userMessage }],
+        }),
+      });
+
+      if (res.status === 200) {
+        // Read SSE stream from Anthropic API
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var fullText = "";
+        var stopReason = null;
+        var sseBuffer = "";
+
+        while (true) {
+          var result = await reader.read();
+          if (result.done) break;
+
+          sseBuffer += decoder.decode(result.value, { stream: true });
+          var lines = sseBuffer.split("\n");
+          // Keep the last potentially incomplete line
+          sseBuffer = lines.pop() || "";
+
+          for (var li = 0; li < lines.length; li++) {
+            var line = lines[li];
+            if (!line.startsWith("data: ")) continue;
+            var payload = line.slice(6);
+            if (payload === "[DONE]") continue;
+
+            try {
+              var evt = JSON.parse(payload);
+              if (evt.type === "content_block_delta" && evt.delta && evt.delta.type === "text_delta") {
+                fullText += evt.delta.text;
+                onText(evt.delta.text);
+              } else if (evt.type === "message_delta" && evt.delta && evt.delta.stop_reason) {
+                stopReason = evt.delta.stop_reason;
+              }
+            } catch (e) { /* skip malformed event */ }
+          }
+        }
+
+        return { fullText: fullText, stopReason: stopReason, maxTokens: maxTokens, model: model };
+      }
+
+      if (res.status === 429) {
+        var retryAfter = parseInt(res.headers.get("retry-after") || "0", 10);
+        var wait = Math.max(retryAfter, attempt === 0 ? 5 : 15) * 1000;
+        if (attempt === 0) {
+          await new Promise(function(r) { setTimeout(r, wait); });
+          continue;
+        }
+        if (i < MODELS.length - 1) break;
+        throw new Error("Rate limited — please try again in a minute");
+      }
+
+      if (res.status === 529) {
+        if (attempt === 0) {
+          await new Promise(function(r) { setTimeout(r, 2000); });
+          continue;
+        }
+        if (i < MODELS.length - 1) break;
+        throw new Error("All models overloaded");
+      }
+
+      var body = await res.text();
+      if (i < MODELS.length - 1) break;
+      throw new Error("API error " + res.status + ": " + body.slice(0, 200));
+    }
+  }
+  throw new Error("All models failed");
+}
+
+// MARK: - SSE Stream Handler
+
+function sseEvent(type, data) {
+  return "event: " + type + "\ndata: " + JSON.stringify(data) + "\n\n";
+}
+
+/**
+ * Streaming guide generation handler. Emits SSE events as race recommendations
+ * are generated by the LLM. Compatible with EventSource or fetch+getReader.
+ */
+export async function handlePWA_GuideStream(request, env) {
+  var requestUrl = new URL(request.url);
+  var nocache = requestUrl.searchParams.get("nocache") === "1";
+
+  var body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return new Response("event: error\ndata: " + JSON.stringify({ error: "Invalid request body" }) + "\n\n", {
+      status: 400,
+      headers: { "Content-Type": "text/event-stream", "Access-Control-Allow-Origin": "*" },
+    });
+  }
+
+  var party = body.party;
+  var profile = body.profile;
+  var districts = body.districts;
+  var lang = body.lang;
+  var countyFips = body.countyFips;
+  var readingLevel = body.readingLevel;
+  var llm = body.llm;
+
+  if (!party || !["republican", "democrat"].includes(party)) {
+    return new Response("event: error\ndata: " + JSON.stringify({ error: "party required (republican|democrat)" }) + "\n\n", {
+      status: 400,
+      headers: { "Content-Type": "text/event-stream", "Access-Control-Allow-Origin": "*" },
+    });
+  }
+  if (!profile) {
+    return new Response("event: error\ndata: " + JSON.stringify({ error: "profile required" }) + "\n\n", {
+      status: 400,
+      headers: { "Content-Type": "text/event-stream", "Access-Control-Allow-Origin": "*" },
+    });
+  }
+
+  // Create the SSE stream
+  var streamController;
+  var stream = new ReadableStream({
+    start: function(controller) { streamController = controller; },
+  });
+  var encoder = new TextEncoder();
+
+  function write(text) {
+    try { streamController.enqueue(encoder.encode(text)); } catch (e) { /* stream closed */ }
+  }
+
+  function closeStream() {
+    try { streamController.close(); } catch (e) { /* already closed */ }
+  }
+
+  // Run the guide generation in the background of the stream
+  var streamPromise = (async function() {
+    try {
+      // Parallel KV reads
+      var [statewideRaw, legacyRaw, countyRaw, manifestRaw] = await Promise.all([
+        env.ELECTION_DATA.get("ballot:statewide:" + party + "_primary_2026"),
+        env.ELECTION_DATA.get("ballot:" + party + "_primary_2026"),
+        countyFips
+          ? env.ELECTION_DATA.get("ballot:county:" + countyFips + ":" + party + "_primary_2026")
+          : Promise.resolve(null),
+        env.ELECTION_DATA.get("manifest"),
+      ]);
+
+      var raw = statewideRaw || legacyRaw;
+      if (!raw) {
+        write(sseEvent("error", { error: "No ballot data available" }));
+        closeStream();
+        return;
+      }
+      var ballot = JSON.parse(raw);
+
+      // Merge county races
+      var countyBallotAvailable = false;
+      if (countyFips && countyRaw) {
+        try {
+          var countyBallot = JSON.parse(countyRaw);
+          var seenRaces = new Set(ballot.races.map(function(r) { return r.office + "|" + (r.district || ""); }));
+          var dedupedCounty = (countyBallot.races || []).filter(function(r) { return !seenRaces.has(r.office + "|" + (r.district || "")); });
+          ballot.races = ballot.races.concat(dedupedCounty);
+          if (countyBallot.propositions) {
+            ballot.propositions = (ballot.propositions || []).concat(countyBallot.propositions);
+          }
+          countyBallotAvailable = true;
+        } catch (e) { /* statewide-only */ }
+      }
+
+      // Filter by districts
+      if (districts) {
+        ballot = filterBallotToDistricts(ballot, districts);
+      }
+
+      // Extract data freshness
+      var dataUpdatedAt = null;
+      try {
+        if (manifestRaw) {
+          var manifest = JSON.parse(manifestRaw);
+          if (manifest[party] && manifest[party].updatedAt) {
+            dataUpdatedAt = manifest[party].updatedAt;
+          }
+        }
+      } catch (e) { /* non-fatal */ }
+
+      // Emit meta event with ballot skeleton (no recommendations)
+      var ballotSkeleton = JSON.parse(JSON.stringify(ballot));
+      write(sseEvent("meta", {
+        party: party,
+        ballot: ballotSkeleton,
+        cached: false,
+        countyBallotAvailable: countyFips ? countyBallotAvailable : null,
+      }));
+
+      // Check guide cache
+      var cacheKey = null;
+      if (!nocache) {
+        try {
+          var hash = await hashGuideKey(profile, ballot, party, lang, readingLevel, llm);
+          cacheKey = "guide_cache:" + hash;
+          var cachedRaw = await env.ELECTION_DATA.get(cacheKey);
+          if (cachedRaw) {
+            var cachedResult = JSON.parse(cachedRaw);
+            console.log("Guide stream cache HIT for " + party);
+            // Emit all events from cached result
+            if (cachedResult.profileSummary) {
+              write(sseEvent("profile", { profileSummary: cachedResult.profileSummary }));
+            }
+            if (cachedResult.ballot && cachedResult.ballot.races) {
+              for (var cr = 0; cr < cachedResult.ballot.races.length; cr++) {
+                var cachedRace = cachedResult.ballot.races[cr];
+                if (cachedRace.recommendation) {
+                  write(sseEvent("race", {
+                    office: cachedRace.office,
+                    district: cachedRace.district || null,
+                    recommendation: cachedRace.recommendation,
+                    candidates: cachedRace.candidates,
+                  }));
+                }
+              }
+            }
+            if (cachedResult.ballot && cachedResult.ballot.propositions) {
+              for (var cp = 0; cp < cachedResult.ballot.propositions.length; cp++) {
+                var cachedProp = cachedResult.ballot.propositions[cp];
+                if (cachedProp.recommendation) {
+                  write(sseEvent("proposition", {
+                    number: cachedProp.number,
+                    title: cachedProp.title,
+                    recommendation: cachedProp.recommendation,
+                    reasoning: cachedProp.reasoning,
+                    caveats: cachedProp.caveats || null,
+                    confidence: cachedProp.confidence || null,
+                  }));
+                }
+              }
+            }
+            write(sseEvent("complete", {
+              balanceScore: cachedResult.balanceScore,
+              dataUpdatedAt: cachedResult.dataUpdatedAt,
+              llm: cachedResult.llm || "claude",
+              cached: true,
+            }));
+            closeStream();
+            return;
+          }
+        } catch (e) {
+          console.log("Guide stream cache lookup error:", e.message);
+          cacheKey = null;
+        }
+      }
+
+      // Load cached translations for Spanish
+      var cachedTranslations = null;
+      if (lang === "es") {
+        cachedTranslations = await loadCachedTranslations(env, party, countyFips);
+      }
+
+      // Build ballot description
+      var ballotDesc;
+      var ballotDescCacheKey = null;
+      try {
+        var ballotDescData = new TextEncoder().encode(JSON.stringify({
+          races: ballot.races.map(function(r) {
+            return r.office + "|" + (r.district || "") + "|" +
+              r.candidates.map(function(c) { return c.name + (c.withdrawn ? "W" : "") + (c.isIncumbent ? "I" : ""); }).join(",");
+          }).sort(),
+          props: (ballot.propositions || []).map(function(p) { return p.number + ":" + p.title; }),
+          electionName: ballot.electionName,
+        }));
+        var ballotDescHashBuf = await crypto.subtle.digest("SHA-256", ballotDescData);
+        var ballotDescHashArr = new Uint8Array(ballotDescHashBuf);
+        var ballotDescHex = "";
+        for (var h = 0; h < ballotDescHashArr.length; h++) {
+          ballotDescHex += ballotDescHashArr[h].toString(16).padStart(2, "0");
+        }
+        ballotDescCacheKey = "ballot_desc:" + ballotDescHex;
+        var cachedDesc = await env.ELECTION_DATA.get(ballotDescCacheKey);
+        if (cachedDesc) {
+          ballotDesc = cachedDesc;
+        }
+      } catch (e) {
+        ballotDescCacheKey = null;
+      }
+      if (!ballotDesc) {
+        ballotDesc = buildCondensedBallotDescription(ballot);
+        if (ballotDescCacheKey) {
+          env.ELECTION_DATA.put(ballotDescCacheKey, ballotDesc, { expirationTtl: 3600 })
+            .catch(function(e) { console.log("Ballot desc cache write error:", e.message); });
+        }
+      }
+
+      var userPrompt = buildUserPrompt(profile, ballotDesc, ballot, party, lang, readingLevel, cachedTranslations);
+      var effectiveLang = (lang === "es" && cachedTranslations) ? "es_cached" : lang;
+
+      // Non-Claude backends: use existing non-streaming path, emit events from parsed result
+      if (llm && llm !== "claude") {
+        var responseText = await callLLM(env, SYSTEM_PROMPT, userPrompt, effectiveLang, llm);
+        var guideResponse = parseResponse(responseText);
+        var mergedBallot = mergeRecommendations(guideResponse, ballot, lang, cachedTranslations);
+        var balanceScore = scorePartisanBalance(guideResponse, ballot);
+
+        if (guideResponse.profileSummary) {
+          write(sseEvent("profile", { profileSummary: guideResponse.profileSummary }));
+        }
+        for (var nr = 0; nr < mergedBallot.races.length; nr++) {
+          var nrace = mergedBallot.races[nr];
+          if (nrace.recommendation) {
+            write(sseEvent("race", {
+              office: nrace.office,
+              district: nrace.district || null,
+              recommendation: nrace.recommendation,
+              candidates: nrace.candidates,
+            }));
+          }
+        }
+        for (var np = 0; np < (mergedBallot.propositions || []).length; np++) {
+          var nprop = mergedBallot.propositions[np];
+          if (nprop.recommendation) {
+            write(sseEvent("proposition", {
+              number: nprop.number,
+              title: nprop.title,
+              recommendation: nprop.recommendation,
+              reasoning: nprop.reasoning,
+              caveats: nprop.caveats || null,
+              confidence: nprop.confidence || null,
+            }));
+          }
+        }
+
+        var nonStreamResult = {
+          ballot: mergedBallot,
+          profileSummary: guideResponse.profileSummary,
+          llm: llm,
+          countyBallotAvailable: countyFips ? countyBallotAvailable : null,
+          dataUpdatedAt: dataUpdatedAt,
+          balanceScore: balanceScore,
+          skewNote: balanceScore.skewNote,
+          translationsCached: lang === "es" ? !!cachedTranslations : null,
+          cached: false,
+        };
+        if (cacheKey) {
+          env.ELECTION_DATA.put(cacheKey, JSON.stringify(nonStreamResult), { expirationTtl: 3600 })
+            .catch(function(e) { console.log("Guide cache write error:", e.message); });
+        }
+        write(sseEvent("complete", {
+          balanceScore: balanceScore,
+          dataUpdatedAt: dataUpdatedAt,
+          llm: llm,
+          cached: false,
+        }));
+        closeStream();
+        return;
+      }
+
+      // Claude streaming path
+      var emittedRaceOffices = new Set();
+      var emittedPropNumbers = new Set();
+
+      var parser = createIncrementalParser({
+        onProfileSummary: function(summary) {
+          write(sseEvent("profile", { profileSummary: summary }));
+        },
+        onRace: function(raceObj) {
+          // Merge this race recommendation into ballot and emit
+          var raceKey = raceObj.office + "|" + (raceObj.district || "");
+          if (emittedRaceOffices.has(raceKey)) return;
+          emittedRaceOffices.add(raceKey);
+
+          // Find matching ballot race
+          for (var br = 0; br < ballot.races.length; br++) {
+            var ballotRace = ballot.races[br];
+            if (ballotRace.office === raceObj.office &&
+                (ballotRace.district || null) === (raceObj.district || null)) {
+              // Build merged race data
+              var mergedCandidates = JSON.parse(JSON.stringify(ballotRace.candidates));
+              var recommendation = null;
+              for (var mc = 0; mc < mergedCandidates.length; mc++) {
+                mergedCandidates[mc].isRecommended = false;
+              }
+              for (var mc2 = 0; mc2 < mergedCandidates.length; mc2++) {
+                if (mergedCandidates[mc2].name === raceObj.recommendedCandidate && !mergedCandidates[mc2].withdrawn) {
+                  mergedCandidates[mc2].isRecommended = true;
+                  recommendation = {
+                    candidateId: mergedCandidates[mc2].id,
+                    candidateName: raceObj.recommendedCandidate,
+                    reasoning: raceObj.reasoning,
+                    matchFactors: raceObj.matchFactors || [],
+                    strategicNotes: raceObj.strategicNotes || null,
+                    caveats: raceObj.caveats || null,
+                    confidence: raceObj.confidence || "Good Match",
+                  };
+                  break;
+                }
+              }
+              write(sseEvent("race", {
+                office: ballotRace.office,
+                district: ballotRace.district || null,
+                recommendation: recommendation,
+                candidates: mergedCandidates,
+              }));
+              break;
+            }
+          }
+        },
+        onProposition: function(propObj) {
+          if (emittedPropNumbers.has(propObj.number)) return;
+          emittedPropNumbers.add(propObj.number);
+          write(sseEvent("proposition", {
+            number: propObj.number,
+            recommendation: propObj.recommendation || "Your Call",
+            reasoning: propObj.reasoning,
+            caveats: propObj.caveats || null,
+            confidence: propObj.confidence || null,
+          }));
+        },
+      });
+
+      var streamResult = await callClaudeStreaming(env, SYSTEM_PROMPT, userPrompt, effectiveLang, function(chunk) {
+        parser.feed(chunk);
+      });
+
+      parser.flush();
+
+      // Handle truncation
+      var fullText = streamResult.fullText;
+      if (streamResult.stopReason === "max_tokens") {
+        var repaired = repairTruncatedGuide(fullText);
+        if (repaired) {
+          // Emit any races/props from repaired that weren't already streamed
+          var repairedRaces = repaired.races || [];
+          for (var rr = 0; rr < repairedRaces.length; rr++) {
+            var rrKey = repairedRaces[rr].office + "|" + (repairedRaces[rr].district || "");
+            if (!emittedRaceOffices.has(rrKey)) {
+              parser.feed(""); // Trigger re-check not needed, just emit directly
+              emittedRaceOffices.add(rrKey);
+              for (var rb = 0; rb < ballot.races.length; rb++) {
+                if (ballot.races[rb].office === repairedRaces[rr].office &&
+                    (ballot.races[rb].district || null) === (repairedRaces[rr].district || null)) {
+                  var rMergedCands = JSON.parse(JSON.stringify(ballot.races[rb].candidates));
+                  var rRec = null;
+                  for (var rmc = 0; rmc < rMergedCands.length; rmc++) {
+                    rMergedCands[rmc].isRecommended = false;
+                    if (rMergedCands[rmc].name === repairedRaces[rr].recommendedCandidate && !rMergedCands[rmc].withdrawn) {
+                      rMergedCands[rmc].isRecommended = true;
+                      rRec = {
+                        candidateId: rMergedCands[rmc].id,
+                        candidateName: repairedRaces[rr].recommendedCandidate,
+                        reasoning: repairedRaces[rr].reasoning,
+                        matchFactors: repairedRaces[rr].matchFactors || [],
+                        strategicNotes: repairedRaces[rr].strategicNotes || null,
+                        caveats: repairedRaces[rr].caveats || null,
+                        confidence: repairedRaces[rr].confidence || "Good Match",
+                        _truncated: true,
+                      };
+                    }
+                  }
+                  write(sseEvent("race", {
+                    office: ballot.races[rb].office,
+                    district: ballot.races[rb].district || null,
+                    recommendation: rRec,
+                    candidates: rMergedCands,
+                    _truncated: true,
+                  }));
+                  break;
+                }
+              }
+            }
+          }
+          fullText = JSON.stringify(repaired);
+        } else if (streamResult.maxTokens < 8192) {
+          // Retry non-streaming with doubled tokens
+          console.log("[STREAM RETRY] Retrying non-streaming with doubled max_tokens");
+          var retryText = await callClaude(env, SYSTEM_PROMPT, userPrompt, effectiveLang, null, Math.min(streamResult.maxTokens * 2, 8192));
+          fullText = retryText;
+          var retryGuide = parseResponse(retryText);
+          var retryMerged = mergeRecommendations(retryGuide, ballot, lang, cachedTranslations);
+          // Emit any missing races/props from retry
+          for (var rtr = 0; rtr < retryMerged.races.length; rtr++) {
+            var rtKey = retryMerged.races[rtr].office + "|" + (retryMerged.races[rtr].district || "");
+            if (!emittedRaceOffices.has(rtKey) && retryMerged.races[rtr].recommendation) {
+              write(sseEvent("race", {
+                office: retryMerged.races[rtr].office,
+                district: retryMerged.races[rtr].district || null,
+                recommendation: retryMerged.races[rtr].recommendation,
+                candidates: retryMerged.races[rtr].candidates,
+              }));
+            }
+          }
+          for (var rtp = 0; rtp < (retryMerged.propositions || []).length; rtp++) {
+            var rtProp = retryMerged.propositions[rtp];
+            if (!emittedPropNumbers.has(rtProp.number) && rtProp.recommendation) {
+              write(sseEvent("proposition", {
+                number: rtProp.number,
+                recommendation: rtProp.recommendation,
+                reasoning: rtProp.reasoning,
+                caveats: rtProp.caveats || null,
+                confidence: rtProp.confidence || null,
+              }));
+            }
+          }
+          if (retryGuide.profileSummary && !emittedRaceOffices.size) {
+            write(sseEvent("profile", { profileSummary: retryGuide.profileSummary }));
+          }
+        }
+      }
+
+      // Parse full response for caching and balance scoring
+      var guideResponseFinal;
+      try {
+        guideResponseFinal = parseResponse(fullText);
+      } catch (e) {
+        guideResponseFinal = { races: [], propositions: [] };
+      }
+      var mergedBallotFinal = mergeRecommendations(guideResponseFinal, ballot, lang, cachedTranslations);
+      var balanceScoreFinal = scorePartisanBalance(guideResponseFinal, ballot);
+
+      if (balanceScoreFinal.flags.length > 0) {
+        console.log("Partisan balance flags for " + party + " stream guide:", balanceScoreFinal.flags.join("; "));
+      }
+
+      // Cache the full result
+      var fullResult = {
+        ballot: mergedBallotFinal,
+        profileSummary: guideResponseFinal.profileSummary,
+        llm: llm || "claude",
+        countyBallotAvailable: countyFips ? countyBallotAvailable : null,
+        dataUpdatedAt: dataUpdatedAt,
+        balanceScore: balanceScoreFinal,
+        skewNote: balanceScoreFinal.skewNote,
+        translationsCached: lang === "es" ? !!cachedTranslations : null,
+        cached: false,
+      };
+      if (cacheKey) {
+        env.ELECTION_DATA.put(cacheKey, JSON.stringify(fullResult), { expirationTtl: 3600 })
+          .catch(function(e) { console.log("Guide stream cache write error:", e.message); });
+      }
+
+      write(sseEvent("complete", {
+        balanceScore: balanceScoreFinal,
+        dataUpdatedAt: dataUpdatedAt,
+        llm: llm || "claude",
+        cached: false,
+      }));
+      closeStream();
+    } catch (err) {
+      console.error("Guide stream error:", err);
+      write(sseEvent("error", { error: err.message || "Guide generation failed" }));
+      closeStream();
+    }
+  })();
+
+  // Return the SSE response immediately — the async function runs via waitUntil-like behavior
+  // The stream will be written to as data arrives
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+export { sortOrder, parseResponse, filterBallotToDistricts, buildUserPrompt, mergeRecommendations, buildCondensedBallotDescription, callLLM, VALID_LLMS, scorePartisanBalance, CONFIDENCE_SCORES, loadCachedTranslations, hashGuideKey, repairTruncatedGuide, createIncrementalParser, callClaudeStreaming };

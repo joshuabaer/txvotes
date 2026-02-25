@@ -46,7 +46,7 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 cd worker && npx vitest run
 ```
 
-1335 tests across 15 test files:
+1358 tests across 16 test files:
 
 - **interview-flow.test.js** — Interview flow UI tests (happy-dom + vitest)
 - **index-helpers.test.js** — Helper functions, route patterns, candidate profiles, data quality
@@ -62,6 +62,7 @@ cd worker && npx vitest run
 - **token-budget.test.js** — Token budget calculations, large-ballot fixtures, truncation handling
 - **new-features.test.js** — Confidence indicators, caching, novelty warnings, data quality page, ballot size checks
 - **pwa-ui-features.test.js** — PWA UI feature tests, deep dive framing/balance, error handling, Spanish translations
+- **streaming.test.js** — SSE streaming: incremental JSON parser, streaming handler, cache hits, event format
 - **smoke.test.js** — Basic smoke tests for deployment validation
 
 ## Key Patterns
@@ -124,5 +125,5 @@ When making code changes, ALWAYS use the feature branch workflow:
 ## README
 
 - **Always update README.md** when making changes that affect architecture, file structure, test counts, features, or deployment
-- Keep test count (`1232+ tests across 16 test files`) current after adding/removing tests
+- Keep test count (`1255+ tests across 17 test files`) current after adding/removing tests
 - Keep file structure tree current after adding/removing source files

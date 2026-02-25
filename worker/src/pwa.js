@@ -402,6 +402,11 @@ var CSS = [
   "@keyframes tugRight{0%,100%{transform:scale(1.35)}50%{transform:scale(1)}}",
   ".loading-msg{animation:fadeIn .4s ease}",
   "@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}",
+  "@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}",
+  ".stream-card-in{animation:cardIn .3s ease-out}",
+  ".stream-bar{background:linear-gradient(90deg,var(--blue),var(--red),var(--blue));background-size:200% 100%;animation:streamShimmer 2s linear infinite;color:#fff;text-align:center;padding:10px 16px;border-radius:12px;margin-bottom:12px;font-size:14px;font-weight:600}",
+  "@keyframes streamShimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}",
+  ".stream-pending{opacity:.5;border:1px dashed var(--border2)}",
   ".dots{display:flex;gap:6px;justify-content:center;margin-top:16px}",
   ".dot{font-size:14px;color:var(--border);line-height:1}",
   ".dot-done-red{color:#c62626}",
@@ -2036,6 +2041,10 @@ var APP_JS = [
     "var _dua=S.selectedParty==='democrat'?S.demDataUpdatedAt:S.repDataUpdatedAt;" +
     "if(_dua){h+='<div style=\"font-size:12px;color:var(--text2);margin-top:8px\">'+t('Data last verified')+': '+fmtDate(_dua)+'</div>'}" +
     "h+='</div>';" +
+    // Streaming indicator
+    "if(S._streaming){" +
+      "h+='<div class=\"stream-bar\">'+t('Analyzing your ballot...')+'</div>'" +
+    "}" +
     // Stale ballot data banner (shown when data is >48 hours old)
     "if(S.staleBallot){" +
       "h+='<div style=\"background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text2);cursor:pointer\" data-action=\"refresh-ballots\">';" +
@@ -2240,7 +2249,9 @@ var APP_JS = [
   "function renderRaceCard(race,allRaces){" +
     "var idx=-1;for(var i=0;i<allRaces.length;i++){if(allRaces[i].office===race.office&&allRaces[i].district===race.district){idx=i;break}}" +
     "var label=race.office+(race.district?' \\u2014 '+race.district:'')+(race.recommendation?' \\u2014 Recommended: '+race.recommendation.candidateName:'');" +
-    "var h='<div class=\"card card-touch\" data-action=\"nav\" data-to=\"#/race/'+idx+'\" role=\"link\" aria-label=\"'+esc(label)+'\" tabindex=\"0\">';" +
+    "var _streamClass=race._streamed?' stream-card-in':'';" +
+    "var _pendingClass=(!race.recommendation&&S._streaming)?' stream-pending':'';" +
+    "var h='<div class=\"card card-touch'+_streamClass+_pendingClass+'\" data-action=\"nav\" data-to=\"#/race/'+idx+'\" role=\"link\" aria-label=\"'+esc(label)+'\" tabindex=\"0\">';" +
     // Row 1: office title + badge + chevron
     "h+='<div style=\"display:flex;justify-content:space-between;align-items:center;gap:6px\">';" +
     "h+='<div style=\"flex:1;min-width:0;font-size:14px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(race.isKeyRace?'<span class=\"star\">\u2B50</span> ':'')+esc(race.office)+(race.district?' \\u2014 '+esc(race.district):'')+'</div>';" +
@@ -3165,10 +3176,113 @@ var APP_JS = [
     "if(S.readingLevel===7)return cowboy[key]||t(key);" +
     "return t(key)" +
   "}",
+  // ============ SSE STREAMING GUIDE ============
+  "function handleGuideEvent(party,type,data){" +
+    "if(type==='meta'){" +
+      "if(party==='republican'){S.repBallot=data.ballot;S.repCountyBallotAvailable=data.countyBallotAvailable}" +
+      "else{S.demBallot=data.ballot;S.demCountyBallotAvailable=data.countyBallotAvailable}" +
+    "}" +
+    "else if(type==='profile'){" +
+      "if(!S.summary)S.summary=data.profileSummary;" +
+      "if(party==='republican')S._repSummary=data.profileSummary;" +
+      "else S._demSummary=data.profileSummary" +
+    "}" +
+    "else if(type==='race'){" +
+      // Merge the streamed race into the ballot
+      "var b=party==='republican'?S.repBallot:S.demBallot;" +
+      "if(b&&b.races){" +
+        "for(var i=0;i<b.races.length;i++){" +
+          "if(b.races[i].office===data.office&&(b.races[i].district||null)===(data.district||null)){" +
+            "if(data.candidates)b.races[i].candidates=data.candidates;" +
+            "b.races[i].recommendation=data.recommendation;" +
+            "b.races[i]._streamed=true;" +
+            "break" +
+          "}" +
+        "}" +
+      "}" +
+    "}" +
+    "else if(type==='proposition'){" +
+      "var bp=party==='republican'?S.repBallot:S.demBallot;" +
+      "if(bp&&bp.propositions){" +
+        "for(var j=0;j<bp.propositions.length;j++){" +
+          "if(bp.propositions[j].number===data.number){" +
+            "bp.propositions[j].recommendation=data.recommendation;" +
+            "bp.propositions[j].reasoning=data.reasoning;" +
+            "bp.propositions[j].caveats=data.caveats;" +
+            "if(data.confidence)bp.propositions[j].confidence=data.confidence;" +
+            "bp.propositions[j]._streamed=true;" +
+            "break" +
+          "}" +
+        "}" +
+      "}" +
+    "}" +
+    "else if(type==='complete'){" +
+      "if(party==='republican'){S.repDataUpdatedAt=data.dataUpdatedAt;S._repBalance=data.balanceScore}" +
+      "else{S.demDataUpdatedAt=data.dataUpdatedAt;S._demBalance=data.balanceScore}" +
+    "}" +
+  "}",
+
+  "function streamGuide(party,profile,districts,cFips,llm){" +
+    "return new Promise(function(resolve,reject){" +
+      "var body=JSON.stringify({party:party,profile:profile,districts:districts,lang:LANG,countyFips:cFips,readingLevel:S.readingLevel,llm:llm});" +
+      "fetch('/app/api/guide-stream',{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(function(res){" +
+        "if(!res.ok||!res.body){" +
+          // Fallback to non-streaming endpoint
+          "fetch('/app/api/guide',{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(function(r){return r.json()}).then(resolve).catch(reject);return" +
+        "}" +
+        "var reader=res.body.getReader();" +
+        "var decoder=new TextDecoder();" +
+        "var buf='';" +
+        "var done=false;" +
+        "var hasError=false;" +
+        "function read(){" +
+          "reader.read().then(function(result){" +
+            "if(result.done){" +
+              "if(!done)resolve({_streamed:true,party:party});" +
+              "return" +
+            "}" +
+            "buf+=decoder.decode(result.value,{stream:true});" +
+            // Parse SSE events from buffer
+            "var parts=buf.split('\\n\\n');" +
+            "buf=parts.pop()||'';" +
+            "for(var i=0;i<parts.length;i++){" +
+              "var evt=parts[i];" +
+              "var evType=null,evData=null;" +
+              "var lines=evt.split('\\n');" +
+              "for(var j=0;j<lines.length;j++){" +
+                "if(lines[j].indexOf('event: ')===0)evType=lines[j].slice(7);" +
+                "else if(lines[j].indexOf('data: ')===0)evData=lines[j].slice(6)" +
+              "}" +
+              "if(evType&&evData){" +
+                "try{var parsed=JSON.parse(evData)}catch(e){continue}" +
+                "if(evType==='error'){hasError=true;resolve({error:parsed.error,party:party});return}" +
+                "handleGuideEvent(party,evType,parsed);" +
+                // Transition to ballot view on first meta event
+                "if(evType==='meta'&&S.isLoading){" +
+                  "S._streaming=true;S.isLoading=false;S.guideComplete=true;" +
+                  // Set default selected party
+                  "if(!S.selectedParty||S.selectedParty!==party){" +
+                    "if(S.spectrum==='Progressive'||S.spectrum==='Liberal')S.selectedParty='democrat';" +
+                    "else if(S.spectrum==='Conservative'||S.spectrum==='Libertarian')S.selectedParty='republican';" +
+                    "else S.selectedParty=party" +
+                  "}" +
+                  "location.hash='#/ballot'" +
+                "}" +
+                "render()" +
+              "}" +
+            "}" +
+            "if(!hasError)read()" +
+          "}).catch(function(err){if(!done)reject(err)})" +
+        "}" +
+        "read()" +
+      "}).catch(reject)" +
+    "})" +
+  "}",
+
   "function buildGuide(){" +
     "trk('interview_complete',{d1:''+S.readingLevel,d2:S.spectrum,ms:Date.now()-(S._iStart||Date.now())});" +
     "trk('guide_start');" +
-    "S.phase=8;S.error=null;S.loadPhase=0;S.loadMsg=lm('Finding your ballot...');S.isLoading=true;render();" +
+    "S.phase=8;S.error=null;S.loadPhase=0;S.loadMsg=lm('Finding your ballot...');S.isLoading=true;S._streaming=false;render();" +
     "doGuide();" +
   "}",
 
@@ -3188,63 +3302,58 @@ var APP_JS = [
       "var demFirst=false;" +
       "if(S.spectrum==='Progressive'||S.spectrum==='Liberal')demFirst=true;" +
       "else if(S.spectrum==='Moderate'||S.spectrum==='Independent / Issue-by-Issue')demFirst=Math.random()<0.5;" +
-      // Step 3: Generate both ballots in parallel
       "S.loadPhase=2;S.loadMsg=lm('Researching candidates...');render();" +
       "var cFips=S.districts&&S.districts.countyFips?S.districts.countyFips:null;" +
       "var _llm=window._llmOverride||null;" +
-      "var repP=fetch('/app/api/guide',{method:'POST',headers:{'Content-Type':'application/json'}," +
-        "body:JSON.stringify({party:'republican',profile:profile,districts:S.districts,lang:LANG,countyFips:cFips,readingLevel:S.readingLevel,llm:_llm})}).then(function(r){return r.json()});" +
-      "var demP=fetch('/app/api/guide',{method:'POST',headers:{'Content-Type':'application/json'}," +
-        "body:JSON.stringify({party:'democrat',profile:profile,districts:S.districts,lang:LANG,countyFips:cFips,readingLevel:S.readingLevel,llm:_llm})}).then(function(r){return r.json()});" +
-      // Rotate messages while both requests are in-flight
-      "var repResult=null,demResult=null;" +
+      // Use streaming for both parties in parallel
+      "var repP=streamGuide('republican',profile,S.districts,cFips,_llm);" +
+      "var demP=streamGuide('democrat',profile,S.districts,cFips,_llm);" +
+      // Rotate messages while streaming
       "var msgs=demFirst?[lm('Researching Democrats...'),lm('Researching Republicans...')]:['Researching Republicans...','Researching Democrats...'].map(lm);" +
-      // Easter egg modes: use funny rotating arrays instead of just 2 party messages
       "var funnyMsgs=S.readingLevel===7?cowboyLoadMsgs:null;" +
-      "var mi=0;S.loadPhase=3;S.loadMsg=funnyMsgs?funnyMsgs[0]:msgs[0];render();" +
+      "var mi=0;" +
+      // Only show rotating messages during initial loading (before first meta event transitions to ballot)
       "var rotateTimer=setInterval(function(){" +
+        "if(!S.isLoading){clearInterval(rotateTimer);return}" +
         "if(funnyMsgs){mi=(mi+1)%funnyMsgs.length;S.loadPhase=Math.min(Math.max(S.loadPhase,3),4);S.loadMsg=funnyMsgs[mi]}" +
         "else{mi=1-mi;S.loadPhase=Math.max(S.loadPhase,mi===0?3:4);S.loadMsg=msgs[mi]}" +
         ";render()},funnyMsgs?2500:3000);" +
       "var results=await Promise.allSettled([repP,demP]);" +
       "clearInterval(rotateTimer);" +
-      "repResult=results[0].status==='fulfilled'?results[0].value:null;" +
-      "demResult=results[1].status==='fulfilled'?results[1].value:null;" +
-      "S.loadPhase=5;S.loadMsg=lm('Finalizing recommendations...');render();" +
-      // Process results
-      "if(repResult&&repResult.ballot)S.repBallot=repResult.ballot;" +
-      "if(demResult&&demResult.ballot)S.demBallot=demResult.ballot;" +
-      // Store data freshness timestamps
-      "if(repResult&&repResult.dataUpdatedAt)S.repDataUpdatedAt=repResult.dataUpdatedAt;" +
-      "if(demResult&&demResult.dataUpdatedAt)S.demDataUpdatedAt=demResult.dataUpdatedAt;" +
-      // Store county ballot availability (false means county was provided but no local data found)
-      "if(repResult&&repResult.countyBallotAvailable!==undefined)S.countyBallotAvailable=repResult.countyBallotAvailable;" +
-      "else if(demResult&&demResult.countyBallotAvailable!==undefined)S.countyBallotAvailable=demResult.countyBallotAvailable;" +
+      "var repResult=results[0].status==='fulfilled'?results[0].value:null;" +
+      "var demResult=results[1].status==='fulfilled'?results[1].value:null;" +
+      // Store county ballot availability
+      "if(S.repCountyBallotAvailable!==undefined)S.countyBallotAvailable=S.repCountyBallotAvailable;" +
+      "else if(S.demCountyBallotAvailable!==undefined)S.countyBallotAvailable=S.demCountyBallotAvailable;" +
+      // Handle both failing
       "if(!S.repBallot&&!S.demBallot){" +
         "var _errMsg='Failed to generate recommendations. Please try again.';" +
         "var _apiErr=(repResult&&repResult.error)||(demResult&&demResult.error)||null;" +
         "if(_apiErr)_errMsg+=' ('+_apiErr+')';" +
-        "S.error=_errMsg;" +
+        "S.error=_errMsg;S.isLoading=false;S._streaming=false;" +
         "render();return" +
       "}" +
-      // Set summary from inferred party
-      "S.summary=(demFirst?(demResult&&demResult.profileSummary):(repResult&&repResult.profileSummary))||" +
-        "(repResult&&repResult.profileSummary)||(demResult&&demResult.profileSummary)||null;" +
-      // Set default party
-      "if(S.spectrum==='Progressive'||S.spectrum==='Liberal')S.selectedParty='democrat';" +
-      "else if(S.spectrum==='Conservative'||S.spectrum==='Libertarian')S.selectedParty='republican';" +
-      "else S.selectedParty=S.repBallot?'republican':'democrat';" +
-      // Ensure the selected party has a ballot, fallback if not
-      "if(S.selectedParty==='republican'&&!S.repBallot)S.selectedParty='democrat';" +
-      "if(S.selectedParty==='democrat'&&!S.demBallot)S.selectedParty='republican';" +
-      // Save and show
-      "S.guideComplete=true;S.isLoading=false;" +
+      // Set summary from inferred party (streaming may have already set S.summary)
+      "if(!S.summary){" +
+        "S.summary=(demFirst?S._demSummary:S._repSummary)||S._repSummary||S._demSummary||null" +
+      "}" +
+      // Set default party if not already set by streaming
+      "if(!S.selectedParty||(!S.repBallot&&S.selectedParty==='republican')||(!S.demBallot&&S.selectedParty==='democrat')){" +
+        "if(S.spectrum==='Progressive'||S.spectrum==='Liberal')S.selectedParty='democrat';" +
+        "else if(S.spectrum==='Conservative'||S.spectrum==='Libertarian')S.selectedParty='republican';" +
+        "else S.selectedParty=S.repBallot?'republican':'democrat';" +
+        "if(S.selectedParty==='republican'&&!S.repBallot)S.selectedParty='democrat';" +
+        "if(S.selectedParty==='democrat'&&!S.demBallot)S.selectedParty='republican'" +
+      "}" +
+      // Finalize
+      "S._streaming=false;S.guideComplete=true;S.isLoading=false;" +
       "trk('guide_complete',{ms:Date.now()-(S._iStart||Date.now())});" +
       "save();" +
-      "await new Promise(function(r){setTimeout(r,500)});" +
-      "location.hash='#/ballot';render();" +
+      "if(location.hash!=='#/ballot'){location.hash='#/ballot'}" +
+      "render();" +
     "}catch(err){" +
       "trk('guide_error',{d1:(err.message||'unknown').slice(0,128)});" +
+      "S._streaming=false;S.isLoading=false;" +
       "S.error=err.message||'Something went wrong. Please try again.';render();" +
     "}" +
   "}",
@@ -3282,7 +3391,7 @@ var APP_JS = [
 
   // ============ REPROCESS GUIDE ============
   "function reprocessGuide(){" +
-    "S.guideComplete=false;S.phase=8;S.error=null;S.loadPhase=0;S.loadMsg=lm('Finding your ballot...');S.isLoading=true;render();" +
+    "S.guideComplete=false;S.phase=8;S.error=null;S.loadPhase=0;S.loadMsg=lm('Finding your ballot...');S.isLoading=true;S._streaming=false;render();" +
     "doGuide();" +
   "}",
 
