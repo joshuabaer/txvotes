@@ -1,0 +1,522 @@
+{
+  "id": "large_test_primary_2026",
+  "party": "republican",
+  "electionDate": "2026-03-03",
+  "electionName": "2026 Republican Primary — Large Ballot Test",
+  "races": [
+    {
+      "office": "U.S. Senator",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "sen-1",
+          "name": "John Smith",
+          "isIncumbent": true,
+          "summary": "Senior senator with 12 years of experience in federal legislation and committee leadership on armed services.",
+          "background": "Former state attorney general who served two terms before winning his Senate seat. Graduate of UT Austin Law School. Previously worked as a federal prosecutor in the Southern District of Texas.",
+          "keyPositions": ["Border security enforcement", "Tax reform and simplification", "Military readiness funding", "Energy independence through domestic drilling", "Second Amendment protections"],
+          "endorsements": [{"name": "Texas Farm Bureau", "type": "advocacy group"}, {"name": "NRA", "type": "advocacy group"}, {"name": "Gov. Greg Abbott", "type": "elected official"}, {"name": "Texas Association of Business", "type": "business group"}],
+          "pros": ["Strong legislative track record with 47 bills passed", "Deep committee experience on Armed Services and Judiciary", "Secured $2.3B in border security funding", "Bipartisan infrastructure deals for Texas highways", "Consistent conservative voting record rated 94% by Heritage"],
+          "cons": ["Voted against popular prescription drug pricing bill", "Missed 12% of Senate votes in 2025 session", "Accepted donations from pharmaceutical industry PACs", "Slow to address rural broadband expansion", "Criticized for insufficient disaster relief response"]
+        },
+        {
+          "id": "sen-2",
+          "name": "Maria Garcia",
+          "isIncumbent": false,
+          "summary": "Business executive and former city council member challenging from the right on immigration policy.",
+          "background": "CEO of a mid-size manufacturing company in Houston. Served on Houston City Council for 8 years. MBA from Rice University. Active in Texas Republican Party since 2010.",
+          "keyPositions": ["Complete border wall construction", "Eliminate capital gains tax", "School choice vouchers statewide", "Deregulation of energy sector"],
+          "endorsements": [{"name": "Club for Growth", "type": "advocacy group"}, {"name": "Ted Cruz", "type": "elected official"}, {"name": "Texas Public Policy Foundation", "type": "advocacy group"}],
+          "pros": ["Successful business executive with job creation record", "Strong grassroots fundraising at $4.2M raised", "Fresh perspective from private sector experience", "Endorsed by multiple conservative organizations", "Clear policy positions on key voter issues"],
+          "cons": ["No federal legislative experience", "Limited foreign policy background", "Some business dealings face scrutiny from media", "Thin record on environmental policy positions", "Narrow appeal beyond business community base"]
+        },
+        {
+          "id": "sen-3",
+          "name": "Robert Williams",
+          "isIncumbent": false,
+          "summary": "Retired military general bringing national security expertise to the race with strong veteran support.",
+          "background": "Three-star general with 30 years of service including deployments to Iraq and Afghanistan. Commanded Joint Task Force operations. West Point graduate with masters from Naval War College.",
+          "keyPositions": ["Veterans affairs reform", "Strong national defense posture", "Cybersecurity investment", "Immigration enforcement through military support"],
+          "endorsements": [{"name": "Veterans of Foreign Wars TX", "type": "advocacy group"}, {"name": "Retired Military Officers Association", "type": "professional association"}],
+          "pros": ["Extensive national security and military experience", "Strong leadership credentials from 30-year career", "Appeals to veteran and military family voters", "No prior political baggage or controversial votes"],
+          "cons": ["No elected office experience at any level", "Limited understanding of domestic economic policy", "Campaign organization still building infrastructure", "Policy positions lack detail on healthcare and education"]
+        }
+      ]
+    },
+    {
+      "office": "Governor",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "gov-1",
+          "name": "Sarah Johnson",
+          "isIncumbent": false,
+          "summary": "Current Attorney General seeking the governorship with a law-and-order platform and border security focus.",
+          "background": "Served as Texas Attorney General for 6 years. Previously a district attorney in Tarrant County. Led multiple high-profile lawsuits against federal government overreach.",
+          "keyPositions": ["Property tax elimination plan", "Border wall completion", "School choice expansion", "Anti-ESG legislation"],
+          "endorsements": [{"name": "Texas Right to Life", "type": "advocacy group"}, {"name": "Texas State Rifle Association", "type": "advocacy group"}, {"name": "Dan Patrick", "type": "elected official"}, {"name": "Empower Texans", "type": "political organization"}],
+          "pros": ["Strong name recognition from AG office statewide", "Proven track record of suing federal overreach", "Deep donor network with $8.5M war chest", "Clear ideological alignment with party base", "Experience managing large state agency budget"],
+          "cons": ["Several lawsuits faced scrutiny for political motivation", "AG office had staff turnover issues under leadership", "Limited economic development policy experience", "Seen as too ideological by moderate suburban voters", "Ethics complaints filed regarding campaign activities"]
+        },
+        {
+          "id": "gov-2",
+          "name": "Michael Brown",
+          "isIncumbent": false,
+          "summary": "Sitting lieutenant governor with deep legislative experience and a focus on education and property tax reform.",
+          "background": "Lieutenant Governor for 4 years, previously served 12 years in the Texas Senate. Small business owner in Dallas. Known for shepherding property tax relief through the legislature.",
+          "keyPositions": ["Property tax reform continuation", "Teacher pay increases", "Grid reliability investment", "Business-friendly regulatory environment"],
+          "endorsements": [{"name": "Texas Association of Realtors", "type": "business group"}, {"name": "Texas State Teachers Association", "type": "professional association"}, {"name": "Austin American-Statesman", "type": "editorial board"}],
+          "pros": ["Deep legislative experience shepherding major bills", "Broad coalition appeal across party factions", "Strong record on property tax relief legislation", "Known for bipartisan dealmaking when needed"],
+          "cons": ["Perceived as moderate by some conservative activists", "Grid reliability efforts drew criticism after 2021 storm", "Some Senate votes opposed by party base members", "Campaign fundraising trails primary opponent significantly"]
+        },
+        {
+          "id": "gov-3",
+          "name": "James Wilson",
+          "isIncumbent": false,
+          "summary": "Tech entrepreneur running on innovation, economic growth, and government modernization platform.",
+          "background": "Founded two successful technology companies in Austin. Forbes 400 member. No prior political experience but active Republican donor and party event organizer.",
+          "keyPositions": ["Government technology modernization", "Cryptocurrency-friendly regulation", "STEM education investment", "Broadband for all Texas"],
+          "endorsements": [{"name": "TechNet", "type": "business group"}, {"name": "Silicon Hills News", "type": "editorial board"}],
+          "pros": ["Self-funding campaign with $15M personal investment", "Fresh outsider perspective on government efficiency", "Strong appeal to younger and tech-sector voters", "Impressive business track record creating 2000 jobs"],
+          "cons": ["Zero political experience or government service record", "Policy positions seen as too focused on tech sector", "Limited appeal in rural Texas communities", "Some business practices questioned by former employees"]
+        }
+      ]
+    },
+    {
+      "office": "Lieutenant Governor",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "ltgov-1",
+          "name": "Patricia Davis",
+          "isIncumbent": false,
+          "summary": "State senator with 10 years experience leading on education and healthcare committee work.",
+          "background": "Texas State Senator representing District 15 for 10 years. Former school superintendent. Led successful fights for teacher pay raises and rural hospital funding.",
+          "keyPositions": ["Education funding increase", "Rural hospital preservation", "Water infrastructure investment", "Property tax caps"],
+          "endorsements": [{"name": "Texas Medical Association", "type": "professional association"}, {"name": "Texas Classroom Teachers Association", "type": "professional association"}, {"name": "Ken Paxton", "type": "elected official"}],
+          "pros": ["Strong legislative record on education and healthcare", "Deep relationships across the Texas Senate chamber", "Proven fundraiser with $3.8M in contributions", "Appeals to suburban women voters in key districts"],
+          "cons": ["Some votes seen as too moderate on social issues", "Limited name recognition outside her Senate district", "Healthcare positions criticized by fiscal conservatives", "No executive branch management experience"]
+        },
+        {
+          "id": "ltgov-2",
+          "name": "Thomas Anderson",
+          "isIncumbent": false,
+          "summary": "Former congressman bringing federal experience and national security credentials to the race.",
+          "background": "Served 3 terms in U.S. Congress representing TX-22. Former Army officer. Lost reelection in 2024 redistricting. Active in conservative policy circles.",
+          "keyPositions": ["Border security through federal-state cooperation", "Second Amendment sanctuary state", "Parental rights in education", "Government spending cuts"],
+          "endorsements": [{"name": "Heritage Action", "type": "advocacy group"}, {"name": "Gun Owners of America", "type": "advocacy group"}],
+          "pros": ["Federal legislative experience provides broader perspective", "Strong conservative credentials with Heritage 95% rating", "Military service resonates with veteran voters statewide", "National fundraising network from congressional campaigns"],
+          "cons": ["Lost previous election which raises electability concerns", "Federal focus may not translate to state-level priorities", "Seen as a Washington insider by grassroots activists", "Limited Texas state government experience and connections"]
+        },
+        {
+          "id": "ltgov-3",
+          "name": "Richard Martinez",
+          "isIncumbent": false,
+          "summary": "South Texas rancher and county judge running on rural issues and border community perspective.",
+          "background": "County judge in Webb County for 8 years. Fourth-generation Texas rancher. Active in border community advocacy and agricultural policy.",
+          "keyPositions": ["Border community economic development", "Agricultural water rights protection", "Rural broadband expansion", "Property rights defense"],
+          "endorsements": [{"name": "Texas and Southwestern Cattle Raisers", "type": "business group"}, {"name": "South Texas Border Coalition", "type": "community organization"}],
+          "pros": ["Authentic border community voice and perspective", "Executive experience managing county government budget", "Strong appeal to Hispanic Republican voters in South Texas", "Practical knowledge of border and immigration issues"],
+          "cons": ["Very limited statewide name recognition among voters", "Small campaign budget compared to primary opponents", "County-level experience may not prepare for statewide role", "Some positions on border too nuanced for primary voters"]
+        }
+      ]
+    },
+    {
+      "office": "Attorney General",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "ag-1",
+          "name": "Karen White",
+          "isIncumbent": false,
+          "summary": "Former federal prosecutor with expertise in cybercrime and public corruption cases.",
+          "background": "20 years as assistant U.S. Attorney in Northern District of Texas. Led cybercrime and public corruption units. Prosecuted over 200 federal cases with 95% conviction rate.",
+          "keyPositions": ["Public corruption prosecution", "Cybercrime enforcement", "Consumer protection strengthening", "Election integrity enforcement"],
+          "endorsements": [{"name": "Texas District and County Attorneys Association", "type": "professional association"}, {"name": "Law Enforcement Alliance of America", "type": "advocacy group"}, {"name": "Dallas Morning News", "type": "editorial board"}],
+          "pros": ["Extensive prosecutorial experience in federal courts", "Non-political law enforcement career builds credibility", "Expertise in emerging cybercrime threats is timely", "Strong endorsements from law enforcement organizations"],
+          "cons": ["No experience in civil litigation or state law practice", "Campaign struggles to gain traction in crowded field", "Perceived as too focused on federal-level issues", "Limited grassroots organizing infrastructure statewide"]
+        },
+        {
+          "id": "ag-2",
+          "name": "David Lee",
+          "isIncumbent": false,
+          "summary": "State representative and constitutional law attorney with strong conservative legal credentials.",
+          "background": "Texas State Rep for 6 years. Constitutional law attorney who argued cases before the Texas Supreme Court. Clerked for a Fifth Circuit judge after law school.",
+          "keyPositions": ["Religious liberty defense", "Anti-abortion enforcement", "Tenth Amendment federalism", "Border lawsuit strategy"],
+          "endorsements": [{"name": "Texas Alliance for Life", "type": "advocacy group"}, {"name": "First Liberty Institute", "type": "advocacy group"}, {"name": "Rick Perry", "type": "elected official"}],
+          "pros": ["Constitutional law expertise directly relevant to AG role", "Legislative experience provides policy-making understanding", "Strong conservative legal network and Federalist Society ties", "Clear vision for using AG office to challenge federal overreach"],
+          "cons": ["Limited management experience for large AG office staff", "Some legal positions seen as too extreme for general election", "Fundraising lags behind main opponent in primary race", "State rep record includes some controversial floor votes"]
+        },
+        {
+          "id": "ag-3",
+          "name": "Lisa Chen",
+          "isIncumbent": false,
+          "summary": "Corporate attorney and former state solicitor general with appellate court experience.",
+          "background": "Served as Texas Solicitor General for 4 years under previous AG. Partner at major Houston law firm specializing in appellate litigation.",
+          "keyPositions": ["Professional AG office management", "Business-friendly legal environment", "Tort reform defense", "Tech industry regulation framework"],
+          "endorsements": [{"name": "Texas Association of Business", "type": "business group"}, {"name": "Houston Chronicle", "type": "editorial board"}],
+          "pros": ["Direct AG office experience as former solicitor general", "Strong appellate litigation skills from private practice", "Business community support provides substantial fundraising", "Brings management experience from large law firm partnership"],
+          "cons": ["Perceived as establishment candidate by grassroots movement", "Less visible conservative credentials than opponents", "Corporate law background may not resonate with populist base", "Limited criminal prosecution experience for AG role"]
+        }
+      ]
+    },
+    {
+      "office": "Comptroller",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "comp-1",
+          "name": "Steven Taylor",
+          "isIncumbent": true,
+          "summary": "Incumbent comptroller seeking reelection on his record of fiscal transparency and technology modernization.",
+          "background": "Comptroller for 4 years. Former CFO of a Fortune 500 company based in Dallas. CPA with 25 years of financial management experience.",
+          "keyPositions": ["State spending transparency portal", "Tax collection modernization", "Pension fund oversight", "Economic forecasting accuracy"],
+          "endorsements": [{"name": "Texas Society of CPAs", "type": "professional association"}, {"name": "Texas Taxpayers and Research Association", "type": "advocacy group"}],
+          "pros": ["Strong incumbent advantage with proven track record", "Modernized tax collection saving state $45M annually", "Professional financial management background is relevant", "Launched popular state spending transparency website"],
+          "cons": ["Revenue projections were off by 8% last fiscal year", "Office faced IT security breach affecting taxpayer data", "Criticized for insufficient audit of state agency spending", "Low profile means voters often skip this race"]
+        },
+        {
+          "id": "comp-2",
+          "name": "Nancy Parker",
+          "isIncumbent": false,
+          "summary": "State auditor challenging the incumbent on oversight and accountability track record.",
+          "background": "State auditor for 6 years. Former Big Four accounting firm partner. Led major audits of state agencies that uncovered waste.",
+          "keyPositions": ["Aggressive state agency auditing", "Taxpayer protection advocacy", "Budget transparency enforcement", "Fraud prevention systems"],
+          "endorsements": [{"name": "Empower Texans", "type": "political organization"}, {"name": "Americans for Tax Reform", "type": "advocacy group"}],
+          "pros": ["Extensive auditing experience uncovering government waste", "Specific plan to save $2B through audit recommendations", "Strong taxpayer protection advocacy credentials", "Independent reputation untainted by political dealmaking"],
+          "cons": ["No executive management experience at comptroller scale", "Audit recommendations often face political implementation barriers", "Campaign lacks the fundraising of incumbent opponent", "Narrow professional focus may limit broader policy vision"]
+        }
+      ]
+    },
+    {
+      "office": "Land Commissioner",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "land-1",
+          "name": "William Green",
+          "isIncumbent": false,
+          "summary": "Former state parks director with conservation and land management expertise seeking to lead the GLO.",
+          "background": "Director of Texas Parks and Wildlife for 6 years. Environmental engineer by training. Led expansion of state park system and coastal restoration programs.",
+          "keyPositions": ["Coastal protection from hurricanes", "State land revenue maximization", "Veterans land board reform", "Energy lease management"],
+          "endorsements": [{"name": "Texas Wildlife Association", "type": "advocacy group"}, {"name": "Coastal Conservation Association", "type": "advocacy group"}, {"name": "George P. Bush", "type": "elected official"}],
+          "pros": ["Direct land management experience is directly relevant", "Environmental engineering background aids coastal protection", "Bipartisan appeal through conservation track record", "Veterans land board reform plan addresses real problems"],
+          "cons": ["Conservation focus may conflict with energy industry interests", "Limited experience with oil and gas lease management", "Name recognition is low even among engaged Republican voters", "Some positions seen as too environmentally focused for primary"]
+        },
+        {
+          "id": "land-2",
+          "name": "Jennifer Adams",
+          "isIncumbent": false,
+          "summary": "Oil and gas attorney focusing on maximizing state land revenue and energy development.",
+          "background": "Energy law attorney with 15 years of experience in oil and gas lease negotiation. Represents landowners and mineral rights holders.",
+          "keyPositions": ["Maximize oil and gas lease revenue", "Streamline permitting processes", "Protect private property rights", "Veterans housing program expansion"],
+          "endorsements": [{"name": "Texas Oil and Gas Association", "type": "business group"}, {"name": "Texas Land and Mineral Owners Association", "type": "advocacy group"}],
+          "pros": ["Deep energy industry expertise for lease management", "Property rights focus resonates with rural Texas voters", "Strong fundraising from energy sector supporters", "Clear plan to increase state land revenue streams"],
+          "cons": ["No government management or agency leadership experience", "Too closely tied to oil and gas industry for some voters", "Limited coastal protection and conservation credentials", "Veterans affairs experience is thin for land board role"]
+        }
+      ]
+    },
+    {
+      "office": "Railroad Commissioner",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "rrc-1",
+          "name": "Charles Moore",
+          "isIncumbent": true,
+          "summary": "Incumbent commissioner with 8 years on the RRC focused on energy industry regulation and grid reliability.",
+          "background": "Petroleum engineer with 20 years in the oil and gas industry before being elected. Serves on the Interstate Oil and Gas Compact Commission.",
+          "keyPositions": ["Pipeline safety enforcement", "Natural gas production support", "Grid reliability coordination", "Methane emission reduction"],
+          "endorsements": [{"name": "Texas Independent Producers and Royalty Owners", "type": "business group"}, {"name": "International Association of Drilling Contractors", "type": "professional association"}],
+          "pros": ["Deep industry expertise from 20-year engineering career", "Incumbent with established relationships across the industry", "Led pipeline safety improvements reducing incidents 30%", "Pragmatic approach to environmental compliance requirements"],
+          "cons": ["Seen as too cozy with the industry being regulated", "Slow response to grid reliability issues during 2021 freeze", "Campaign primarily funded by industry PAC contributions", "Reform proposals lack ambition according to clean energy advocates"]
+        },
+        {
+          "id": "rrc-2",
+          "name": "Angela Foster",
+          "isIncumbent": false,
+          "summary": "Environmental engineer and energy consultant pushing for commission modernization and transparency.",
+          "background": "Environmental engineer with experience at both oil companies and environmental consulting firms. Advocates for RRC name change to reflect actual mission.",
+          "keyPositions": ["Commission transparency overhaul", "Orphan well cleanup acceleration", "Renewable energy integration", "Environmental compliance modernization"],
+          "endorsements": [{"name": "Texas Clean Energy Coalition", "type": "advocacy group"}, {"name": "Young Republicans of Texas", "type": "political organization"}],
+          "pros": ["Bridge-builder between energy industry and environmental concerns", "Fresh perspective on an often overlooked state commission", "Orphan well cleanup plan addresses real environmental hazard", "Appeals to younger Republican voters interested in reform"],
+          "cons": ["Environmental credentials may alienate oil and gas base voters", "No prior elected office or government agency experience", "Limited fundraising compared to industry-backed incumbent", "Renewable energy positions seen as anti-oil by some primary voters"]
+        },
+        {
+          "id": "rrc-3",
+          "name": "David Hernandez",
+          "isIncumbent": false,
+          "summary": "Petroleum landman and small business owner running on deregulation and property rights platform.",
+          "background": "Independent petroleum landman for 15 years. Small business owner. Active in Republican Party precinct organizing. Ran for state house in 2024.",
+          "keyPositions": ["Reduce regulatory burden on producers", "Property rights protection for mineral owners", "Oppose renewable energy mandates", "Support domestic energy independence"],
+          "endorsements": [{"name": "Americans for Prosperity TX", "type": "advocacy group"}],
+          "pros": ["Grassroots campaign with genuine small business credentials", "Strong property rights message resonates with rural voters", "Previous campaign experience from state house race attempt", "Deregulation platform aligns with Republican primary electorate"],
+          "cons": ["Very limited campaign funding and organizational support", "No engineering or technical background in energy regulation", "Previous state house campaign was unsuccessful in primary", "Policy positions lack nuance on complex regulatory issues"]
+        }
+      ]
+    },
+    {
+      "office": "State Senator",
+      "district": "District 14",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "sd14-1",
+          "name": "Barbara Mitchell",
+          "isIncumbent": true,
+          "summary": "Incumbent state senator known for education reform and rural healthcare advocacy in Central Texas.",
+          "background": "State Senator for 8 years. Former school board president and rancher in Williamson County. Led rural healthcare preservation legislation.",
+          "keyPositions": ["Rural hospital funding", "Education savings accounts", "Water infrastructure investment", "Property tax relief"],
+          "endorsements": [{"name": "Texas Farm Bureau", "type": "advocacy group"}, {"name": "Texas Hospital Association", "type": "professional association"}, {"name": "Round Rock Chamber of Commerce", "type": "business group"}],
+          "pros": ["Strong incumbent advantage with high approval ratings", "Effective legislator who passed 23 bills in last session", "Deep district ties from decades of community involvement", "Bipartisan coalition building achieves real policy results"],
+          "cons": ["Some conservative activists criticize moderate approach", "Property tax reform efforts seen as insufficient by voters", "Age concerns raised by opponent in campaign advertising", "Limited social media and digital campaign presence"]
+        },
+        {
+          "id": "sd14-2",
+          "name": "Kevin Price",
+          "isIncumbent": false,
+          "summary": "Young attorney challenging the incumbent from the right on school choice and parental rights issues.",
+          "background": "Attorney specializing in education law. School board member for 4 years. Active in Moms for Liberty chapter. Age 34.",
+          "keyPositions": ["Universal school choice vouchers", "Parental rights in curriculum", "Ban on DEI in public schools", "Term limits for state legislators"],
+          "endorsements": [{"name": "Moms for Liberty TX", "type": "advocacy group"}, {"name": "Young Conservatives of Texas", "type": "political organization"}],
+          "pros": ["Energetic young candidate brings generational appeal", "Education law expertise directly relevant to key issues", "Strong social media presence drives grassroots engagement", "Clear ideological contrast with moderate incumbent senator"],
+          "cons": ["Very limited experience in government beyond school board", "Narrow issue focus may not appeal to broader electorate", "Fundraising significantly behind well-established incumbent", "Seen as too ideological for pragmatic-minded district voters"]
+        }
+      ]
+    },
+    {
+      "office": "State Rep",
+      "district": "District 47",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "hd47-1",
+          "name": "Diana Ross-Miller",
+          "isIncumbent": false,
+          "summary": "Former city council member focusing on suburban growth management and transportation infrastructure.",
+          "background": "City council member in Cedar Park for 6 years. Urban planner by profession. Led successful transportation bond passage.",
+          "keyPositions": ["Transportation infrastructure funding", "Controlled suburban growth management", "School funding formula reform", "Small business tax relief"],
+          "endorsements": [{"name": "Cedar Park Chamber of Commerce", "type": "business group"}, {"name": "Travis County Republican Party", "type": "political organization"}],
+          "pros": ["Local government experience in rapidly growing district", "Transportation expertise addresses top voter concern", "Strong community relationships from city council service", "Moderate profile appeals to suburban swing district"],
+          "cons": ["Some city council votes criticized by fiscal conservatives", "Growth management positions worry property rights advocates", "Limited experience with state-level legislative process", "Campaign infrastructure is still being built from scratch"]
+        },
+        {
+          "id": "hd47-2",
+          "name": "Mark Thompson",
+          "isIncumbent": false,
+          "summary": "Small business owner and Army veteran running on fiscal conservatism and veterans affairs.",
+          "background": "Owns a chain of fitness centers in the Austin suburbs. Army veteran who served two tours in Afghanistan. Active in veteran support organizations.",
+          "keyPositions": ["Small business deregulation", "Veterans mental health funding", "School choice vouchers", "Property tax elimination goal"],
+          "endorsements": [{"name": "National Federation of Independent Business TX", "type": "business group"}, {"name": "Texas Veterans Commission", "type": "advocacy group"}],
+          "pros": ["Military service record provides strong candidate narrative", "Small business ownership gives economic credibility", "Veterans affairs focus fills important policy gap", "Conservative fiscal platform aligns with primary electorate"],
+          "cons": ["No prior elected office experience at any level", "Campaign relies heavily on personal connections not data", "Policy positions sometimes lack specific implementation details", "Some voters prefer candidate with government experience"]
+        },
+        {
+          "id": "hd47-3",
+          "name": "Susan Clark",
+          "isIncumbent": false,
+          "summary": "Retired school principal running on education reform and community safety platform.",
+          "background": "Retired school principal with 25 years in education. Active in neighborhood watch and community policing advocacy. Known locally for school turnaround success.",
+          "keyPositions": ["School safety funding increase", "Community policing support", "Teacher recruitment and retention", "Parental involvement requirements"],
+          "endorsements": [{"name": "Texas Retired Teachers Association", "type": "professional association"}],
+          "pros": ["Deep education expertise from 25-year career in schools", "Community safety focus appeals to suburban family voters", "School turnaround success demonstrates leadership ability", "Well-known in local community from decades of service"],
+          "cons": ["No business or economic policy background experience", "Campaign fundraising is well behind other primary opponents", "Retired status may raise energy and commitment questions", "Education-only focus limits appeal on broader policy issues"]
+        }
+      ]
+    },
+    {
+      "office": "State Rep",
+      "district": "District 52",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "hd52-1",
+          "name": "Ronald Kim",
+          "isIncumbent": true,
+          "summary": "Incumbent state representative in his third term focused on economic development and tech sector growth.",
+          "background": "State rep for 6 years. Former technology executive at Dell. MBA from Wharton. Chairs the House Technology & Innovation Committee.",
+          "keyPositions": ["Tech industry tax incentives", "Workforce development programs", "Broadband infrastructure expansion", "Intellectual property protection"],
+          "endorsements": [{"name": "Texas Association of Business", "type": "business group"}, {"name": "Austin Technology Council", "type": "business group"}, {"name": "Williamson County GOP", "type": "political organization"}],
+          "pros": ["Three-term incumbent with strong legislative track record", "Technology expertise positions district for economic growth", "Strong committee chairmanship amplifies district influence", "Bipartisan approach to economic development legislation"],
+          "cons": ["Tech industry focus may not address all district needs", "Some votes seen as too moderate by conservative activists", "Relies heavily on business PAC funding for campaigns", "District demographic shifts may challenge reelection effort"]
+        },
+        {
+          "id": "hd52-2",
+          "name": "Amy Wallace",
+          "isIncumbent": false,
+          "summary": "Homeschool mom and conservative activist challenging the incumbent on parental rights and education policy.",
+          "background": "Homeschool mother of five. Founded local conservative parents group. Active in Republican Women of Williamson County. First-time candidate.",
+          "keyPositions": ["Parental rights protection", "Homeschool freedom preservation", "Ban on gender ideology in schools", "Family tax credit expansion"],
+          "endorsements": [{"name": "Texas Home School Coalition", "type": "advocacy group"}, {"name": "Republican Women of Williamson County", "type": "political organization"}],
+          "pros": ["Authentic grassroots candidate with passionate base support", "Parental rights message taps into current cultural movement", "Social media skills generate significant earned media coverage", "Clear ideological contrast with moderate incumbent representative"],
+          "cons": ["No professional experience in government or policy making", "Very narrow issue focus limited to education and family topics", "Campaign budget is tiny fraction of incumbent war chest", "First-time candidate may struggle with district-wide operation"]
+        }
+      ]
+    },
+    {
+      "office": "Court of Appeals",
+      "district": "3rd District, Place 4",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "coa-1",
+          "name": "Judge Helen Park",
+          "isIncumbent": true,
+          "summary": "Incumbent appellate judge with 12 years on the bench known for thorough and well-reasoned opinions.",
+          "background": "Appellate judge for 12 years. Former civil litigation partner at major Austin law firm. UT Austin Law graduate. Clerked for Texas Supreme Court.",
+          "keyPositions": ["Judicial efficiency improvements", "Court technology modernization", "Access to justice expansion", "Textualist judicial philosophy"],
+          "endorsements": [{"name": "Travis County Bar Association", "type": "professional association"}, {"name": "Texas Supreme Court Justice (ret.) Nathan Hecht", "type": "elected official"}],
+          "pros": ["Extensive judicial experience with strong opinion quality", "Textualist philosophy aligns with conservative legal values", "Bar association endorsement signals professional competence", "Court modernization efforts improved case disposition times"],
+          "cons": ["Some rulings criticized as too moderate by conservative groups", "Long judicial tenure may indicate entrenchment over innovation", "Limited public profile means most voters unfamiliar with record", "Campaign effort is minimal relying mainly on ballot position"]
+        },
+        {
+          "id": "coa-2",
+          "name": "Rachel Foster",
+          "isIncumbent": false,
+          "summary": "Conservative constitutional attorney seeking to bring originalist judicial philosophy to the appellate bench.",
+          "background": "Constitutional law attorney for 15 years. Argued cases before Texas Supreme Court and Fifth Circuit. Active in Federalist Society Texas chapter.",
+          "keyPositions": ["Originalist constitutional interpretation", "Second Amendment case development", "Religious liberty jurisprudence", "Government power limitation"],
+          "endorsements": [{"name": "Federalist Society Austin Chapter", "type": "professional association"}, {"name": "Texas Values", "type": "advocacy group"}],
+          "pros": ["Strong originalist credentials appeal to conservative base", "Appellate litigation experience directly relevant to role", "Federalist Society ties provide intellectual framework", "Younger candidate brings generational perspective to bench"],
+          "cons": ["No judicial experience sitting on any bench at any level", "Ideological approach may concern those wanting impartial judges", "Limited trial court experience compared to sitting judge", "Campaign fundraising trails incumbent with established donors"]
+        }
+      ]
+    },
+    {
+      "office": "Board of Education",
+      "district": "District 10",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "sboe-1",
+          "name": "Margaret Cooper",
+          "isIncumbent": true,
+          "summary": "Incumbent SBOE member focused on curriculum standards and textbook review processes.",
+          "background": "SBOE member for 8 years. Former school district curriculum director. PhD in Education from Texas A&M. Authored multiple curriculum standards.",
+          "keyPositions": ["Rigorous academic standards", "Phonics-based reading instruction", "Financial literacy requirements", "Textbook quality assurance"],
+          "endorsements": [{"name": "Texas Classroom Teachers Association", "type": "professional association"}, {"name": "Texas PTA", "type": "community organization"}],
+          "pros": ["Deep curriculum expertise from professional education career", "Incumbent experience navigating complex SBOE politics", "Led phonics initiative improving reading scores statewide", "Bipartisan approach gets actual standards improvements adopted"],
+          "cons": ["Some curriculum decisions criticized by both left and right", "Long tenure may indicate complacency on controversial issues", "Limited public engagement beyond education policy circles", "Moderate positions frustrate activists wanting bolder changes"]
+        },
+        {
+          "id": "sboe-2",
+          "name": "Pastor James Wright",
+          "isIncumbent": false,
+          "summary": "Pastor and former teacher challenging incumbent on parental rights and curriculum transparency.",
+          "background": "Senior pastor of large church in Round Rock. Former high school history teacher for 10 years. Active in school board advocacy.",
+          "keyPositions": ["Curriculum transparency for parents", "Remove critical race theory", "Restore traditional American history emphasis", "Parental opt-out expansion"],
+          "endorsements": [{"name": "Patriot Mobile", "type": "business group"}, {"name": "Texas Eagle Forum", "type": "advocacy group"}],
+          "pros": ["Teaching experience gives classroom-level understanding", "Strong church community provides built-in volunteer base", "Curriculum transparency message resonates with parents", "Clear contrast with incumbent on cultural education issues"],
+          "cons": ["No administrative or policy-making experience in education", "Positions seen as too focused on culture war by moderates", "Church leadership may raise separation of church and state concerns", "Limited understanding of SBOE procedural and legal framework"]
+        },
+        {
+          "id": "sboe-3",
+          "name": "Dr. Linda Nguyen",
+          "isIncumbent": false,
+          "summary": "STEM professor advocating for science education standards and technology integration in curriculum.",
+          "background": "Professor of Computer Science at Texas State University. Former public school math teacher. Serves on several education technology advisory boards.",
+          "keyPositions": ["STEM education standards strengthening", "AI literacy curriculum development", "Computer science graduation requirements", "Math instruction methodology reform"],
+          "endorsements": [{"name": "Texas STEM Coalition", "type": "advocacy group"}],
+          "pros": ["Strong STEM credentials from university research career", "Forward-looking technology education vision for Texas schools", "Math and science teaching experience grounds policy in practice", "Brings needed technical expertise to curriculum decisions"],
+          "cons": ["Narrow STEM focus may not address broader curriculum needs", "Academic background may seem disconnected from K-12 realities", "Limited political experience and campaign infrastructure", "Single-issue campaign may not sustain through full primary"]
+        }
+      ]
+    },
+    {
+      "office": "U.S. Representative",
+      "district": "District 25",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "tx25-1",
+          "name": "Roger Fitzgerald",
+          "isIncumbent": true,
+          "summary": "Four-term congressman on the Ways and Means Committee focused on tax policy and trade.",
+          "background": "U.S. Representative for 8 years. Former tax attorney and CPA. Serves on House Ways and Means Committee. Rice University and UT Law graduate.",
+          "keyPositions": ["Tax cuts and simplification", "Free trade agreements", "Balanced budget amendment", "Social Security reform"],
+          "endorsements": [{"name": "U.S. Chamber of Commerce", "type": "business group"}, {"name": "National Taxpayers Union", "type": "advocacy group"}, {"name": "Texas Association of Business", "type": "business group"}],
+          "pros": ["Ways and Means Committee seat gives outsized policy influence", "Tax expertise directly relevant to key committee assignments", "Strong constituent services operation rated highly by voters", "Fundraising advantage with $2.8M cash on hand for reelection"],
+          "cons": ["Voted for omnibus spending bill angering fiscal hawks", "Free trade positions conflict with populist wing of party", "Social Security reform stance worries senior citizen voters", "Perceived as too focused on DC at expense of district needs"]
+        },
+        {
+          "id": "tx25-2",
+          "name": "Ashley Ramirez",
+          "isIncumbent": false,
+          "summary": "Former Trump administration official challenging the incumbent on immigration and spending issues.",
+          "background": "Served in DHS during Trump administration. Immigration policy advisor. Born and raised in the district. Georgetown Law graduate.",
+          "keyPositions": ["Immigration enforcement priority", "Federal spending cuts", "Department of Education elimination", "Energy deregulation"],
+          "endorsements": [{"name": "Trump 47 PAC", "type": "political organization"}, {"name": "NumbersUSA", "type": "advocacy group"}, {"name": "Stephen Miller", "type": "public figure"}],
+          "pros": ["Trump administration credentials provide strong brand", "Immigration expertise is top issue for Republican primary voters", "Fresh face offering generational change from longtime incumbent", "National media attention generates free campaign publicity"],
+          "cons": ["No legislative experience at any level of government", "Single-issue immigration focus may limit general election appeal", "Campaign organization thin compared to incumbent machine", "Some Trump admin policies faced legal challenges and setbacks"]
+        }
+      ]
+    },
+    {
+      "office": "U.S. Representative",
+      "district": "District 31",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "tx31-1",
+          "name": "Craig Patterson",
+          "isIncumbent": true,
+          "summary": "Two-term congressman focused on military affairs and veterans issues from Fort Hood district.",
+          "background": "Former Army colonel with 26 years of service. U.S. Representative for 4 years. Serves on House Armed Services Committee.",
+          "keyPositions": ["Military base funding and protection", "Veterans healthcare expansion", "Defense budget increase", "Fort Cavazos modernization"],
+          "endorsements": [{"name": "Veterans of Foreign Wars", "type": "advocacy group"}, {"name": "Military Officers Association of America", "type": "professional association"}, {"name": "Bell County GOP", "type": "political organization"}],
+          "pros": ["Military background directly serves Fort Cavazos district needs", "Armed Services Committee seat protects local military installations", "Veterans advocacy is authentic from personal service experience", "Strong bipartisan credibility on defense and veterans issues"],
+          "cons": ["Defense-heavy focus leaves domestic policy positions underdeveloped", "Voted for bipartisan bills that angered conservative base members", "Limited engagement with non-military economic development issues", "Growing district demographics may outpace current campaign strategy"]
+        },
+        {
+          "id": "tx31-2",
+          "name": "Donna Mitchell",
+          "isIncumbent": false,
+          "summary": "Local business owner and school board member offering a civilian perspective on district needs beyond military.",
+          "background": "Owner of regional accounting firm with 50 employees. School board member for 6 years. Active in Killeen Chamber of Commerce.",
+          "keyPositions": ["Small business tax relief", "Education funding reform", "Infrastructure investment", "Balanced federal budget"],
+          "endorsements": [{"name": "National Federation of Independent Business", "type": "business group"}, {"name": "Killeen Daily Herald", "type": "editorial board"}],
+          "pros": ["Business ownership provides economic policy credibility", "School board experience adds education policy depth", "Local roots and community involvement span two decades", "Offers needed civilian perspective in military-dominated district"],
+          "cons": ["No military background in a heavily military-dependent district", "Limited campaign funding compared to incumbent war chest", "School board votes sometimes drew controversy from parents", "First federal race with no DC or state-level government experience"]
+        },
+        {
+          "id": "tx31-3",
+          "name": "Tony Reeves",
+          "isIncumbent": false,
+          "summary": "Retired Marine and conservative activist pushing the incumbent from the right on cultural issues.",
+          "background": "Retired Marine Master Sergeant. Conservative podcast host with 50,000 subscribers. Active in local Tea Party organization.",
+          "keyPositions": ["Ban on transgender military service", "Eliminate DEI from military", "Border security military deployment", "Federal spending freeze"],
+          "endorsements": [{"name": "Tea Party Patriots TX", "type": "political organization"}, {"name": "Judicial Watch", "type": "advocacy group"}],
+          "pros": ["Military background matches district demographics and culture", "Social media following provides built-in campaign audience", "Cultural conservative platform energizes grassroots primary voters", "Authentic enlisted perspective differs from officer-class incumbent"],
+          "cons": ["No governing experience beyond military service and activism", "Polarizing cultural positions may alienate moderate district voters", "Podcast career raises questions about legislative temperament", "Very limited campaign funding relies on small-dollar donations only"]
+        }
+      ]
+    }
+  ],
+  "propositions": [
+    {
+      "number": 1,
+      "title": "State Highway Fund Amendment",
+      "description": "Dedicates a portion of oil and gas production tax revenue to the State Highway Fund for road maintenance.",
+      "background": "Texas roads face a $15B maintenance backlog as population growth strains existing infrastructure.",
+      "fiscalImpact": "Estimated $2.5B annually redirected from general revenue to highway fund.",
+      "supporters": ["Texas Good Roads Association", "Texas Association of Business"],
+      "opponents": ["Texas Budget Coalition"]
+    },
+    {
+      "number": 2,
+      "title": "Property Tax Homestead Exemption Increase",
+      "description": "Increases the homestead exemption for school district property taxes from $100,000 to $150,000.",
+      "background": "Rising property values have increased tax burdens despite previous exemption increases in 2023.",
+      "fiscalImpact": "Estimated $1.8B reduction in school district property tax revenue, offset by state funding.",
+      "supporters": ["Texas Realtors", "Americans for Prosperity TX"],
+      "opponents": ["Texas School Alliance"]
+    }
+  ]
+}

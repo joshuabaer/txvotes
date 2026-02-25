@@ -1,0 +1,40 @@
+name = "txvotes-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Custom domain routes for txvotes.app
+routes = [
+  { pattern = "txvotes.app/*", zone_name = "txvotes.app" },
+  { pattern = "www.txvotes.app/*", zone_name = "txvotes.app" },
+]
+
+# Static assets (headshot images served at /headshots/*)
+[assets]
+directory = "./public"
+
+# KV namespace for cached election data (shared with atxvotes-api)
+[[kv_namespaces]]
+binding = "ELECTION_DATA"
+id = "1b02b19492f243c8b503d99d0ff11761"
+
+# Analytics Engine for custom event tracking
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "txvotes_events"
+
+# No cron — relies on atxvotes-api's daily updater via shared KV
+# [triggers]
+# crons = ["0 12 * * *"]
+
+# Environment variables (public, non-secret)
+[vars]
+CF_BEACON_TOKEN = ""    # Set after creating Web Analytics site for txvotes.app
+
+# Secrets (set via `npx wrangler secret put -c wrangler.txvotes.toml`):
+#   ANTHROPIC_API_KEY - Anthropic API key (default LLM for guide generation)
+#   ADMIN_SECRET - secret for manual trigger endpoint and admin dashboards
+#   OPENAI_API_KEY - OpenAI API key (used with ?chatgpt URL flag)
+#   GEMINI_API_KEY - Google Gemini API key (used with ?gemini URL flag)
+#   GROK_API_KEY - xAI Grok API key (used with ?grok URL flag)
+#   CF_ACCOUNT_ID - Cloudflare account ID (for /admin/analytics dashboard)
+#   CF_API_TOKEN - Cloudflare API token with Account Analytics Read (for /admin/analytics)

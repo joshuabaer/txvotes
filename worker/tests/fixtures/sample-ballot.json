@@ -1,0 +1,90 @@
+{
+  "id": "test_primary_2026",
+  "party": "democrat",
+  "electionDate": "2026-03-03",
+  "electionName": "2026 Democratic Primary",
+  "races": [
+    {
+      "office": "U.S. Senator",
+      "district": null,
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "sen-1",
+          "name": "Alice Johnson",
+          "isIncumbent": true,
+          "summary": "Experienced senator focused on healthcare reform.",
+          "keyPositions": ["Universal healthcare", "Climate action", "Workers' rights"],
+          "endorsements": ["Austin Chronicle", "Texas AFL-CIO"],
+          "pros": ["Strong legislative record", "Bipartisan deals"],
+          "cons": ["Seen as establishment", "Slow on housing"]
+        },
+        {
+          "id": "sen-2",
+          "name": "Bob Martinez",
+          "isIncumbent": false,
+          "summary": "Progressive challenger with grassroots support.",
+          "keyPositions": ["Green New Deal", "Medicare for All", "Student debt relief"],
+          "endorsements": ["Sunrise Movement"],
+          "pros": ["Energizes young voters", "Bold policy vision"],
+          "cons": ["No legislative experience", "Thin endorsement list"]
+        }
+      ]
+    },
+    {
+      "office": "State Rep",
+      "district": "District 46",
+      "isContested": true,
+      "candidates": [
+        {
+          "id": "rep-1",
+          "name": "Carol Davis",
+          "isIncumbent": false,
+          "summary": "Community organizer running on housing and transit.",
+          "keyPositions": ["Affordable housing", "Public transit expansion"],
+          "endorsements": ["AURA"],
+          "pros": ["Deep community ties"],
+          "cons": ["First-time candidate"]
+        },
+        {
+          "id": "rep-2",
+          "name": "Dan Wilson",
+          "isIncumbent": true,
+          "summary": "Incumbent focused on education and public safety.",
+          "keyPositions": ["School funding", "Police reform"],
+          "endorsements": ["Texas Tribune endorsement"],
+          "pros": ["Proven track record"],
+          "cons": ["Weak on environmental issues"]
+        }
+      ]
+    },
+    {
+      "office": "Board of Education",
+      "district": "District 5",
+      "isContested": false,
+      "candidates": [
+        {
+          "id": "boe-1",
+          "name": "Eve Thompson",
+          "isIncumbent": true,
+          "summary": "Longtime educator and board member.",
+          "keyPositions": ["Curriculum standards", "Teacher pay"],
+          "endorsements": [],
+          "pros": ["Deep education expertise"],
+          "cons": ["Unopposed — no competition"]
+        }
+      ]
+    }
+  ],
+  "propositions": [
+    {
+      "number": 1,
+      "title": "Austin Transit Expansion Bond",
+      "description": "Authorizes $500M in bonds for light rail and bus rapid transit.",
+      "background": "Austin's population has doubled since 2000, straining existing transit.",
+      "fiscalImpact": "Estimated 2-cent property tax increase per $100 valuation.",
+      "supporters": ["AURA", "Austin Chamber of Commerce"],
+      "opponents": ["Taxpayers Union of Travis County"]
+    }
+  ]
+}

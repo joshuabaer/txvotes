@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+._*
+
+# Cloudflare Wrangler
+worker/.wrangler/
+
+# Dependencies
+node_modules/
+
+# Swap files
+*.swp
+*~

@@ -1,0 +1,17 @@
+{
+  "name": "atxvotes-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:tx": "wrangler dev -c wrangler.txvotes.toml",
+    "deploy": "wrangler deploy",
+    "deploy:tx": "wrangler deploy -c wrangler.txvotes.toml",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.7.0",
+    "vitest": "^4.0.18",
+    "wrangler": "^4.67.0"
+  }
+}

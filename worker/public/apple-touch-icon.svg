@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Solid cream background for apple-touch-icon (no transparency) -->
+  <rect width="180" height="180" rx="36" fill="#FAF8F0"/>
+  <defs>
+    <clipPath id="shield">
+      <path d="M30 25h120c3 0 5 2 5 5v65c0 30-35 42-65 50-30-8-65-20-65-50V30c0-3 2-5 5-5Z" transform="translate(0,5)"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#shield)" transform="translate(0,5)">
+    <rect x="25" y="25" width="130" height="125" fill="#21598F"/>
+    <rect x="85" y="25" width="75" height="25" fill="#FFFFFF"/>
+    <rect x="85" y="50" width="75" height="25" fill="#BF2626"/>
+    <rect x="85" y="75" width="75" height="25" fill="#FFFFFF"/>
+    <rect x="85" y="100" width="75" height="25" fill="#BF2626"/>
+    <rect x="85" y="125" width="75" height="25" fill="#FFFFFF"/>
+  </g>
+  <path d="M55 72 L60 86 L75 86 L63 95 L67 109 L55 100 L43 109 L47 95 L35 86 L50 86Z" fill="#FFFFFF" transform="translate(0,5)"/>
+  <path d="M30 25h120c3 0 5 2 5 5v65c0 30-35 42-65 50-30-8-65-20-65-50V30c0-3 2-5 5-5Z" fill="none" stroke="#0D2E4A" stroke-width="1.5" opacity="0.2" transform="translate(0,5)"/>
+</svg>

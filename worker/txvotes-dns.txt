@@ -1,0 +1,13 @@
+;;
+;; Domain: txvotes.app
+;; Exported for Cloudflare DNS import
+;;
+
+;; A record — proxied dummy IP (Cloudflare handles routing to Worker)
+txvotes.app.	1	IN	A	192.0.2.1
+
+;; AAAA record — proxied dummy IPv6
+txvotes.app.	1	IN	AAAA	100::
+
+;; CNAME for www subdomain
+www.txvotes.app.	1	IN	CNAME	txvotes.app.

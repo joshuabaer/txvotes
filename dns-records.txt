@@ -1,0 +1,12 @@
+; atxvotes.app DNS records for Cloudflare BIND import
+; Cloudflare Dashboard > DNS > Import and Export > Import DNS records
+
+; Root domain — dummy IPs for Cloudflare proxy (Worker handles traffic)
+atxvotes.app.	1	IN	A	192.0.2.1
+atxvotes.app.	1	IN	AAAA	100::
+
+; API subdomain — routes to existing Cloudflare Worker
+api.atxvotes.app.	1	IN	CNAME	atxvotes-api.joshuabaer.workers.dev.
+
+; WWW redirect
+www.atxvotes.app.	1	IN	CNAME	atxvotes.app.

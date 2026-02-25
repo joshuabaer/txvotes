@@ -1,0 +1,36 @@
+name = "atxvotes-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Custom domain routes (requires DNS records pointing to Cloudflare)
+routes = [
+  { pattern = "atxvotes.app/*", zone_name = "atxvotes.app" },
+  { pattern = "api.atxvotes.app/*", zone_name = "atxvotes.app" },
+  { pattern = "www.atxvotes.app/*", zone_name = "atxvotes.app" },
+]
+
+# Static assets (headshot images served at /headshots/*)
+[assets]
+directory = "./public"
+
+# KV namespace for cached election data
+[[kv_namespaces]]
+binding = "ELECTION_DATA"
+id = "1b02b19492f243c8b503d99d0ff11761"
+
+# Analytics Engine for custom event tracking
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "txvotes_events"
+
+# Daily update cron: 12:00 UTC = 6:00 AM CT
+[triggers]
+crons = ["0 12 * * *"]
+
+# Environment variables (public, non-secret)
+[vars]
+CF_BEACON_TOKEN = "9c181c37d90740429efef870887a9774"  # Cloudflare Web Analytics beacon
+
+# Secrets (set via `npx wrangler secret put`):
+#   ANTHROPIC_API_KEY - your Anthropic API key
+#   ADMIN_SECRET - secret for manual trigger endpoint
