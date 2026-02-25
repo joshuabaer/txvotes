@@ -405,6 +405,7 @@ var CSS = [
   "@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}",
   ".stream-card-in{animation:cardIn .3s ease-out}",
   ".stream-bar{background:linear-gradient(90deg,var(--blue),var(--red),var(--blue));background-size:200% 100%;animation:streamShimmer 2s linear infinite;color:#fff;text-align:center;padding:10px 16px;border-radius:12px;margin-bottom:12px;font-size:14px;font-weight:600}",
+".stream-progress{font-size:20px;font-weight:700;margin-top:4px;letter-spacing:1px}",
   "@keyframes streamShimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}",
   ".stream-pending{opacity:.5;border:1px dashed var(--border2)}",
   ".dots{display:flex;gap:6px;justify-content:center;margin-top:16px}",
@@ -735,6 +736,7 @@ var APP_JS = [
     "'Democratic':'Dem\\u00F3crata'," +
     "'Democrat':'Dem\\u00F3crata'," +
     "'Tuesday, March 3, 2026':'Martes, 3 de marzo, 2026'," +
+    "'Analyzing your ballot...':'Analizando tu boleta...'," +
     "'Showing all races':'Mostrando todas las contiendas'," +
     "'Data last verified':'Datos verificados por \\u00FAltima vez'," +
     "'No ballot available for this party.':'No hay boleta disponible para este partido.'," +
@@ -2043,7 +2045,13 @@ var APP_JS = [
     "h+='</div>';" +
     // Streaming indicator
     "if(S._streaming){" +
-      "h+='<div class=\"stream-bar\">'+t('Analyzing your ballot...')+'</div>'" +
+      "var _sRaces=contested.filter(function(r){return r._streamed}).length;" +
+      "var _sProps=b.propositions?b.propositions.filter(function(p){return p._streamed}).length:0;" +
+      "var _sTotal=_sRaces+_sProps;" +
+      "var _sTotalAll=contested.length+(b.propositions?b.propositions.length:0);" +
+      "h+='<div class=\"stream-bar\">'+t('Analyzing your ballot...');" +
+      "if(_sTotalAll>0){h+='<div class=\"stream-progress\">'+_sTotal+' / '+_sTotalAll+'</div>'}" +
+      "h+='</div>'" +
     "}" +
     // Stale ballot data banner (shown when data is >48 hours old)
     "if(S.staleBallot){" +

@@ -40,6 +40,10 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 - [ ] Create new txvotes repo in GitHub — fresh copy of the code without all the dev history
 - [ ] **Plan Colorado expansion** — Enter planning mode and figure out how to expand the platform to Colorado. Research CO election structure, counties, ballot format, data sources, and what needs to change in the codebase (multi-state routing, KV key namespacing, branding, etc.). Write the plan to `docs/plans/plan_colorado_expansion.md`.
 - [ ] **Plan Washington DC primaries** — Enter planning mode and figure out how to support DC primaries. Research DC election structure, wards, ANCs, ballot format, data sources, and codebase changes needed (DC has no counties, unique local government structure). Write the plan to `docs/plans/plan_dc_primaries.md`.
+- [ ] Show website traffic stats publicly — expose a public-facing page with site traffic/usage stats (currently only visible via admin analytics at `/admin/analytics`)
+- [ ] **Translate all remaining English on Spanish pages** — Multiple static pages (`/how-it-works`, `/nonpartisan`, `/audit`, etc.) have large blocks of English body text when viewed with `?lang=es`. The headings are translated but many paragraph bodies, bullet points, and descriptions remain in English. Affected pages visible in screenshots: "What Does This App Do?" section body text, "How It Works" step descriptions, source list bullets, nonpartisan safeguards text, AI audit descriptions, balance check explanations, "Flag this info" section, data transparency section, and source ranking policy details.
+- [ ] **Use neutral Spanish dialect in all AI prompts** — Instruct all Spanish translation prompts (guide generation, candidate translations, summary generation) to use a neutral/standard Latin American Spanish dialect accessible to the broadest audience (avoid region-specific slang, use "usted" forms where appropriate, prefer universally understood vocabulary). Update `SYSTEM_PROMPT`, `buildUserPrompt()`, and `handleSeedTranslations()` prompt instructions in `pwa-guide.js`.
+- [ ] **Update existing KV-cached translations to neutral dialect** — Re-run `POST /api/election/seed-translations` for both parties (and any county translations) after updating the prompts to regenerate all cached Spanish candidate translations in the neutral dialect. Verify via the app with `?lang=es`.
 
 ### Audit Score Improvements
 _Latest audit (Feb 23): ChatGPT 7.5, Gemini 7.5, Claude 8.2, Grok 7.8 (avg 7.8/10). Dimension averages: Bias 8.3, Accuracy 7.0, Framing 8.0, Pros/Cons 7.3, Transparency 9.3. Lowest: Accuracy (7.0) and Pros/Cons (7.3)._
@@ -186,7 +190,6 @@ _From Claude API usage review (Feb 22). Recurring cost ~$26/month (updater $20 +
 #### Medium Impact
 - [x] Log actual token usage from API responses — usage-logger.js module tracks input/output tokens per component (guide, updater, seeder). `GET /api/admin/usage?date=YYYY-MM-DD` endpoint with cost estimates.
 - [x] Enable Anthropic prompt caching for guide generation — system prompt uses `cache_control: { type: "ephemeral" }`. No beta header needed (GA). Both guide and summary endpoints benefit.
-- [ ] Deprecate Grok from audit runner — at $3/$15 per M tokens (same as Claude), provides a redundant data point. Three auditors (ChatGPT, Gemini, Claude) are sufficient. Saves ~$2/month.
 - [x] Batch tone regeneration after daily updates — `didCandidateTextChange()` detects modifications, `generateCandidateTone()` regenerates levels 1/4/7 with 2s delays. ~$0.036/candidate.
 
 #### Post-Election
