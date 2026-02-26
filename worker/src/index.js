@@ -112,6 +112,7 @@ const PAGE_TR_COMMON = {
   'Texas Votes': 'Texas Votes',
   // Footer
   'How It Works': 'C\u00F3mo Funciona',
+  'Stats': 'Estad\u00EDsticas',
   'Privacy': 'Privacidad',
   'Built in Texas': 'Hecho en Texas',
   // CTA banner
@@ -202,9 +203,9 @@ function pageI18n(pageTR) {
  */
 function generateFooter({ noDataT = false } = {}) {
   if (noDataT) {
-    return `<div class="page-footer"><a href="/">Texas Votes</a> &middot; <a href="/how-it-works">How It Works</a> &middot; <a href="/privacy">Privacy</a><br><span style="color:#fff">&starf;</span> Built in Texas &middot; <a href="mailto:howdy@txvotes.app">howdy@txvotes.app</a></div>`;
+    return `<div class="page-footer"><a href="/">Texas Votes</a> &middot; <a href="/how-it-works">How It Works</a> &middot; <a href="/stats">Stats</a> &middot; <a href="/privacy">Privacy</a><br><span style="color:#fff">&starf;</span> Built in Texas &middot; <a href="mailto:howdy@txvotes.app">howdy@txvotes.app</a></div>`;
   }
-  return `<div class="page-footer"><a href="/" data-t="Texas Votes">Texas Votes</a> &middot; <a href="/how-it-works" data-t="How It Works">How It Works</a> &middot; <a href="/privacy" data-t="Privacy">Privacy</a><br><span style="color:#fff">&starf;</span> <span data-t="Built in Texas">Built in Texas</span> &middot; <a href="mailto:howdy@txvotes.app">howdy@txvotes.app</a></div>`;
+  return `<div class="page-footer"><a href="/" data-t="Texas Votes">Texas Votes</a> &middot; <a href="/how-it-works" data-t="How It Works">How It Works</a> &middot; <a href="/stats" data-t="Stats">Stats</a> &middot; <a href="/privacy" data-t="Privacy">Privacy</a><br><span style="color:#fff">&starf;</span> <span data-t="Built in Texas">Built in Texas</span> &middot; <a href="mailto:howdy@txvotes.app">howdy@txvotes.app</a></div>`;
 }
 
 /**
@@ -542,6 +543,7 @@ function handleLandingPage() {
       'Works on any device \u2014 phone, tablet, or computer.':'Funciona en cualquier dispositivo \u2014 tel\\u00E9fono, tableta o computadora.',
       'No app download needed.':'No necesitas descargar una app.',
       'How It Works':'C\\u00F3mo Funciona',
+      'Stats':'Estad\\u00EDsticas',
       'Nonpartisan by Design':'Apartidista por Dise\\u00F1o',
       'AI Audit':'Auditor\\u00EDa de IA',
       'Data Quality':'Calidad de Datos',
@@ -4394,6 +4396,435 @@ const TX_COUNTY_NAMES = {
   "48501":"Young","48503":"Zapata","48505":"Zavala","48507":"Zablocki"
 };
 
+async function handleStats(env) {
+  try {
+  // --- Check cache first (15-min TTL) ---
+  const cachedStats = await env.ELECTION_DATA.get("public_stats_cache");
+  if (cachedStats) {
+    try {
+      const cached = JSON.parse(cachedStats);
+      if (cached.html && cached.expiresAt && Date.now() < cached.expiresAt) {
+        return new Response(cached.html, {
+          headers: {
+            "Content-Type": "text/html;charset=utf-8",
+            "Cache-Control": "public, max-age=900",
+          },
+        });
+      }
+    } catch { /* cache miss — rebuild */ }
+  }
+
+  // --- Load KV data in parallel ---
+  const today = new Date().toISOString().slice(0, 10);
+  const usageLogDays = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.now() - i * 86400000);
+    usageLogDays.push(d.toISOString().slice(0, 10));
+  }
+
+  const [manifestRaw, repBallotRaw, demBallotRaw, auditSummaryRaw, ...usageLogRaws] = await Promise.all([
+    env.ELECTION_DATA.get("manifest"),
+    env.ELECTION_DATA.get("ballot:statewide:republican_primary_2026"),
+    env.ELECTION_DATA.get("ballot:statewide:democrat_primary_2026"),
+    env.ELECTION_DATA.get("audit:summary"),
+    ...usageLogDays.map(d => env.ELECTION_DATA.get(`usage_log:${d}`)),
+  ]);
+
+  const manifest = manifestRaw ? JSON.parse(manifestRaw) : {};
+  const repBallot = repBallotRaw ? JSON.parse(repBallotRaw) : null;
+  const demBallot = demBallotRaw ? JSON.parse(demBallotRaw) : null;
+  const auditSummary = auditSummaryRaw ? JSON.parse(auditSummaryRaw) : null;
+
+  // --- Count ballot coverage ---
+  const ballots = { republican: repBallot, democrat: demBallot };
+  let totalRaces = 0;
+  let totalCandidates = 0;
+  let totalPropositions = 0;
+  for (const b of Object.values(ballots)) {
+    if (!b) continue;
+    totalRaces += (b.races || []).length;
+    totalCandidates += (b.races || []).reduce((s, r) => s + (r.candidates || []).length, 0);
+    totalPropositions += (b.propositions || []).length;
+  }
+
+  // --- County coverage (quick scan — count presence of county info keys) ---
+  // Use a batch approach similar to handleDataQuality but lighter
+  const BATCH = 50;
+  let countiesWithInfo = 0;
+  let countiesWithBallots = 0;
+  for (let i = 0; i < TX_FIPS.length; i += BATCH) {
+    const batch = TX_FIPS.slice(i, i + BATCH);
+    const reads = batch.flatMap(fips => [
+      env.ELECTION_DATA.get(`county_info:${fips}`).then(v => ({ type: "info", has: !!v })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:republican_primary_2026`).then(v => ({ type: "ballot", has: !!v })),
+    ]);
+    const results = await Promise.all(reads);
+    for (const r of results) {
+      if (r.type === "info" && r.has) countiesWithInfo++;
+      if (r.type === "ballot" && r.has) countiesWithBallots++;
+    }
+  }
+
+  // --- AI Fairness Score from audit ---
+  const fairnessScore = auditSummary?.averageScore || null;
+
+  // --- Analytics Engine queries (safe public subset) ---
+  const hasAE = !!(env.CF_ACCOUNT_ID && env.CF_API_TOKEN);
+  let aeStats = null;
+
+  if (hasAE) {
+    const ds = "usvotes_events";
+    const errors = [];
+    async function sq(label, sql) {
+      try { return await queryAnalyticsEngine(env, sql); }
+      catch (e) { errors.push(label + ": " + e.message); return { data: [] }; }
+    }
+
+    const [guidesR, interviewsR, ivotedR, cheatsheetsR, dailyR, tonesR, langR, timingR, sharingR] = await Promise.all([
+      sq("guides", `SELECT count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'guide_complete' FORMAT JSON`),
+      sq("interviews", `SELECT count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'interview_complete' FORMAT JSON`),
+      sq("ivoted", `SELECT count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'i_voted' FORMAT JSON`),
+      sq("cheatsheets", `SELECT count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'cheatsheet_print' FORMAT JSON`),
+      sq("daily", `SELECT toDate(timestamp) AS day, count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 IN ('guide_complete','interview_complete') GROUP BY day ORDER BY day ASC FORMAT JSON`),
+      sq("tones", `SELECT blob3 AS tone_level, count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'tone_select' GROUP BY tone_level ORDER BY total DESC FORMAT JSON`),
+      sq("lang", `SELECT blob2 AS lang, count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 IN ('guide_complete','interview_complete') GROUP BY lang ORDER BY total DESC FORMAT JSON`),
+      sq("timing", `SELECT avg(double2) AS avg_ms, count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'guide_complete' AND double2 > 0 FORMAT JSON`),
+      sq("sharing", `SELECT blob1 AS event, count() AS total FROM ${ds} WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 IN ('share_app','share_race','share_voted') GROUP BY event ORDER BY total DESC FORMAT JSON`),
+    ]);
+
+    const guidesCount = (guidesR.data && guidesR.data[0]) ? Number(guidesR.data[0].total) || 0 : 0;
+    const interviewsCount = (interviewsR.data && interviewsR.data[0]) ? Number(interviewsR.data[0].total) || 0 : 0;
+    const ivotedCount = (ivotedR.data && ivotedR.data[0]) ? Number(ivotedR.data[0].total) || 0 : 0;
+    const cheatsheetsCount = (cheatsheetsR.data && cheatsheetsR.data[0]) ? Number(cheatsheetsR.data[0].total) || 0 : 0;
+
+    // Daily activity for chart
+    const dailyActivity = (dailyR.data || []).map(r => ({
+      day: r.day,
+      total: Number(r.total) || 0,
+    }));
+
+    // Tone distribution
+    const toneLabels = { "1": "Just the Facts", "2": "Simple & Clear", "3": "Balanced", "4": "Deep Dive", "5": "Expert", "7": "Texas Cowboy" };
+    const toneData = (tonesR.data || []).map(r => ({
+      level: r.tone_level || "?",
+      label: toneLabels[r.tone_level] || "Other",
+      count: Number(r.total) || 0,
+    }));
+
+    // Language split
+    const langData = (langR.data || []).map(r => ({
+      lang: r.lang === "es" ? "Spanish" : r.lang === "en" ? "English" : (r.lang || "Unknown"),
+      count: Number(r.total) || 0,
+    }));
+
+    // Completion rate
+    const completionRate = interviewsCount > 0 && guidesCount > 0
+      ? Math.round((guidesCount / interviewsCount) * 100) : null;
+
+    // Avg guide time
+    const avgGuideMs = (timingR.data && timingR.data[0]) ? Number(timingR.data[0].avg_ms) || 0 : 0;
+    const avgGuideSec = avgGuideMs > 0 ? Math.round(avgGuideMs / 1000) : null;
+
+    // Sharing
+    const sharingData = {};
+    for (const r of (sharingR.data || [])) {
+      sharingData[r.event] = Number(r.total) || 0;
+    }
+    const totalShares = Object.values(sharingData).reduce((a, b) => a + b, 0);
+
+    aeStats = {
+      guidesCount,
+      interviewsCount,
+      ivotedCount,
+      cheatsheetsCount,
+      dailyActivity,
+      toneData,
+      langData,
+      completionRate,
+      avgGuideSec,
+      totalShares,
+      sharingData,
+      errors,
+    };
+  }
+
+  // --- Build hero stat cards ---
+  function statCard(value, label, subtitle) {
+    const sub = subtitle ? `<div class="dq-card-detail">${subtitle}</div>` : "";
+    return `<div class="dq-card"><div class="dq-card-value">${value}</div><div class="dq-card-label" data-t="${escapeHtml(label)}">${escapeHtml(label)}</div>${sub}</div>`;
+  }
+
+  const guidesVal = aeStats ? aeStats.guidesCount.toLocaleString() : "\u2014";
+  const interviewsVal = aeStats ? aeStats.interviewsCount.toLocaleString() : "\u2014";
+  const ivotedVal = aeStats ? aeStats.ivotedCount.toLocaleString() : "\u2014";
+  const cheatsheetsVal = aeStats ? aeStats.cheatsheetsCount.toLocaleString() : "\u2014";
+  const countiesVal = `${countiesWithInfo}<span class="dq-unit"> / 254</span>`;
+  const fairnessVal = fairnessScore !== null ? `${fairnessScore}<span class="dq-unit"> / 10</span>` : '<span style="color:var(--text2)">Pending</span>';
+
+  const heroCards = `
+    <div class="dq-card-grid">
+      ${statCard(guidesVal, "Guides Generated", "Last 30 days")}
+      ${statCard(interviewsVal, "Interviews Completed", "Last 30 days")}
+      ${statCard(ivotedVal, "I Voted Clicks", "Last 30 days")}
+      ${statCard(cheatsheetsVal, "Cheat Sheets Printed", "Last 30 days")}
+      ${statCard(countiesVal, "Counties Covered")}
+      ${statCard(fairnessVal, "AI Fairness Score")}
+    </div>`;
+
+  // --- Activity chart (last 30 days) ---
+  let activityChart = "";
+  if (aeStats && aeStats.dailyActivity.length > 0) {
+    const maxVal = Math.max(...aeStats.dailyActivity.map(d => d.total), 1);
+    const bars = aeStats.dailyActivity.map(d => {
+      const pct = Math.max((d.total / maxVal) * 100, 2);
+      const dayLabel = d.day.slice(5); // MM-DD
+      return `<div class="stats-bar" style="height:${pct}%" title="${escapeHtml(dayLabel)}: ${d.total}"></div>`;
+    }).join("");
+    const firstDay = aeStats.dailyActivity[0]?.day?.slice(5) || "";
+    const lastDay = aeStats.dailyActivity[aeStats.dailyActivity.length - 1]?.day?.slice(5) || "";
+    activityChart = `
+    <h2 data-t="Activity (Last 30 Days)">Activity (Last 30 Days)</h2>
+    <p style="font-size:0.9rem;color:var(--text2);margin-bottom:0.75rem" data-t="Daily guides generated and interviews completed.">Daily guides generated and interviews completed.</p>
+    <div class="stats-chart-container">${bars}</div>
+    <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text2);margin-top:2px"><span>${escapeHtml(firstDay)}</span><span>${escapeHtml(lastDay)}</span></div>`;
+  } else if (!hasAE) {
+    activityChart = `
+    <h2 data-t="Activity (Last 30 Days)">Activity (Last 30 Days)</h2>
+    <p style="font-size:0.9rem;color:var(--text2)" data-t="Usage analytics are not yet available.">Usage analytics are not yet available.</p>`;
+  }
+
+  // --- How Voters Use the App ---
+  let voterUsageHtml = "";
+  if (aeStats) {
+    // Tone distribution
+    let toneRows = "";
+    const totalToneSelections = aeStats.toneData.reduce((a, t) => a + t.count, 0);
+    for (const t of aeStats.toneData) {
+      const pct = totalToneSelections > 0 ? Math.round((t.count / totalToneSelections) * 100) : 0;
+      toneRows += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+        <span style="min-width:110px;font-size:0.9rem;font-weight:600">${escapeHtml(t.label)}</span>
+        <div style="flex:1;background:var(--border);border-radius:99px;height:10px;overflow:hidden"><div style="height:100%;border-radius:99px;background:var(--blue);width:${pct}%"></div></div>
+        <span style="min-width:40px;text-align:right;font-size:0.85rem;color:var(--text2)">${pct}%</span>
+      </div>`;
+    }
+
+    // Language split
+    let langRows = "";
+    const totalLang = aeStats.langData.reduce((a, l) => a + l.count, 0);
+    for (const l of aeStats.langData) {
+      const pct = totalLang > 0 ? Math.round((l.count / totalLang) * 100) : 0;
+      langRows += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+        <span style="min-width:80px;font-size:0.9rem;font-weight:600">${escapeHtml(l.lang)}</span>
+        <div style="flex:1;background:var(--border);border-radius:99px;height:10px;overflow:hidden"><div style="height:100%;border-radius:99px;background:var(--blue);width:${pct}%"></div></div>
+        <span style="min-width:40px;text-align:right;font-size:0.85rem;color:var(--text2)">${pct}%</span>
+      </div>`;
+    }
+
+    const crText = aeStats.completionRate !== null ? `${aeStats.completionRate}%` : "N/A";
+    const crColor = aeStats.completionRate !== null && aeStats.completionRate >= 50 ? "#16a34a" : "var(--text2)";
+    const avgTimeText = aeStats.avgGuideSec !== null ? `${aeStats.avgGuideSec}s` : "N/A";
+
+    voterUsageHtml = `
+    <h2 data-t="How Voters Use the App">How Voters Use the App</h2>
+    <div class="dq-card-grid" style="margin-bottom:1rem">
+      <div class="dq-card"><div class="dq-card-value" style="color:${crColor}">${crText}</div><div class="dq-card-label" data-t="Completion Rate">Completion Rate</div></div>
+      <div class="dq-card"><div class="dq-card-value">${avgTimeText}</div><div class="dq-card-label" data-t="Avg Guide Time">Avg Guide Time</div></div>
+    </div>
+    ${toneRows ? `<h3 style="font-size:1rem;font-weight:700;margin-bottom:0.5rem" data-t="Reading Level Preferences">Reading Level Preferences</h3>${toneRows}` : ""}
+    ${langRows ? `<h3 style="font-size:1rem;font-weight:700;margin-top:1rem;margin-bottom:0.5rem" data-t="Language">Language</h3>${langRows}` : ""}`;
+  }
+
+  // --- Data Quality summary ---
+  const completenessFields = ["summary", "background", "keyPositions", "endorsements", "pros", "cons"];
+  let totalFieldsFilled = 0;
+  let totalFieldsPossible = 0;
+  for (const b of [repBallot, demBallot]) {
+    if (!b) continue;
+    for (const race of (b.races || [])) {
+      for (const c of (race.candidates || [])) {
+        for (const f of completenessFields) {
+          totalFieldsPossible++;
+          const val = c[f];
+          if (val !== undefined && val !== null && val !== "" && !(Array.isArray(val) && val.length === 0)) totalFieldsFilled++;
+        }
+      }
+    }
+  }
+  const completenessPercent = totalFieldsPossible > 0 ? Math.round((totalFieldsFilled / totalFieldsPossible) * 100) : 0;
+  const completenessColor = completenessPercent >= 90 ? "#16a34a" : completenessPercent >= 70 ? "#b45309" : "#dc2626";
+
+  // --- Balance score ---
+  const balanceScores = [];
+  for (const b of [repBallot, demBallot]) {
+    if (!b) continue;
+    try {
+      const report = checkBallotBalance(b);
+      balanceScores.push(report.summary.score);
+    } catch { /* skip */ }
+  }
+  const balanceScore = balanceScores.length > 0 ? Math.round(balanceScores.reduce((a, b) => a + b, 0) / balanceScores.length) : null;
+  const balanceColor = balanceScore !== null && balanceScore >= 90 ? "#16a34a" : balanceScore !== null && balanceScore >= 70 ? "#b45309" : balanceScore !== null ? "#dc2626" : "var(--text2)";
+
+  const dataQualityHtml = `
+    <h2 data-t="Data Quality">Data Quality</h2>
+    <div class="dq-card-grid">
+      <div class="dq-card"><div class="dq-card-value" style="color:${completenessColor}">${completenessPercent}%</div><div class="dq-card-label" data-t="Candidate Completeness">Candidate Completeness</div></div>
+      <div class="dq-card"><div class="dq-card-value">${totalRaces}</div><div class="dq-card-label" data-t="Races Tracked">Races Tracked</div></div>
+      <div class="dq-card"><div class="dq-card-value">${totalCandidates}</div><div class="dq-card-label" data-t="Candidates Profiled">Candidates Profiled</div></div>
+      <div class="dq-card"><div class="dq-card-value" style="color:${balanceColor}">${balanceScore !== null ? balanceScore + '<span class="dq-unit">/100</span>' : "N/A"}</div><div class="dq-card-label" data-t="Balance Score">Balance Score</div></div>
+    </div>
+    <p style="font-size:0.9rem;color:var(--text2);margin-top:0.5rem"><a href="/data-quality" data-t="View full Data Quality dashboard">View full Data Quality dashboard &rarr;</a></p>`;
+
+  // --- AI Fairness ---
+  let fairnessHtml = "";
+  if (auditSummary) {
+    const providers = auditSummary.providers || {};
+    let providerCards = "";
+    const providerNames = { chatgpt: "ChatGPT", gemini: "Gemini", grok: "Grok", claude: "Claude" };
+    for (const [key, displayName] of Object.entries(providerNames)) {
+      const score = providers[key]?.score;
+      if (score !== undefined && score !== null) {
+        const sColor = score >= 8 ? "#16a34a" : score >= 6 ? "#b45309" : "#dc2626";
+        providerCards += `<div class="dq-card"><div class="dq-card-value" style="color:${sColor}">${score}<span class="dq-unit"> / 10</span></div><div class="dq-card-label">${escapeHtml(displayName)}</div></div>`;
+      } else {
+        providerCards += `<div class="dq-card"><div class="dq-card-value" style="color:var(--text2)">Pending</div><div class="dq-card-label">${escapeHtml(displayName)}</div></div>`;
+      }
+    }
+    fairnessHtml = `
+    <h2 data-t="AI Fairness Audit">AI Fairness Audit</h2>
+    <p style="font-size:0.9rem;color:var(--text2);margin-bottom:1rem" data-t="Four independent AI systems review our methodology for bias and fairness.">Four independent AI systems review our methodology for bias and fairness.</p>
+    <div class="dq-card-grid">${providerCards}</div>
+    <p style="font-size:0.9rem;color:var(--text2);margin-top:0.5rem"><a href="/audit" data-t="View full AI Bias Audit">View full AI Bias Audit &rarr;</a></p>`;
+  } else {
+    fairnessHtml = `
+    <h2 data-t="AI Fairness Audit">AI Fairness Audit</h2>
+    <p style="font-size:0.9rem;color:var(--text2)" data-t="Audit results are pending. Four independent AI systems will review our methodology.">Audit results are pending. Four independent AI systems will review our methodology.</p>
+    <p style="font-size:0.9rem;color:var(--text2);margin-top:0.5rem"><a href="/audit" data-t="View full AI Bias Audit">View full AI Bias Audit &rarr;</a></p>`;
+  }
+
+  // --- Sharing & Community ---
+  let sharingHtml = "";
+  if (aeStats && aeStats.totalShares > 0) {
+    sharingHtml = `
+    <h2 data-t="Sharing & Community">Sharing &amp; Community</h2>
+    <div class="dq-card-grid">
+      ${statCard(aeStats.totalShares.toLocaleString(), "Total Shares", "Last 30 days")}
+      ${statCard((aeStats.sharingData.share_app || 0).toLocaleString(), "App Shares")}
+      ${statCard((aeStats.sharingData.share_voted || 0).toLocaleString(), "I Voted Shares")}
+    </div>`;
+  }
+
+  // --- Related links ---
+  const relatedHtml = `
+    <h2 data-t="Related">Related</h2>
+    <ul class="related-links">
+      <li><a href="/how-it-works" data-t="How It Works">How It Works</a> &mdash; <span data-t="Plain-language explanation of the app and AI">Plain-language explanation of the app and AI</span></li>
+      <li><a href="/data-quality" data-t="Data Quality Dashboard">Data Quality Dashboard</a> &mdash; <span data-t="Live metrics on how complete our data is">Live metrics on how complete our data is</span></li>
+      <li><a href="/audit" data-t="AI Bias Audit">AI Bias Audit</a> &mdash; <span data-t="Independent review of our AI by four different systems">Independent review of our AI by four different systems</span></li>
+      <li><a href="/nonpartisan" data-t="Nonpartisan by Design">Nonpartisan by Design</a> &mdash; <span data-t="How we ensure fairness for all voters">How we ensure fairness for all voters</span></li>
+      <li><a href="/open-source" data-t="Open Source">Open Source</a> &mdash; <span data-t="Source code, architecture, and independent code reviews">Source code, architecture, and independent code reviews</span></li>
+      <li><a href="/candidates" data-t="All Candidates">All Candidates</a> &mdash; <span data-t="Browse every candidate with detailed profiles">Browse every candidate with detailed profiles</span></li>
+    </ul>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${pageHead({
+    title: "Stats \u2014 Texas Votes",
+    description: "Public usage statistics and transparency metrics for Texas Votes. See how voters use the app, data quality, and AI fairness scores.",
+    url: "https://txvotes.app/stats",
+  })}
+  <style>
+    .dq-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem}
+    .dq-card{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:1.25rem;text-align:center}
+    .dq-card-label{font-size:0.85rem;color:var(--text2);margin-bottom:0.25rem;font-weight:600}
+    .dq-card-value{font-size:1.5rem;font-weight:800;color:var(--blue)}
+    .dq-card-detail{font-size:0.82rem;color:var(--text2);margin-top:0.25rem}
+    .dq-unit{font-size:0.9rem;font-weight:600}
+    .stats-chart-container{display:flex;align-items:flex-end;gap:2px;height:100px;background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:8px;margin-bottom:0.25rem}
+    .stats-bar{flex:1;background:var(--blue);border-radius:2px 2px 0 0;min-width:2px;opacity:0.8;transition:opacity .15s}
+    .stats-bar:hover{opacity:1}
+  </style>
+</head>
+<body>
+  <div class="container" style="max-width:720px">
+    <a href="/" class="back-top">&larr; Texas Votes</a>
+    <h1 data-t="Stats">Stats</h1>
+    <p class="subtitle" data-t="Public usage statistics and transparency metrics.">Public usage statistics and transparency metrics.</p>
+
+    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+
+    ${heroCards}
+    ${activityChart}
+    ${voterUsageHtml}
+    ${dataQualityHtml}
+    ${fairnessHtml}
+    ${sharingHtml}
+    ${relatedHtml}
+
+    ${generateFooter()}
+  </div>
+  ${pageI18n({
+    'Stats': 'Estad\u00EDsticas',
+    'Public usage statistics and transparency metrics.': 'Estad\u00EDsticas p\u00FAblicas de uso y m\u00E9tricas de transparencia.',
+    'Guides Generated': 'Gu\u00EDas Generadas',
+    'Interviews Completed': 'Entrevistas Completadas',
+    'I Voted Clicks': 'Clics de Yo Vot\u00E9',
+    'Cheat Sheets Printed': 'Hojas de Referencia Impresas',
+    'Counties Covered': 'Condados Cubiertos',
+    'AI Fairness Score': 'Puntuaci\u00F3n de Equidad de IA',
+    'Activity (Last 30 Days)': 'Actividad (\u00DAltimos 30 D\u00EDas)',
+    'Daily guides generated and interviews completed.': 'Gu\u00EDas generadas e entrevistas completadas diariamente.',
+    'Usage analytics are not yet available.': 'Las anal\u00EDticas de uso a\u00FAn no est\u00E1n disponibles.',
+    'How Voters Use the App': 'C\u00F3mo los Votantes Usan la App',
+    'Completion Rate': 'Tasa de Completaci\u00F3n',
+    'Avg Guide Time': 'Tiempo Promedio de Gu\u00EDa',
+    'Reading Level Preferences': 'Preferencias de Nivel de Lectura',
+    'Language': 'Idioma',
+    'Data Quality': 'Calidad de Datos',
+    'Candidate Completeness': 'Datos Completos de Candidatos',
+    'Races Tracked': 'Carreras Rastreadas',
+    'Candidates Profiled': 'Candidatos Perfilados',
+    'Balance Score': 'Puntuaci\u00F3n de Equilibrio',
+    'View full Data Quality dashboard': 'Ver panel completo de Calidad de Datos',
+    'AI Fairness Audit': 'Auditor\u00EDa de Equidad de IA',
+    'Four independent AI systems review our methodology for bias and fairness.': 'Cuatro sistemas de IA independientes revisan nuestra metodolog\u00EDa en busca de sesgo y equidad.',
+    'View full AI Bias Audit': 'Ver Auditor\u00EDa Completa de Sesgo de IA',
+    'Audit results are pending. Four independent AI systems will review our methodology.': 'Los resultados de auditor\u00EDa est\u00E1n pendientes. Cuatro sistemas de IA independientes revisar\u00E1n nuestra metodolog\u00EDa.',
+    'Sharing & Community': 'Compartir y Comunidad',
+    'Total Shares': 'Compartidos Totales',
+    'App Shares': 'Compartidos de App',
+    'I Voted Shares': 'Compartidos de Yo Vot\u00E9',
+    'Last 30 days': '\u00DAltimos 30 d\u00EDas',
+  })}
+</body>
+</html>`;
+
+  // --- Cache the rendered page (15-min TTL) ---
+  try {
+    await env.ELECTION_DATA.put("public_stats_cache", JSON.stringify({
+      html,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    }), { expirationTtl: 1800 }); // 30 min KV TTL (in-object check is 15 min)
+  } catch { /* non-fatal */ }
+
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html;charset=utf-8",
+      "Cache-Control": "public, max-age=900",
+    },
+  });
+  } catch (err) {
+    console.error("handleStats error:", err);
+    const errMsg = String(err && err.message ? err.message : err)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return new Response(`<!DOCTYPE html><html lang="en"><head>${pageHead({ title: "Stats \u2014 Texas Votes", url: "https://txvotes.app/stats" })}</head><body><div class="container" style="max-width:720px"><a href="/" class="back-top">&larr; Texas Votes</a><h1>Stats</h1><p class="subtitle">This page is temporarily unavailable. Our team has been notified.</p><!-- debug: ${errMsg} --></div></body></html>`, {
+      status: 500,
+      headers: { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }
+}
+
 async function handleDataQuality(env) {
   try {
   const parties = ["republican", "democrat"];
@@ -6353,6 +6784,9 @@ export default {
       }
       if (url.pathname === "/data-quality") {
         return handleDataQuality(env);
+      }
+      if (url.pathname === "/stats") {
+        return handleStats(env);
       }
       if (url.pathname === "/candidates") {
         return handleCandidatesIndex(env);

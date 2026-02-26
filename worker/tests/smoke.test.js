@@ -64,6 +64,7 @@ const htmlRoutes = [
   { path: "/open-source", name: "Open Source", expectContain: "open" },
   { path: "/sample", name: "Sample ballot", expectContain: "sample" },
   { path: "/support", name: "Support page", expectContain: "support" },
+  { path: "/stats", name: "Stats page", expectContain: "stats" },
 ];
 
 describe("Smoke tests: HTML pages return 200", () => {
@@ -286,7 +287,7 @@ describe("Smoke tests: No unhandled exceptions", () => {
   const allGetRoutes = [
     "/", "/app", "/privacy", "/nonpartisan", "/how-it-works",
     "/data-quality", "/audit", "/candidates", "/open-source",
-    "/sample", "/support", "/app/clear", "/app/sw.js",
+    "/sample", "/support", "/stats", "/app/clear", "/app/sw.js",
     "/app/manifest.json", "/cowboy", "/chef",
     "/api/audit/export", "/api/balance-check",
     "/.well-known/security.txt",
