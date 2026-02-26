@@ -217,6 +217,27 @@ function generateAdminFooter() {
   return `<div class="page-footer"><a href="/admin">Admin</a> &middot; <a href="/admin/status">Status</a> &middot; <a href="/admin/coverage">Coverage</a> &middot; <a href="/admin/analytics">Analytics</a> &middot; <a href="/admin/errors">AI Errors</a> &middot; <a href="/">Texas Votes</a> &middot; <a href="/privacy">Privacy</a><br><span style="color:#fff">&starf;</span> Built in Texas &middot; <a href="mailto:howdy@txvotes.app">howdy@txvotes.app</a></div>`;
 }
 
+/**
+ * Check admin auth — accepts both Bearer token and HTTP Basic Auth.
+ * Returns null if authenticated, or a 401 Response with WWW-Authenticate
+ * header (triggers browser login prompt) if not.
+ */
+function checkAdminAuth(request, env) {
+  const auth = request.headers.get("Authorization") || "";
+  if (auth === `Bearer ${env.ADMIN_SECRET}`) return null;
+  if (auth.startsWith("Basic ")) {
+    try {
+      const decoded = atob(auth.slice(6));
+      const password = decoded.includes(":") ? decoded.split(":").slice(1).join(":") : decoded;
+      if (password === env.ADMIN_SECRET) return null;
+    } catch {}
+  }
+  return new Response("Unauthorized", {
+    status: 401,
+    headers: { "WWW-Authenticate": 'Basic realm="Admin"' },
+  });
+}
+
 // MARK: - Candidate Profile Helpers
 
 /**
@@ -6901,45 +6922,35 @@ export default {
       if (url.pathname === "/health") {
         return handleHealthCheck(env);
       }
-      // Admin hub (GET with Bearer auth)
+      // Admin hub (GET with Basic/Bearer auth)
       if (url.pathname === "/admin") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         return handleAdmin();
       }
-      // Admin status dashboard (GET with Bearer auth)
+      // Admin status dashboard (GET with Basic/Bearer auth)
       if (url.pathname === "/admin/status") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         return handleAdminStatus(env);
       }
 
-      // Admin coverage dashboard (GET with Bearer auth)
+      // Admin coverage dashboard (GET with Basic/Bearer auth)
       if (url.pathname === "/admin/coverage") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         return handleAdminCoverage(env);
       }
-      // Admin analytics dashboard (GET with Bearer auth)
+      // Admin analytics dashboard (GET with Basic/Bearer auth)
       if (url.pathname === "/admin/analytics") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         return handleAdminAnalytics(env);
       }
-      // Admin AI error log endpoint (GET with Bearer auth)
+      // Admin AI error log endpoint (GET with Basic/Bearer auth)
       if (url.pathname === "/admin/errors") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         return handleAdminErrors(request, env);
       }
       // Admin API usage endpoint (GET with Bearer auth)

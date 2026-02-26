@@ -541,9 +541,10 @@ describe("Admin cleanup: stale dated-key detection", () => {
 // Admin hub page
 // ---------------------------------------------------------------------------
 describe("Smoke tests: GET /admin hub", () => {
-  it("returns 401 without auth", async () => {
+  it("returns 401 with WWW-Authenticate header without auth", async () => {
     const res = await get("/admin");
     expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate")).toBe('Basic realm="Admin"');
   });
 
   it("returns 200 with correct Bearer token", async () => {
@@ -556,6 +557,26 @@ describe("Smoke tests: GET /admin hub", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Admin Hub");
+  });
+
+  it("returns 200 with correct Basic auth (password only)", async () => {
+    const url = "https://txvotes.app/admin";
+    const request = new Request(url, {
+      method: "GET",
+      headers: { Authorization: "Basic " + btoa("admin:test-secret-123") },
+    });
+    const res = await worker.fetch(request, mockEnv);
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 401 with wrong Basic auth password", async () => {
+    const url = "https://txvotes.app/admin";
+    const request = new Request(url, {
+      method: "GET",
+      headers: { Authorization: "Basic " + btoa("admin:wrong-password") },
+    });
+    const res = await worker.fetch(request, mockEnv);
+    expect(res.status).toBe(401);
   });
 
   it("contains links to all 4 dashboards", async () => {

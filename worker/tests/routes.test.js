@@ -803,11 +803,10 @@ describe("Admin status dashboard", () => {
     expect(indexSrc).toContain('url.pathname === "/admin/status"');
   });
 
-  it("requires ADMIN_SECRET auth", () => {
+  it("requires admin auth", () => {
     const statusRouteIdx = indexSrc.indexOf('url.pathname === "/admin/status"');
     const nextLines = indexSrc.slice(statusRouteIdx, statusRouteIdx + 300);
-    expect(nextLines).toContain("ADMIN_SECRET");
-    expect(nextLines).toContain("Unauthorized");
+    expect(nextLines).toContain("checkAdminAuth");
   });
 
   it("routes to handleAdminStatus", () => {
@@ -843,11 +842,10 @@ describe("Admin AI error log dashboard", () => {
     expect(indexSrc).toContain('url.pathname === "/admin/errors"');
   });
 
-  it("requires ADMIN_SECRET auth", () => {
+  it("requires admin auth", () => {
     const routeIdx = indexSrc.indexOf('url.pathname === "/admin/errors"');
     const nextLines = indexSrc.slice(routeIdx, routeIdx + 300);
-    expect(nextLines).toContain("ADMIN_SECRET");
-    expect(nextLines).toContain("Unauthorized");
+    expect(nextLines).toContain("checkAdminAuth");
   });
 
   it("routes to handleAdminErrors", () => {
