@@ -4701,7 +4701,7 @@ async function handleStats(env) {
     let providerCards = "";
     const providerNames = { chatgpt: "ChatGPT", gemini: "Gemini", grok: "Grok", claude: "Claude" };
     for (const [key, displayName] of Object.entries(providerNames)) {
-      const score = providers[key]?.score;
+      const score = providers[key]?.overallScore;
       if (score !== undefined && score !== null) {
         const sColor = score >= 8 ? "#16a34a" : score >= 6 ? "#b45309" : "#dc2626";
         providerCards += `<div class="dq-card"><div class="dq-card-value" style="color:${sColor}">${score}<span class="dq-unit"> / 10</span></div><div class="dq-card-label">${escapeHtml(displayName)}</div></div>`;
@@ -5578,8 +5578,8 @@ async function handleAdminStatus(env) {
 
   const auditProviders = audit && audit.providers
     ? Object.entries(audit.providers).map(([name, p]) => {
-        const score = p.score != null ? p.score.toFixed(1) : "N/A";
-        const scoreColor = p.score >= 7 ? "#16a34a" : p.score >= 5 ? "#d97706" : "#dc2626";
+        const score = p.overallScore != null ? p.overallScore.toFixed(1) : "N/A";
+        const scoreColor = p.overallScore >= 7 ? "#16a34a" : p.overallScore >= 5 ? "#d97706" : "#dc2626";
         return `<tr><td style="text-transform:capitalize">${escapeHtml(name)}</td><td style="color:${scoreColor};font-weight:600">${score}/10</td><td>${escapeHtml(p.timestamp || "")}</td></tr>`;
       }).join("")
     : '<tr><td colspan="3" style="color:var(--text2)">No audit data</td></tr>';
