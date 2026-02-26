@@ -2111,14 +2111,24 @@ var APP_JS = [
     "var _dua=S.selectedParty==='democrat'?S.demDataUpdatedAt:S.repDataUpdatedAt;" +
     "if(_dua){h+='<div style=\"font-size:12px;color:var(--text2);margin-top:8px\">'+t('Data last verified')+': '+fmtDate(_dua)+'</div>'}" +
     "h+='</div>';" +
-    // Streaming indicator
+    // Streaming indicator (star progress bar)
     "if(S._streaming){" +
       "var _sRaces=contested.filter(function(r){return r._streamed}).length;" +
       "var _sProps=b.propositions?b.propositions.filter(function(p){return p._streamed}).length:0;" +
       "var _sTotal=_sRaces+_sProps;" +
       "var _sTotalAll=contested.length+(b.propositions?b.propositions.length:0);" +
-      "h+='<div class=\"stream-bar\">'+t('Analyzing your ballot...');" +
-      "if(_sTotalAll>0){h+='<div class=\"stream-progress\">'+_sTotal+' / '+_sTotalAll+'</div>'}" +
+      "h+='<div style=\"text-align:center;margin-bottom:14px\">';" +
+      "h+='<div style=\"font-size:14px;font-weight:600;color:var(--text2);margin-bottom:8px\">'+t('Analyzing your ballot...')+'</div>';" +
+      "if(_sTotalAll>0){" +
+        "h+='<div class=\"dots\" style=\"margin-top:0;flex-wrap:wrap\">';" +
+        "var _rwb=['red','white','blue'];" +
+        "for(var _si=0;_si<_sTotalAll;_si++){" +
+          "var _sc='dot';var _cn=_rwb[_si%3];" +
+          "if(_si<_sTotal)_sc+=' dot-done-'+_cn;else if(_si===_sTotal)_sc+=' dot-active-'+_cn;" +
+          "h+='<div class=\"'+_sc+'\">\\u2605</div>'" +
+        "}" +
+        "h+='</div>'" +
+      "}" +
       "h+='</div>'" +
     "}" +
     // Stale ballot data banner (shown when data is >48 hours old)
