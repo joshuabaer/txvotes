@@ -143,6 +143,7 @@ const PAGE_TR_COMMON = {
   'Browse every candidate with detailed profiles': 'Explora todos los candidatos con perfiles detallados',
   'See what a personalized ballot looks like': 'Mira c\u00F3mo se ve una boleta personalizada',
   'Full transparency of all AI prompts and data pipelines': 'Transparencia total de todos los prompts de IA y pipelines de datos',
+  'Public usage statistics and transparency metrics': 'Estad\u00EDsticas p\u00FAblicas de uso y m\u00E9tricas de transparencia',
 };
 
 /**
@@ -1546,6 +1547,7 @@ function handleHowItWorks() {
       <li><a href="/open-source" data-t="Open Source">Open Source</a> — <span data-t="Source code, architecture, and independent code reviews">Source code, architecture, and independent code reviews</span></li>
       <li><a href="/privacy" data-t="Privacy Policy">Privacy Policy</a> — <span data-t="What data we collect (almost none) and why">What data we collect (almost none) and why</span></li>
       <li><a href="/candidates" data-t="All Candidates">All Candidates</a> — <span data-t="Browse every candidate with detailed profiles">Browse every candidate with detailed profiles</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
@@ -1691,6 +1693,7 @@ function handleNonpartisan() {
       <li><a href="/data-quality" data-t="Data Quality Dashboard">Data Quality Dashboard</a> — <span data-t="Live metrics on ballot coverage and candidate completeness">Live metrics on ballot coverage and candidate completeness</span></li>
       <li><a href="/open-source" data-t="Open Source">Open Source</a> — <span data-t="Source code, architecture, and independent code reviews">Source code, architecture, and independent code reviews</span></li>
       <li><a href="/candidates" data-t="All Candidates">All Candidates</a> — <span data-t="Browse every candidate with detailed profiles">Browse every candidate with detailed profiles</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
@@ -2095,6 +2098,7 @@ CONFLICT RESOLUTION: If sources disagree, trust official filings over campaign c
       <li><a href="/nonpartisan" data-t="Nonpartisan by Design">Nonpartisan by Design</a> — <span data-t="How we ensure fairness for all voters">How we ensure fairness for all voters</span></li>
       <li><a href="/api/audit/export" data-t="Methodology Export">Methodology Export</a> — <span data-t="Full transparency of all AI prompts and data pipelines">Full transparency of all AI prompts and data pipelines</span></li>
       <li><a href="/candidates" data-t="All Candidates">All Candidates</a> — <span data-t="Browse every candidate with detailed profiles">Browse every candidate with detailed profiles</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
@@ -3212,6 +3216,7 @@ function handleSupport() {
       <li><a href="/how-it-works" data-t="How It Works">How It Works</a> — <span data-t="Plain-language explanation of the app and AI">Plain-language explanation of the app and AI</span></li>
       <li><a href="/nonpartisan" data-t="Nonpartisan by Design">Nonpartisan by Design</a> — <span data-t="How we keep the app fair for all voters">How we keep the app fair for all voters</span></li>
       <li><a href="/candidates" data-t="All Candidates">All Candidates</a> — <span data-t="Browse every candidate with detailed profiles">Browse every candidate with detailed profiles</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
@@ -3342,6 +3347,7 @@ function handlePrivacyPolicy() {
       <li><a href="/data-quality" data-t="Data Quality Dashboard">Data Quality Dashboard</a> — <span data-t="Live metrics on how complete our data is">Live metrics on how complete our data is</span></li>
       <li><a href="/open-source" data-t="Open Source">Open Source</a> — <span data-t="Source code, architecture, and independent code reviews">Source code, architecture, and independent code reviews</span></li>
       <li><a href="/candidates" data-t="All Candidates">All Candidates</a> — <span data-t="Browse every candidate with detailed profiles">Browse every candidate with detailed profiles</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
@@ -3504,6 +3510,7 @@ async function handleOpenSource(env) {
       <li><a href="/data-quality" data-t="Data Quality Dashboard">Data Quality Dashboard</a> — <span data-t="Live metrics on ballot coverage and candidate completeness">Live metrics on ballot coverage and candidate completeness</span></li>
       <li><a href="/nonpartisan" data-t="Nonpartisan by Design">Nonpartisan by Design</a> — <span data-t="How we ensure fairness for all voters">How we ensure fairness for all voters</span></li>
       <li><a href="/candidates" data-t="All Candidates">All Candidates</a> — <span data-t="Browse every candidate with detailed profiles">Browse every candidate with detailed profiles</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
@@ -4141,6 +4148,7 @@ async function handleCandidateProfile(slug, env) {
       <li><a href="/sample-ballot" data-t="Sample Ballot">Sample Ballot</a> — <span data-t="See what a personalized ballot looks like">See what a personalized ballot looks like</span></li>
       <li><a href="/data-quality" data-t="Data Quality Dashboard">Data Quality Dashboard</a> — <span data-t="Live metrics on ballot coverage and candidate completeness">Live metrics on ballot coverage and candidate completeness</span></li>
       <li><a href="/nonpartisan" data-t="Nonpartisan by Design">Nonpartisan by Design</a> — <span data-t="How we keep the app fair for all voters">How we keep the app fair for all voters</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
@@ -4294,6 +4302,7 @@ async function handleCandidatesIndex(env) {
       <li><a href="/nonpartisan" data-t="Nonpartisan by Design">Nonpartisan by Design</a> — <span data-t="How we keep the app fair for all voters">How we keep the app fair for all voters</span></li>
       <li><a href="/audit" data-t="AI Bias Audit">AI Bias Audit</a> — <span data-t="Independent review of our AI by four different systems">Independent review of our AI by four different systems</span></li>
       <li><a href="/open-source" data-t="Open Source">Open Source</a> — <span data-t="Source code, architecture, and independent code reviews">Source code, architecture, and independent code reviews</span></li>
+      <li><a href="/stats" data-t="Stats">Stats</a> — <span data-t="Public usage statistics and transparency metrics">Public usage statistics and transparency metrics</span></li>
     </ul>
 
     ${generateFooter()}
