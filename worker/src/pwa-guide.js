@@ -15,6 +15,7 @@ const SYSTEM_PROMPT =
   "- Use neutral, factual language in all reasoning. Avoid loaded terms, partisan framing, or editorial commentary. " +
   "- Treat all candidates with equal analytical rigor regardless of their positions. " +
   "- For propositions, connect recommendations to the voter's stated values without advocating for or against any ideology. " +
+  "SPANISH DIALECT: When generating Spanish content, use neutral Latin American Spanish (español neutro) accessible to all Spanish speakers. Avoid region-specific slang or colloquialisms. Use \"usted\" forms where appropriate. Prefer universally understood vocabulary over country-specific terms. " +
   "Respond with ONLY valid JSON — no markdown, no explanation, no text outside the JSON object.";
 
 const MODELS = ["claude-sonnet-4-6", "claude-sonnet-4-20250514"];
@@ -272,7 +273,7 @@ export async function handlePWA_Summary(request, env) {
       .join("; ");
 
     var langInstruction = lang === "es"
-      ? "Write your response in Spanish. "
+      ? "Write your response in neutral Latin American Spanish (español neutro). Avoid regional slang, prefer universally understood vocabulary, use \"usted\" forms. "
       : "";
 
     var toneInstruction = READING_LEVEL_INSTRUCTIONS[readingLevel] || "";
@@ -457,7 +458,7 @@ function buildUserPrompt(profile, ballotDesc, ballot, party, lang, readingLevel,
     "stated values, not to party-line positions.\n\n" +
     "IMPORTANT: For profileSummary, write 2 sentences in first person \u2014 conversational, specific, no generic labels. " +
     'NEVER say "I\'m a Democrat/Republican" \u2014 focus on values and priorities.' +
-    (lang === "es" ? " Write ALL text fields in Spanish (profileSummary, reasoning, strategicNotes, caveats). Keep office names, candidate names, district names, and confidence levels in English." : "") +
+    (lang === "es" ? " Write ALL text fields in Spanish (profileSummary, reasoning, strategicNotes, caveats). Use neutral Latin American Spanish (español neutro) — avoid regional slang, prefer universally understood vocabulary, use \"usted\" forms. Keep office names, candidate names, district names, and confidence levels in English." : "") +
     "\n\n" +
     "VOTER: " +
     partyLabel +
@@ -509,10 +510,10 @@ function buildUserPrompt(profile, ballotDesc, ballot, party, lang, readingLevel,
       ? ',\n  "candidateTranslations": [\n' +
         "    {\n" +
         '      "name": "exact candidate name (do not translate)",\n' +
-        '      "summary": "Spanish translation of candidate summary",\n' +
-        '      "keyPositions": ["Spanish translation of each position"],\n' +
-        '      "pros": ["Spanish translation of each pro"],\n' +
-        '      "cons": ["Spanish translation of each con"]\n' +
+        '      "summary": "neutral Latin American Spanish translation of candidate summary",\n' +
+        '      "keyPositions": ["neutral Latin American Spanish translation of each position"],\n' +
+        '      "pros": ["neutral Latin American Spanish translation of each pro"],\n' +
+        '      "cons": ["neutral Latin American Spanish translation of each con"]\n' +
         "    }\n" +
         "  ]\n"
       : "\n") +
@@ -655,8 +656,9 @@ export async function handleSeedTranslations(env, party, countyFips) {
     return lines.join("\n");
   }).join("\n\n");
 
-  var prompt = "Translate ALL of the following Texas election candidate text fields into Spanish. " +
-    "Keep candidate names in English. Use neutral, non-partisan language. " +
+  var prompt = "Translate ALL of the following Texas election candidate text fields into neutral Latin American Spanish (español neutro). " +
+    "Keep candidate names in English. Use neutral, non-partisan language accessible to all Spanish speakers. " +
+    "Avoid region-specific slang or colloquialisms. Prefer universally understood vocabulary over country-specific terms. " +
     "Maintain the same meaning and roughly the same length as the originals.\n\n" +
     candidateList + "\n\n" +
     "Return a JSON array of objects, one per candidate:\n" +
@@ -672,7 +674,8 @@ export async function handleSeedTranslations(env, party, countyFips) {
     "Return ONLY valid JSON — no markdown, no explanation.";
 
   var system = "You are a professional translator specializing in Texas political content. " +
-    "Translate from English to Spanish with neutral, non-partisan language. " +
+    "Translate from English to neutral Latin American Spanish (español neutro) with non-partisan language accessible to all Spanish speakers. " +
+    "Avoid region-specific slang or colloquialisms. Use \"usted\" forms where appropriate. Prefer universally understood vocabulary over country-specific terms. " +
     "Keep candidate names, office titles, and district names in English. " +
     "Return ONLY valid JSON.";
 
@@ -1153,9 +1156,18 @@ function parseResponse(text) {
   else if (cleaned.indexOf("```") === 0) cleaned = cleaned.slice(3);
   if (cleaned.slice(-3) === "```") cleaned = cleaned.slice(0, -3);
   cleaned = cleaned.trim();
+  // Sanitize common LLM JSON issues: single-quoted keys, trailing commas, unquoted keys
+  var sanitized = cleaned
+    .replace(/\/\/[^\n]*/g, "")                    // remove single-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, "")              // remove block comments
+    .replace(/,\s*([}\]])/g, "$1")                 // remove trailing commas
+    .replace(/([{,]\s*)([a-zA-Z_]\w*)\s*:/g, '$1"$2":')  // unquoted keys → quoted
+    .replace(/:\s*'([^']*)'/g, ':"$1"');           // single-quoted values → double-quoted
   try {
-    return JSON.parse(cleaned);
+    return JSON.parse(sanitized);
   } catch (err) {
+    // Fall back to original cleaned text if sanitization made things worse
+    try { return JSON.parse(cleaned); } catch (_) {}
     // Attempt repair for truncated JSON
     var truncationPatterns = [
       /Unterminated string/i,
