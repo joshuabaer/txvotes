@@ -901,7 +901,7 @@ async function callOpenAICompatible(env, system, userMessage, lang, endpoint, ap
 // MARK: - Gemini API Call
 
 async function callGemini(env, system, userMessage, lang, component, _isRetry) {
-  var maxTokens = _isRetry || (lang === "es" ? 8192 : (lang === "es_cached" ? 4096 : 2048));
+  var maxTokens = _isRetry || (lang === "es" ? 8192 : (lang === "es_cached" ? 4096 : 4096));
   var endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + env.GEMINI_API_KEY;
 
   for (var attempt = 0; attempt <= 1; attempt++) {
@@ -1156,18 +1156,12 @@ function parseResponse(text) {
   else if (cleaned.indexOf("```") === 0) cleaned = cleaned.slice(3);
   if (cleaned.slice(-3) === "```") cleaned = cleaned.slice(0, -3);
   cleaned = cleaned.trim();
-  // Sanitize common LLM JSON issues: single-quoted keys, trailing commas, unquoted keys
-  var sanitized = cleaned
-    .replace(/\/\/[^\n]*/g, "")                    // remove single-line comments
-    .replace(/\/\*[\s\S]*?\*\//g, "")              // remove block comments
-    .replace(/,\s*([}\]])/g, "$1")                 // remove trailing commas
-    .replace(/([{,]\s*)([a-zA-Z_]\w*)\s*:/g, '$1"$2":')  // unquoted keys → quoted
-    .replace(/:\s*'([^']*)'/g, ':"$1"');           // single-quoted values → double-quoted
   try {
-    return JSON.parse(sanitized);
+    return JSON.parse(cleaned);
   } catch (err) {
-    // Fall back to original cleaned text if sanitization made things worse
-    try { return JSON.parse(cleaned); } catch (_) {}
+    // Try light sanitization: trailing commas only (safe transform)
+    var sanitized = cleaned.replace(/,\s*([}\]])/g, "$1");
+    try { return JSON.parse(sanitized); } catch (_) {}
     // Attempt repair for truncated JSON
     var truncationPatterns = [
       /Unterminated string/i,
@@ -1177,7 +1171,7 @@ function parseResponse(text) {
     ];
     var isTruncation = truncationPatterns.some(function(p) { return p.test(err.message); });
     if (isTruncation) {
-      var repaired = repairTruncatedGuide(text);
+      var repaired = repairTruncatedGuide(cleaned);
       if (repaired) {
         console.warn("[REPAIR] Recovered truncated guide response with " +
           (repaired.races ? repaired.races.length : 0) + " races");
