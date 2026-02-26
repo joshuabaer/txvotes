@@ -2155,8 +2155,7 @@ var APP_JS = [
         "'+t('Recommendations are AI-generated from web sources and may contain errors or outdated information. Always verify candidate positions through official sources before voting.')+'" +
       "</div><button data-action=\"dismiss-disclaimer\" style=\"background:none;border:none;font-size:20px;cursor:pointer;padding:4px 8px;color:var(--text2);flex-shrink:0\">&times;</button></div>'" +
     "}" +
-    // Persistent AI limitations note (always visible)
-    "h+='<div style=\"font-size:12px;color:var(--text2);text-align:center;margin-bottom:12px;line-height:1.4\">'+t('AI Limitations')+': '+t('Recommendations are AI-generated from web sources and may contain errors or outdated information. Always verify candidate positions through official sources before voting.')+'</div>';" +
+    // (Duplicate AI limitations note removed — dismissible disclaimer above is sufficient)" +
     // Novelty tone warning banner (Cowboy)
     "if(S.readingLevel===7){" +
       "var _ntEmoji='\\uD83E\\uDD20';" +
@@ -2180,14 +2179,7 @@ var APP_JS = [
     // Actions
     "h+='<div class=\"actions\">';" +
     "h+='<button class=\"btn btn-secondary\" data-action=\"nav\" data-to=\"#/cheatsheet\">\u{1F4CB} '+t('Cheat Sheet')+'</button>';" +
-    "h+='<button class=\"btn btn-secondary\" data-action=\"share\">\u{1F4E4} '+t('Share')+'</button>';" +
-    "h+='</div>';" +
-    // Share CTA card
-    "h+='<div class=\"share-cta\">';" +
-    "h+='<div class=\"share-cta-icon\">\u{1F4E3}</div>';" +
-    "h+='<div class=\"share-cta-title\">'+t('Spread the word')+'</div>';" +
-    "h+='<div class=\"share-cta-body\">'+t('Know someone who needs help deciding?')+' '+t('The Texas primary is March 3. Share Texas Votes so your friends and family can get a personalized voting guide too.')+'</div>';" +
-    "h+='<button class=\"btn btn-primary share-cta-btn\" data-action=\"share-app\">\u{1F4E4} '+t('Share Texas Votes')+'</button>';" +
+    "h+='<button class=\"btn btn-secondary\" data-action=\"share-app\">\u{1F4E4} '+t('Share Texas Votes')+'</button>';" +
     "h+='</div>';" +
     // Key races
     "if(keyRaces.length){" +
@@ -2222,6 +2214,13 @@ var APP_JS = [
         "h+='</div></div>'" +
       "}" +
     "}" +
+    // Share CTA (after all races)
+    "h+='<div class=\"share-cta\">';" +
+    "h+='<div class=\"share-cta-icon\">\u{1F4E3}</div>';" +
+    "h+='<div class=\"share-cta-title\">'+t('Spread the word')+'</div>';" +
+    "h+='<div class=\"share-cta-body\">'+t('Know someone who needs help deciding?')+' '+t('The Texas primary is March 3. Share Texas Votes so your friends and family can get a personalized voting guide too.')+'</div>';" +
+    "h+='<button class=\"btn btn-primary share-cta-btn\" data-action=\"share-app\">\u{1F4E4} '+t('Share Texas Votes')+'</button>';" +
+    "h+='</div>';" +
     // IMPORTANT: Keep footer in sync with index.js generateFooter() — FOOTER_SYNC_PWA
     "h+='<div style=\"text-align:center;padding:24px 0 8px;font-size:13px;color:var(--text2)\">';" +
     "h+='<a href=\"/\" style=\"color:var(--text2)\">'+t('Texas Votes')+'</a>';" +
