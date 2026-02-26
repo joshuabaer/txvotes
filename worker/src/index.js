@@ -541,7 +541,7 @@ function handleLandingPage() {
       <div data-t="Print your cheat sheet for the booth"><span>🖨️</span> Print your cheat sheet for the booth</div>
       <div data-t="Find your polling location"><span>📍</span> Find your polling location</div>
       <div data-t="Nonpartisan and Open Source by design"><span>⚖️</span> <a href="/nonpartisan">Nonpartisan</a> and <a href="/open-source">Open Source</a> by design</div>
-      <div data-t="No personal data collected"><span>🛡️</span> No personal data collected</div>
+      <div data-t="No personal data collected"><span>&#x1F512;&#xFE0F;</span> No personal data collected</div>
     </div>
     <p class="note" data-t="Works on any device — phone, tablet, or computer.">Works on any device — phone, tablet, or computer.</p>
     <p class="note" style="margin-top:0" data-t="No app download needed.">No app download needed.</p>
