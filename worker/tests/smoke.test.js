@@ -536,3 +536,53 @@ describe("Admin cleanup: stale dated-key detection", () => {
     expect(deletedKeys).toContain("update_log:2026-01-01");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Admin hub page
+// ---------------------------------------------------------------------------
+describe("Smoke tests: GET /admin hub", () => {
+  it("returns 401 without auth", async () => {
+    const res = await get("/admin");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 200 with correct Bearer token", async () => {
+    const url = "https://txvotes.app/admin";
+    const request = new Request(url, {
+      method: "GET",
+      headers: { Authorization: "Bearer test-secret-123" },
+    });
+    const res = await worker.fetch(request, mockEnv);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Admin Hub");
+  });
+
+  it("contains links to all 4 dashboards", async () => {
+    const url = "https://txvotes.app/admin";
+    const request = new Request(url, {
+      method: "GET",
+      headers: { Authorization: "Bearer test-secret-123" },
+    });
+    const res = await worker.fetch(request, mockEnv);
+    const html = await res.text();
+    expect(html).toContain('/admin/status');
+    expect(html).toContain('/admin/coverage');
+    expect(html).toContain('/admin/analytics');
+    expect(html).toContain('/admin/errors');
+  });
+
+  it("contains API endpoint references", async () => {
+    const url = "https://txvotes.app/admin";
+    const request = new Request(url, {
+      method: "GET",
+      headers: { Authorization: "Bearer test-secret-123" },
+    });
+    const res = await worker.fetch(request, mockEnv);
+    const html = await res.text();
+    expect(html).toContain('/api/admin/usage');
+    expect(html).toContain('/api/audit/run');
+    expect(html).toContain('/api/election/trigger');
+    expect(html).toContain('/api/admin/cleanup');
+  });
+});

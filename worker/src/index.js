@@ -213,10 +213,8 @@ function generateFooter({ noDataT = false } = {}) {
  * @param {string[]} [extraLinks] - Additional link pairs as [{href, label}]
  * @returns {string} Admin footer HTML
  */
-function generateAdminFooter(extraLinks = []) {
-  const extras = extraLinks.map(l => `<a href="${l.href}">${l.label}</a>`).join(' &middot; ');
-  const mid = extras ? extras + ' &middot; ' : '';
-  return `<div class="page-footer"><a href="/">Texas Votes</a> &middot; ${mid}<a href="/privacy">Privacy</a><br><span style="color:#fff">&starf;</span> Built in Texas &middot; <a href="mailto:howdy@txvotes.app">howdy@txvotes.app</a></div>`;
+function generateAdminFooter() {
+  return `<div class="page-footer"><a href="/admin">Admin</a> &middot; <a href="/admin/status">Status</a> &middot; <a href="/admin/coverage">Coverage</a> &middot; <a href="/admin/analytics">Analytics</a> &middot; <a href="/admin/errors">AI Errors</a> &middot; <a href="/">Texas Votes</a> &middot; <a href="/privacy">Privacy</a><br><span style="color:#fff">&starf;</span> Built in Texas &middot; <a href="mailto:howdy@txvotes.app">howdy@txvotes.app</a></div>`;
 }
 
 // MARK: - Candidate Profile Helpers
@@ -5427,6 +5425,70 @@ async function handleHealthCheck(env) {
   });
 }
 
+// MARK: - Admin Hub
+
+function handleAdmin() {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${pageHead({
+    title: "Admin Hub \u2014 Texas Votes",
+    description: "Admin hub for Texas Votes dashboards and API endpoints.",
+  })}
+  <style>
+    .container{max-width:900px}
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2rem}
+    .stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:1.25rem;text-decoration:none;color:inherit;transition:border-color .15s}
+    .stat-card:hover{border-color:var(--blue)}
+    .stat-card h3{margin:0 0 0.5rem;font-size:1rem;color:var(--blue)}
+    .stat-card p{margin:0;font-size:0.85rem;color:var(--text2)}
+    table{width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:0.9rem}
+    th,td{padding:6px 10px;border:1px solid var(--border);text-align:left}
+    th{background:var(--blue);color:#fff;font-weight:600;font-size:0.85rem}
+    code{background:rgba(128,128,128,.1);padding:1px 4px;border-radius:3px;font-size:0.85em}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-top">&larr; Texas Votes</a>
+    <h1>Admin Hub</h1>
+
+    <h2>Dashboards</h2>
+    <div class="stat-grid">
+      <a href="/admin/status" class="stat-card"><h3>Status</h3><p>System health, cron jobs, update logs, audit scores</p></a>
+      <a href="/admin/coverage" class="stat-card"><h3>Coverage</h3><p>Candidate completeness, tone variants, county data</p></a>
+      <a href="/admin/analytics" class="stat-card"><h3>Analytics</h3><p>Usage events, interview funnel, guide timing</p></a>
+      <a href="/admin/errors" class="stat-card"><h3>AI Errors</h3><p>Error log, failure categories, daily breakdown</p></a>
+    </div>
+
+    <h2>API Endpoints</h2>
+    <table>
+      <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+      <tr><td>GET</td><td><code>/health</code></td><td>Public health check</td></tr>
+      <tr><td>GET</td><td><code>/api/balance-check</code></td><td>Pros/cons balance scoring</td></tr>
+      <tr><td>GET</td><td><code>/api/election/manifest</code></td><td>Election data manifest</td></tr>
+      <tr><td>GET</td><td><code>/api/admin/usage</code></td><td>API usage &amp; cost estimates</td></tr>
+      <tr><td>GET</td><td><code>/api/admin/baseline</code></td><td>Verified candidate baseline</td></tr>
+      <tr><td>GET</td><td><code>/api/admin/baseline/log</code></td><td>Baseline fallback log</td></tr>
+      <tr><td>POST</td><td><code>/api/audit/run</code></td><td>Trigger automated AI audit</td></tr>
+      <tr><td>POST</td><td><code>/api/election/trigger</code></td><td>Trigger election data update</td></tr>
+      <tr><td>POST</td><td><code>/api/election/seed-county</code></td><td>Seed county-specific data</td></tr>
+      <tr><td>POST</td><td><code>/api/election/generate-tones</code></td><td>Pre-generate prop tone variants</td></tr>
+      <tr><td>POST</td><td><code>/api/election/generate-candidate-tones</code></td><td>Pre-generate candidate tone variants</td></tr>
+      <tr><td>POST</td><td><code>/api/election/seed-translations</code></td><td>Pre-generate Spanish translations</td></tr>
+      <tr><td>POST</td><td><code>/api/admin/cleanup</code></td><td>List/delete stale KV keys</td></tr>
+      <tr><td>POST</td><td><code>/api/admin/baseline/seed</code></td><td>Seed baseline from current data</td></tr>
+      <tr><td>POST</td><td><code>/api/admin/baseline/update</code></td><td>Update candidate baseline fields</td></tr>
+    </table>
+
+    ${generateAdminFooter()}
+  </div>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8" } });
+}
+
 // MARK: - Admin Status Dashboard
 
 async function handleAdminStatus(env) {
@@ -5615,12 +5677,7 @@ async function handleAdminStatus(env) {
       ${healthLogRows}
     </table>
 
-    ${generateAdminFooter([
-      { href: '/admin/coverage', label: 'Coverage' },
-      { href: '/admin/analytics', label: 'Analytics' },
-      { href: '/admin/errors', label: 'AI Errors' },
-      { href: '/health', label: 'Health API' },
-    ])}
+    ${generateAdminFooter()}
   </div>
 </body>
 </html>`;
@@ -5909,7 +5966,7 @@ async function handleAdminCoverage(env) {
     </table>
     </div>
 
-    ${generateFooter({ noDataT: true })}
+    ${generateAdminFooter()}
   </div>
 </body>
 </html>`;
@@ -6109,7 +6166,7 @@ async function handleAdminAnalytics(env) {
     </div>
     <h2>Guide Errors</h2>
     <div class="scroll-table"><table><tr><th>Error Message</th><th style="text-align:right">Count</th></tr>${er}</table></div>
-    ${generateAdminFooter([{ href: '/admin/coverage', label: 'Coverage' }])}
+    ${generateAdminFooter()}
   </div>
 </body>
 </html>`;
@@ -6708,11 +6765,7 @@ async function handleAdminErrors(request, env) {
     <h2>Daily Breakdown</h2>
     ${dayCards}
 
-    ${generateAdminFooter([
-      { href: '/admin/status', label: 'Status' },
-      { href: '/admin/coverage', label: 'Coverage' },
-      { href: '/admin/analytics', label: 'Analytics' },
-    ])}
+    ${generateAdminFooter()}
   </div>
 </body>
 </html>`;
@@ -6847,6 +6900,14 @@ export default {
       // Health check endpoint (public, no auth)
       if (url.pathname === "/health") {
         return handleHealthCheck(env);
+      }
+      // Admin hub (GET with Bearer auth)
+      if (url.pathname === "/admin") {
+        const auth = request.headers.get("Authorization");
+        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
+          return new Response("Unauthorized", { status: 401 });
+        }
+        return handleAdmin();
       }
       // Admin status dashboard (GET with Bearer auth)
       if (url.pathname === "/admin/status") {
