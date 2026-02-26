@@ -2326,17 +2326,18 @@ var APP_JS = [
     "var idx=-1;for(var i=0;i<allRaces.length;i++){if(allRaces[i].office===race.office&&allRaces[i].district===race.district){idx=i;break}}" +
     "var label=race.office+(race.district?' \\u2014 '+race.district:'')+(race.recommendation?' \\u2014 Recommended: '+race.recommendation.candidateName:'');" +
     "var _streamClass=race._streamed?' stream-card-in':'';" +
-    "var _pendingClass=(!race._streamed&&S._streaming)?' stream-pending':'';" +
+    "var _isPending=(!race._streamed&&S._streaming);" +
+    "var _pendingClass=_isPending?' stream-pending':'';" +
     "var h='<div class=\"card card-touch'+_streamClass+_pendingClass+'\" data-action=\"nav\" data-to=\"#/race/'+idx+'\" role=\"link\" aria-label=\"'+esc(label)+'\" tabindex=\"0\">';" +
     // Row 1: office title + badge + chevron
     "h+='<div style=\"display:flex;justify-content:space-between;align-items:center;gap:6px\">';" +
     "h+='<div style=\"flex:1;min-width:0;font-size:14px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(race.isKeyRace?'<span class=\"star\">\u2B50</span> ':'')+esc(race.office)+(race.district?' \\u2014 '+esc(race.district):'')+'</div>';" +
     "h+='<div style=\"display:flex;align-items:center;gap:6px;flex-shrink:0\">';" +
-    "if(race.recommendation){h+=confBadge(race.recommendation.confidence)}" +
+    "if(race.recommendation&&!_isPending){h+=confBadge(race.recommendation.confidence)}" +
     "h+='<span style=\"color:var(--text2);font-size:18px\">&rsaquo;</span>';" +
     "h+='</div></div>';" +
-    // Full-width content below
-    "if(race.recommendation){" +
+    // Full-width content below (hide during streaming for pending races)
+    "if(race.recommendation&&!_isPending){" +
       "h+='<div style=\"font-size:17px;font-weight:700;margin-top:4px\">'+esc(race.recommendation.candidateName)+'</div>';" +
       "h+='<div style=\"font-size:13px;color:var(--text2);margin-top:2px;line-height:1.4\">'+esc(race.recommendation.reasoning)+'</div>'" +
     "}" +
@@ -2374,10 +2375,12 @@ var APP_JS = [
     "var recClass='badge-warn';" +
     "if(prop.recommendation==='Lean Yes')recClass='badge-ok';" +
     "if(prop.recommendation==='Lean No')recClass='badge-bad';" +
-    "var _pPending=(!prop._streamed&&S._streaming)?' stream-pending':'';" +
+    "var _pIsPending=(!prop._streamed&&S._streaming);" +
+    "var _pPending=_pIsPending?' stream-pending':'';" +
     "var h='<div class=\"card'+_pPending+'\">';" +
     "h+='<div class=\"prop-header\"><div class=\"prop-title\">Prop '+prop.number+': '+esc(prop.title)+'</div>';" +
-    "h+='<span class=\"badge '+recClass+'\">'+t(prop.recommendation)+'</span></div>';" +
+    "if(!_pIsPending){h+='<span class=\"badge '+recClass+'\">'+t(prop.recommendation)+'</span>'}" +
+    "h+='</div>';" +
     "if(LANG==='es'){var tt=t(prop.title);if(tt!==prop.title)h+='<div class=\"prop-trans\">'+esc(tt)+'</div>'}" +
     "var pdesc=tp(prop.description)||prop.description;" +
     "h+='<div class=\"prop-desc\">'+esc(pdesc)+'</div>';" +

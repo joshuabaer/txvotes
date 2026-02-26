@@ -166,6 +166,7 @@ function pageI18n(pageTR) {
       document.querySelectorAll('[data-t]').forEach(function(el){
         var key=el.getAttribute('data-t');
         var text=lang==='es'?(TR[key]||key):key;
+        if(TR[key]&&TR[key].indexOf('<')!==-1){if(!el.getAttribute('data-orig'))el.setAttribute('data-orig',el.innerHTML);if(lang==='es'){el.innerHTML=TR[key]}else{el.innerHTML=el.getAttribute('data-orig')}return}
         var a=el.querySelector('a');
         if(a&&!el.querySelector('a+a')){a.textContent=text}
         else if(!a){el.textContent=text}
@@ -175,6 +176,7 @@ function pageI18n(pageTR) {
           el.querySelectorAll('a').forEach(function(a2){var k2=a2.textContent.trim();if(TR[k2])a2.textContent=TR[k2]});
         }
       });
+      document.querySelectorAll('[data-t-placeholder]').forEach(function(el){var pk=el.getAttribute('data-t-placeholder');el.placeholder=lang==='es'?(TR[pk]||pk):pk});
       var btn=document.getElementById('lang-toggle');
       if(btn)btn.textContent=lang==='es'?'Switch to English':'Cambiar a Espa\\u00F1ol';
     }
@@ -539,7 +541,7 @@ function handleLandingPage() {
       <div data-t="Print your cheat sheet for the booth"><span>🖨️</span> Print your cheat sheet for the booth</div>
       <div data-t="Find your polling location"><span>📍</span> Find your polling location</div>
       <div data-t="Nonpartisan and Open Source by design"><span>⚖️</span> <a href="/nonpartisan">Nonpartisan</a> and <a href="/open-source">Open Source</a> by design</div>
-      <div data-t="No personal data collected"><span>🔒</span> <strong>No personal data collected</strong></div>
+      <div data-t="No personal data collected"><span>🛡️</span> No personal data collected</div>
     </div>
     <p class="note" data-t="Works on any device — phone, tablet, or computer.">Works on any device — phone, tablet, or computer.</p>
     <p class="note" style="margin-top:0" data-t="No app download needed.">No app download needed.</p>
@@ -570,7 +572,9 @@ function handleLandingPage() {
       'Open Source':'C\\u00F3digo Abierto',
       'Privacy':'Privacidad',
       'All Candidates':'Todos los Candidatos',
-      'See a Sample Ballot':'Ver una boleta de ejemplo'
+      'See a Sample Ballot':'Ver una boleta de ejemplo',
+      'Built in Texas':'Hecho en Texas',
+      'Texas Votes':'Texas Votes'
     };
     var lang=localStorage.getItem('tx_votes_lang')||localStorage.getItem('atx_votes_lang')||((navigator.language||'').slice(0,2)==='es'?'es':'en');
     var features={'5-minute interview learns your values':'\\u2705','Personalized ballot with recommendations':'\\uD83D\\uDCCB','Print your cheat sheet for the booth':'\\uD83D\\uDDA8\\uFE0F','Find your polling location':'\\uD83D\\uDCCD','Nonpartisan and Open Source by design':'\\u2696\\uFE0F'};
@@ -1907,7 +1911,7 @@ async function handleAuditPage(env) {
       <button class="export-btn" onclick="runAudit('https://grok.x.ai/')" style="border:none;cursor:pointer" data-t="Audit with Grok">Audit with Grok</button>
       <button class="export-btn" onclick="runAudit('https://claude.ai/')" style="border:none;cursor:pointer" data-t="Audit with Claude">Audit with Claude</button>
     </div>
-    <div id="audit-toast" style="display:none;background:#16a34a;color:#fff;padding:0.75rem 1.25rem;border-radius:var(--rs);font-weight:600;margin:0.75rem 0;text-align:center;font-size:0.95rem">Prompt copied! Paste it into the chat.</div>
+    <div id="audit-toast" style="display:none;background:#16a34a;color:#fff;padding:0.75rem 1.25rem;border-radius:var(--rs);font-weight:600;margin:0.75rem 0;text-align:center;font-size:0.95rem" data-t="Prompt copied! Paste it into the chat.">Prompt copied! Paste it into the chat.</div>
     <script>
     function copyText(text){
       if(navigator.clipboard&&navigator.clipboard.writeText){
@@ -1926,18 +1930,19 @@ async function handleAuditPage(env) {
     async function runAudit(url){
       var t=document.getElementById('audit-toast');
       var win=window.open('','_blank');
+      var es=document.documentElement.lang==='es';
       try{
-        t.textContent='Loading methodology export...';t.style.display='block';t.style.background='var(--blue)';
+        t.textContent=es?'Cargando exportaci\u00F3n de metodolog\u00EDa...':'Loading methodology export...';t.style.display='block';t.style.background='var(--blue)';
         window.focus();
         var r=await fetch('/api/audit/export');var json=await r.text();
         var prompt=${auditPromptTextJson}+json+${auditPromptSuffixJson};
         await copyText(prompt);
-        t.textContent='Prompt copied! Paste it into the AI chat.';t.style.background='#16a34a';
+        t.textContent=es?'\u00A1Prompt copiado! P\u00E9galo en el chat de IA.':'Prompt copied! Paste it into the AI chat.';t.style.background='#16a34a';
         setTimeout(function(){t.style.display='none'},8000);
         if(win&&!win.closed){win.location.href=url;}
-        else{t.innerHTML='Prompt copied! <a href="'+url+'" target="_blank" style="color:#fff;text-decoration:underline">Open the AI chat</a> and paste it.';}
+        else{t.innerHTML=(es?'\u00A1Prompt copiado! ':'Prompt copied! ')+'<a href="'+url+'" target="_blank" style="color:#fff;text-decoration:underline">'+(es?'Abrir el chat de IA':'Open the AI chat')+'</a>'+(es?' y p\u00E9galo.':' and paste it.');}
       }catch(e){
-        t.textContent='Error: '+e.message;t.style.background='#dc2626';t.style.display='block';
+        t.textContent=(es?'Error: ':'Error: ')+e.message;t.style.background='#dc2626';t.style.display='block';
         if(win&&!win.closed)win.close();
       }
     }
@@ -2173,6 +2178,10 @@ CONFLICT RESOLUTION: If sources disagree, trust official filings over campaign c
     'Fairness of Framing': 'Equidad en la Presentaci\u00F3n',
     'Balance of Pros/Cons': 'Equilibrio de Pros/Contras',
     'Transparency': 'Transparencia',
+    'Prompt copied! Paste it into the chat.': '\u00A1Prompt copiado! P\u00E9galo en el chat.',
+    'Loading methodology export...': 'Cargando exportaci\u00F3n de metodolog\u00EDa...',
+    'Prompt copied! Paste it into the AI chat.': '\u00A1Prompt copiado! P\u00E9galo en el chat de IA.',
+    'Open the AI chat': 'Abrir el chat de IA',
   })}
 </body>
 </html>`;
@@ -3459,17 +3468,17 @@ async function handleOpenSource(env) {
 
     <h2 data-t="The Code">The Code</h2>
     <!-- TODO: Update URL when GitHub repo is created (see todolist) -->
-    <p data-t="The full source code is available on GitHub.">The full source code is available on GitHub: <a href="https://github.com/txvotes/txvotes">github.com/txvotes/txvotes</a> <span style="font-size:0.85rem;color:var(--text2)">(repo pending — coming soon)</span></p>
+    <p data-t="The full source code is available on GitHub.">The full source code is available on GitHub: <a href="https://github.com/txvotes/txvotes">github.com/txvotes/txvotes</a> <span style="font-size:0.85rem;color:var(--text2)" data-t="(repo pending — coming soon)">(repo pending — coming soon)</span></p>
 
     <p data-t="Texas Votes is a single-file progressive web app served directly from a Cloudflare Worker.">Texas Votes is a single-file progressive web app served directly from a Cloudflare Worker. There's no build step, no framework, no bundler. The entire app — HTML, CSS, and JavaScript — is generated server-side and delivered as one response.</p>
 
     <ul class="tech-list">
-      <li><strong>JavaScript</strong> — vanilla JS, no frameworks</li>
-      <li><strong>Cloudflare Workers</strong> — edge server</li>
-      <li><strong>KV Storage</strong> — election data</li>
-      <li><strong>Claude API</strong> — guide generation</li>
-      <li><strong>Census Geocoder</strong> — district lookup</li>
-      <li><strong>PWA</strong> — works offline, installable</li>
+      <li data-t="JavaScript — vanilla JS, no frameworks"><strong>JavaScript</strong> — vanilla JS, no frameworks</li>
+      <li data-t="Cloudflare Workers — edge server"><strong>Cloudflare Workers</strong> — edge server</li>
+      <li data-t="KV Storage — election data"><strong>KV Storage</strong> — election data</li>
+      <li data-t="Claude API — guide generation"><strong>Claude API</strong> — guide generation</li>
+      <li data-t="Census Geocoder — district lookup"><strong>Census Geocoder</strong> — district lookup</li>
+      <li data-t="PWA — works offline, installable"><strong>PWA</strong> — works offline, installable</li>
     </ul>
 
     <h2 data-t="Independent AI Code Reviews">Independent AI Code Reviews</h2>
@@ -3542,6 +3551,13 @@ async function handleOpenSource(env) {
     'Contact us anytime': 'Cont\u00E1ctanos en cualquier momento',
     'License': 'Licencia',
     'Texas Votes is released under the MIT License.': 'Texas Votes est\u00E1 publicado bajo la Licencia MIT.',
+    'JavaScript \u2014 vanilla JS, no frameworks': '<strong>JavaScript</strong> \u2014 JS puro, sin frameworks',
+    'Cloudflare Workers \u2014 edge server': '<strong>Cloudflare Workers</strong> \u2014 servidor edge',
+    'KV Storage \u2014 election data': '<strong>KV Storage</strong> \u2014 datos electorales',
+    'Claude API \u2014 guide generation': '<strong>Claude API</strong> \u2014 generaci\u00F3n de gu\u00EDas',
+    'Census Geocoder \u2014 district lookup': '<strong>Census Geocoder</strong> \u2014 b\u00FAsqueda de distritos',
+    'PWA \u2014 works offline, installable': '<strong>PWA</strong> \u2014 funciona sin conexi\u00F3n, instalable',
+    '(repo pending \u2014 coming soon)': '(repositorio pendiente \u2014 pr\u00F3ximamente)',
   })}
 </body>
 </html>`;
@@ -4202,13 +4218,13 @@ async function handleCandidatesIndex(env) {
 
   // Build side-by-side race sections
   function renderCandidateList(candidates) {
-    if (candidates.length === 0) return `<p style="color:var(--text2);font-size:0.9rem;margin:0.5rem 0">No primary candidates</p>`;
+    if (candidates.length === 0) return `<p style="color:var(--text2);font-size:0.9rem;margin:0.5rem 0" data-t="No primary candidates">No primary candidates</p>`;
     return `<ul style="padding-left:0;margin:0.5rem 0">${candidates.map(e => {
       const isIncumbent = e.candidate.incumbent || e.candidate.isIncumbent;
       const isWithdrawn = e.candidate.withdrawn;
-      const incumbentBadge = isIncumbent ? ' <span style="font-size:0.8rem;color:var(--text2)">(incumbent)</span>' : "";
-      const withdrawnBadge = isWithdrawn ? ' <span style="font-size:0.8rem;color:#c62626;font-style:italic">(withdrawn)</span>' : "";
-      const limitedBadge = isSparseCandidate(e.candidate) ? ' <span style="font-size:0.75rem;color:var(--text2);font-style:italic">(limited info)</span>' : "";
+      const incumbentBadge = isIncumbent ? ' <span style="font-size:0.8rem;color:var(--text2)" data-t="(incumbent)">(incumbent)</span>' : "";
+      const withdrawnBadge = isWithdrawn ? ' <span style="font-size:0.8rem;color:#c62626;font-style:italic" data-t="(withdrawn)">(withdrawn)</span>' : "";
+      const limitedBadge = isSparseCandidate(e.candidate) ? ' <span style="font-size:0.75rem;color:var(--text2);font-style:italic" data-t="(limited info)">(limited info)</span>' : "";
       const nameStyle = isWithdrawn ? ' style="color:var(--text2);text-decoration:line-through"' : "";
       const initials = e.candidate.name.split(' ').map(w => w[0]).join('').slice(0, 2);
       const placeholder = `<span style="display:none;width:32px;height:32px;border-radius:50%;background:var(--border);vertical-align:middle;margin-right:8px;line-height:32px;text-align:center;font-size:12px;color:var(--text2)">${escapeHtml(initials)}</span>`;
@@ -4227,11 +4243,11 @@ async function handleCandidatesIndex(env) {
       </div>
       <div class="party-columns">
         <div class="party-col">
-          <div style="font-weight:600;color:#c62626;margin-bottom:0.25rem;font-size:0.9rem">Republican</div>
+          <div style="font-weight:600;color:#c62626;margin-bottom:0.25rem;font-size:0.9rem" data-t="Republican">Republican</div>
           ${renderCandidateList(raceData.republican)}
         </div>
         <div class="party-col">
-          <div style="font-weight:600;color:#2563eb;margin-bottom:0.25rem;font-size:0.9rem">Democrat</div>
+          <div style="font-weight:600;color:#2563eb;margin-bottom:0.25rem;font-size:0.9rem" data-t="Democrat">Democrat</div>
           ${renderCandidateList(raceData.democrat)}
         </div>
       </div>
@@ -4239,7 +4255,7 @@ async function handleCandidatesIndex(env) {
   }
 
   if (!raceSections) {
-    raceSections = `<p class="subtitle">No candidate data is available yet. Check back soon.</p>`;
+    raceSections = `<p class="subtitle" data-t="No candidate data is available yet. Check back soon.">No candidate data is available yet. Check back soon.</p>`;
   }
 
   // Build county filter dropdown (only shown if there are county candidates)
@@ -4332,7 +4348,9 @@ async function handleCandidatesIndex(env) {
           if (show) shown++;
         }
         if (countEl) {
-          countEl.textContent = shown + (shown === 1 ? ' race' : ' races');
+          var lang = document.documentElement.lang || localStorage.getItem('tx_votes_lang') || 'en';
+          var raceWord = lang === 'es' ? (shown === 1 ? ' contienda' : ' contiendas') : (shown === 1 ? ' race' : ' races');
+          countEl.textContent = shown + raceWord;
         }
       }
       sel.addEventListener('change', update);
@@ -4351,6 +4369,13 @@ async function handleCandidatesIndex(env) {
     'Filter by county:': 'Filtrar por condado:',
     'All Counties': 'Todos los Condados',
     'Statewide Only': 'Solo Estatales',
+    'Republican': 'Republicano',
+    'Democrat': 'Dem\u00F3crata',
+    'No primary candidates': 'Sin candidatos en la primaria',
+    '(incumbent)': '(titular)',
+    '(withdrawn)': '(retirado)',
+    '(limited info)': '(informaci\u00F3n limitada)',
+    'No candidate data is available yet. Check back soon.': 'A\u00FAn no hay datos de candidatos disponibles. Vuelva pronto.',
   })}
 </body>
 </html>`;
@@ -4578,7 +4603,7 @@ async function handleStats(env) {
 
   // --- Build hero stat cards ---
   function statCard(value, label, subtitle) {
-    const sub = subtitle ? `<div class="dq-card-detail">${subtitle}</div>` : "";
+    const sub = subtitle ? `<div class="dq-card-detail" data-t="${escapeHtml(subtitle)}">${subtitle}</div>` : "";
     return `<div class="dq-card"><div class="dq-card-value">${value}</div><div class="dq-card-label" data-t="${escapeHtml(label)}">${escapeHtml(label)}</div>${sub}</div>`;
   }
 
@@ -4630,7 +4655,7 @@ async function handleStats(env) {
     for (const t of aeStats.toneData) {
       const pct = totalToneSelections > 0 ? Math.round((t.count / totalToneSelections) * 100) : 0;
       toneRows += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
-        <span style="min-width:110px;font-size:0.9rem;font-weight:600">${escapeHtml(t.label)}</span>
+        <span style="min-width:110px;font-size:0.9rem;font-weight:600" data-t="${escapeHtml(t.label)}">${escapeHtml(t.label)}</span>
         <div style="flex:1;background:var(--border);border-radius:99px;height:10px;overflow:hidden"><div style="height:100%;border-radius:99px;background:var(--blue);width:${pct}%"></div></div>
         <span style="min-width:40px;text-align:right;font-size:0.85rem;color:var(--text2)">${pct}%</span>
       </div>`;
@@ -4642,7 +4667,7 @@ async function handleStats(env) {
     for (const l of aeStats.langData) {
       const pct = totalLang > 0 ? Math.round((l.count / totalLang) * 100) : 0;
       langRows += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
-        <span style="min-width:80px;font-size:0.9rem;font-weight:600">${escapeHtml(l.lang)}</span>
+        <span style="min-width:80px;font-size:0.9rem;font-weight:600" data-t="${escapeHtml(l.lang)}">${escapeHtml(l.lang)}</span>
         <div style="flex:1;background:var(--border);border-radius:99px;height:10px;overflow:hidden"><div style="height:100%;border-radius:99px;background:var(--blue);width:${pct}%"></div></div>
         <span style="min-width:40px;text-align:right;font-size:0.85rem;color:var(--text2)">${pct}%</span>
       </div>`;
@@ -4715,7 +4740,7 @@ async function handleStats(env) {
         const sColor = score >= 8 ? "#16a34a" : score >= 6 ? "#b45309" : "#dc2626";
         providerCards += `<div class="dq-card"><div class="dq-card-value" style="color:${sColor}">${score}<span class="dq-unit"> / 10</span></div><div class="dq-card-label">${escapeHtml(displayName)}</div></div>`;
       } else {
-        providerCards += `<div class="dq-card"><div class="dq-card-value" style="color:var(--text2)">Pending</div><div class="dq-card-label">${escapeHtml(displayName)}</div></div>`;
+        providerCards += `<div class="dq-card"><div class="dq-card-value" style="color:var(--text2)" data-t="Pending">Pending</div><div class="dq-card-label">${escapeHtml(displayName)}</div></div>`;
       }
     }
     fairnessHtml = `
@@ -4824,6 +4849,16 @@ async function handleStats(env) {
     'App Shares': 'Compartidos de App',
     'I Voted Shares': 'Compartidos de Yo Vot\u00E9',
     'Last 30 days': '\u00DAltimos 30 d\u00EDas',
+    'Just the Facts': 'Solo los hechos',
+    'Simple & Clear': 'Simple y claro',
+    'Balanced': 'Equilibrado',
+    'Deep Dive': 'An\u00E1lisis profundo',
+    'Expert': 'Experto',
+    'Texas Cowboy': 'Vaquero tejano',
+    'English': 'Ingl\u00E9s',
+    'Spanish': 'Espa\u00F1ol',
+    'Unknown': 'Desconocido',
+    'Pending': 'Pendiente',
   })}
 </body>
 </html>`;
@@ -4878,13 +4913,14 @@ async function handleDataQuality(env) {
   for (const party of parties) {
     const m = manifest[party];
     const label = party === "republican" ? "Republican" : "Democrat";
+    const ballotLabel = party === "republican" ? "Republican Ballot" : "Democrat Ballot";
     if (m && m.updatedAt) {
       const d = new Date(m.updatedAt);
       const dateStr = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-      freshnessCards += `<div class="dq-card"><div class="dq-card-label">${label} Ballot</div><div class="dq-card-value">${dateStr}</div><div class="dq-card-detail">${timeStr}${m.version ? ` &middot; Version ${m.version}` : ""}</div></div>`;
+      freshnessCards += `<div class="dq-card"><div class="dq-card-label" data-t="${ballotLabel}">${ballotLabel}</div><div class="dq-card-value">${dateStr}</div><div class="dq-card-detail">${timeStr}${m.version ? ` &middot; Version ${m.version}` : ""}</div></div>`;
     } else {
-      freshnessCards += `<div class="dq-card"><div class="dq-card-label">${label} Ballot</div><div class="dq-card-value" style="color:var(--text2)">Not yet available</div></div>`;
+      freshnessCards += `<div class="dq-card"><div class="dq-card-label" data-t="${ballotLabel}">${ballotLabel}</div><div class="dq-card-value" style="color:var(--text2)" data-t="Not yet available">Not yet available</div></div>`;
     }
   }
 
@@ -4896,7 +4932,7 @@ async function handleDataQuality(env) {
     const raceCount = b ? (b.races || []).length : 0;
     const candidateCount = b ? (b.races || []).reduce((s, r) => s + (r.candidates || []).length, 0) : 0;
     const propCount = b ? (b.propositions || []).length : 0;
-    coverageCards += `<div class="dq-card"><div class="dq-card-label">${label}</div><div class="dq-card-value">${raceCount} <span class="dq-unit">races</span></div><div class="dq-card-detail">${candidateCount} candidates &middot; ${propCount} propositions</div></div>`;
+    coverageCards += `<div class="dq-card"><div class="dq-card-label" data-t="${label}">${label}</div><div class="dq-card-value">${raceCount} <span class="dq-unit" data-t="races">races</span></div><div class="dq-card-detail">${candidateCount} <span data-t="candidates">candidates</span> &middot; ${propCount} <span data-t="propositions">propositions</span></div></div>`;
   }
 
   // --- Candidate Data Completeness ---
@@ -4943,9 +4979,9 @@ async function handleDataQuality(env) {
       const raceCount = (b.races || []).filter(r => !r.uncontested && (r.candidates || []).length > 1).length;
       const pctOfContext = ((estimatedTokens / CONTEXT_WINDOW) * 100).toFixed(1);
       const sizeColor = estimatedTokens > 50000 ? "#dc2626" : estimatedTokens > 25000 ? "#b45309" : "#16a34a";
-      tokenBudgetCards += `<div class="dq-card"><div class="dq-card-label">${label}</div><div class="dq-card-value" style="color:${sizeColor}">${estimatedTokens.toLocaleString()}<span class="dq-unit"> tokens</span></div><div class="dq-card-detail">${charCount.toLocaleString()} chars &middot; ${raceCount} contested races &middot; ${pctOfContext}% of context window</div></div>`;
+      tokenBudgetCards += `<div class="dq-card"><div class="dq-card-label" data-t="${label}">${label}</div><div class="dq-card-value" style="color:${sizeColor}">${estimatedTokens.toLocaleString()}<span class="dq-unit"> <span data-t="tokens">tokens</span></span></div><div class="dq-card-detail">${charCount.toLocaleString()} <span data-t="chars">chars</span> &middot; ${raceCount} <span data-t="contested races">contested races</span> &middot; ${pctOfContext}<span data-t="% of context window">% of context window</span></div></div>`;
     } catch {
-      tokenBudgetCards += `<div class="dq-card"><div class="dq-card-label">${label}</div><div class="dq-card-value" style="color:var(--text2)">N/A</div><div class="dq-card-detail">Could not compute ballot size</div></div>`;
+      tokenBudgetCards += `<div class="dq-card"><div class="dq-card-label" data-t="${label}">${label}</div><div class="dq-card-value" style="color:var(--text2)">N/A</div><div class="dq-card-detail" data-t="Could not compute ballot size">Could not compute ballot size</div></div>`;
     }
   }
 
@@ -4974,7 +5010,7 @@ async function handleDataQuality(env) {
     if (s.score >= 90) scoreColor = "#16a34a";
     else if (s.score >= 70) scoreColor = "#b45309";
     else scoreColor = "#dc2626";
-    balanceCards += `<div class="dq-card"><div class="dq-card-label">${label}</div><div class="dq-card-value" style="color:${scoreColor}">${s.score}<span class="dq-unit">/100</span></div><div class="dq-card-detail">${s.totalFlags} flag${s.totalFlags === 1 ? "" : "s"}: ${s.criticalCount} critical, ${s.warningCount} warning, ${s.infoCount} info</div></div>`;
+    balanceCards += `<div class="dq-card"><div class="dq-card-label" data-t="${label}">${label}</div><div class="dq-card-value" style="color:${scoreColor}">${s.score}<span class="dq-unit">/100</span></div><div class="dq-card-detail">${s.totalFlags} flag${s.totalFlags === 1 ? "" : "s"}: ${s.criticalCount} <span data-t="critical">critical</span>, ${s.warningCount} <span data-t="warning">warning</span>, ${s.infoCount} <span data-t="info">info</span></div></div>`;
   }
 
   let balanceFlagRows = "";
@@ -5001,10 +5037,10 @@ async function handleDataQuality(env) {
     balanceHtml = `
     <div class="dq-card-grid">${balanceCards}</div>
     <details style="margin-top:0.75rem">
-      <summary style="cursor:pointer;font-weight:600;font-size:0.95rem;color:var(--blue)">View flag details</summary>
+      <summary style="cursor:pointer;font-weight:600;font-size:0.95rem;color:var(--blue)" data-t="View flag details">View flag details</summary>
       <div style="overflow-x:auto;margin-top:0.5rem">
       <table style="font-size:0.85rem;width:100%;border-collapse:collapse">
-        <tr style="background:var(--blue);color:#fff"><th style="padding:4px 8px">Party</th><th style="padding:4px 8px">Race</th><th style="padding:4px 8px">Candidate</th><th style="padding:4px 8px">Severity</th><th style="padding:4px 8px">Detail</th></tr>
+        <tr style="background:var(--blue);color:#fff"><th style="padding:4px 8px" data-t="Party">Party</th><th style="padding:4px 8px" data-t="Race">Race</th><th style="padding:4px 8px" data-t="Candidate">Candidate</th><th style="padding:4px 8px" data-t="Severity">Severity</th><th style="padding:4px 8px" data-t="Detail">Detail</th></tr>
         ${balanceFlagRows}
       </table>
       </div>
@@ -5012,7 +5048,7 @@ async function handleDataQuality(env) {
   } else {
     balanceHtml = `
     <div class="dq-card-grid">${balanceCards}</div>
-    <p class="dq-note">No balance issues detected. All candidates have symmetric pros/cons coverage.</p>`;
+    <p class="dq-note" data-t="No balance issues detected. All candidates have symmetric pros/cons coverage.">No balance issues detected. All candidates have symmetric pros/cons coverage.</p>`;
   }
 
   // --- Per-Race Balance Breakdown ---
@@ -5093,13 +5129,13 @@ async function handleDataQuality(env) {
             <div><div style="font-weight:600;font-size:0.95rem">${r.label}</div><div style="font-size:0.8rem;color:var(--text2)">${r.party} &middot; ${r.candidates.length} candidate${r.candidates.length === 1 ? "" : "s"}</div></div>
           </div>
           <div style="display:flex;gap:0.5rem;font-size:0.8rem">
-            ${r.critical > 0 ? `<span style="color:#dc2626;font-weight:600">${r.critical} critical</span>` : ""}
-            ${r.warning > 0 ? `<span style="color:#b45309;font-weight:600">${r.warning} warning</span>` : ""}
-            ${r.info > 0 ? `<span style="color:#16a34a;font-weight:600">${r.info} info</span>` : ""}
-            ${r.flagCount === 0 ? `<span style="color:#16a34a;font-weight:600">No flags</span>` : ""}
+            ${r.critical > 0 ? `<span style="color:#dc2626;font-weight:600">${r.critical} <span data-t="critical">critical</span></span>` : ""}
+            ${r.warning > 0 ? `<span style="color:#b45309;font-weight:600">${r.warning} <span data-t="warning">warning</span></span>` : ""}
+            ${r.info > 0 ? `<span style="color:#16a34a;font-weight:600">${r.info} <span data-t="info">info</span></span>` : ""}
+            ${r.flagCount === 0 ? `<span style="color:#16a34a;font-weight:600" data-t="No flags">No flags</span>` : ""}
           </div>
         </div>
-        ${hasDetails ? `<details style="margin-top:0.5rem"><summary style="cursor:pointer;font-size:0.85rem;color:var(--blue);font-weight:600">Show candidate scores</summary><div style="margin-top:0.5rem;padding-left:0.25rem">${raceFlagDetail}${candidateDetail}</div></details>` : ""}
+        ${hasDetails ? `<details style="margin-top:0.5rem"><summary style="cursor:pointer;font-size:0.85rem;color:var(--blue);font-weight:600" data-t="Show candidate scores">Show candidate scores</summary><div style="margin-top:0.5rem;padding-left:0.25rem">${raceFlagDetail}${candidateDetail}</div></details>` : ""}
       </div>`;
     }
     perRaceHtml = `
@@ -5155,13 +5191,13 @@ async function handleDataQuality(env) {
     const checkedCount = Array.isArray(updateLog.log) ? updateLog.log.length : (typeof updateLog.log === "string" ? (updateLog.log.match(/Checking /g) || []).length : 0);
     const updatedCount = Array.isArray(updateLog.updated) ? updateLog.updated.length : (updateLog.updated || 0);
     const errorCount = Array.isArray(updateLog.errors) ? updateLog.errors.length : (updateLog.errors || 0);
-    updateHtml = `<div class="dq-card-grid"><div class="dq-card"><div class="dq-card-value">${checkedCount}</div><div class="dq-card-label">Races checked</div></div><div class="dq-card"><div class="dq-card-value">${updatedCount}</div><div class="dq-card-label">Updates applied</div></div><div class="dq-card"><div class="dq-card-value">${errorCount}</div><div class="dq-card-label">Errors</div></div></div>`;
+    updateHtml = `<div class="dq-card-grid"><div class="dq-card"><div class="dq-card-value">${checkedCount}</div><div class="dq-card-label" data-t="Races checked">Races checked</div></div><div class="dq-card"><div class="dq-card-value">${updatedCount}</div><div class="dq-card-label" data-t="Updates applied">Updates applied</div></div><div class="dq-card"><div class="dq-card-value">${errorCount}</div><div class="dq-card-label" data-t="Errors">Errors</div></div></div>`;
     if (updateLog.timestamp) {
       const logTime = new Date(updateLog.timestamp);
-      updateHtml += `<p class="dq-note">Last check: ${logTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} CT</p>`;
+      updateHtml += `<p class="dq-note"><span data-t="Last check:">Last check:</span> ${logTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} CT</p>`;
     }
   } else {
-    updateHtml = `<p style="color:var(--text2)">No updates yet today. Data is checked and refreshed daily.</p>`;
+    updateHtml = `<p style="color:var(--text2)" data-t="No updates yet today. Data is checked and refreshed daily.">No updates yet today. Data is checked and refreshed daily.</p>`;
   }
 
   const checkerDataJson = JSON.stringify(countyCheckerData);
@@ -5215,7 +5251,7 @@ async function handleDataQuality(env) {
     <div class="dq-checker-hero">
       <div class="dq-checker-title" data-t="Check Your County">Check Your County</div>
       <p class="dq-checker-subtitle" data-t="See what local election data is available for your county">See what local election data is available for your county</p>
-      <input type="text" id="county-input" placeholder="Type a county name (e.g., Travis, Harris, Bexar)..." autocomplete="off">
+      <input type="text" id="county-input" placeholder="Type a county name (e.g., Travis, Harris, Bexar)..." data-t-placeholder="Type a county name (e.g., Travis, Harris, Bexar)..." autocomplete="off">
       <div id="county-result" class="dq-checker-result"></div>
     </div>
 
@@ -5233,7 +5269,7 @@ async function handleDataQuality(env) {
     <div class="dq-card" style="text-align:left;margin-bottom:1.5rem">
       <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:0.25rem">
         <span style="font-size:2rem;font-weight:800;color:var(--blue)">${completenessPercent}%</span>
-        <span style="font-size:0.95rem;color:var(--text2)">overall completeness</span>
+        <span style="font-size:0.95rem;color:var(--text2)" data-t="overall completeness">overall completeness</span>
       </div>
       <div class="dq-progress"><div class="dq-progress-bar" style="width:${completenessPercent}%"></div></div>
       <p style="font-size:0.9rem;color:var(--text);margin:0.5rem 0">${fullProfileCount} of ${totalCandidates} candidates have full profiles. ${sparseCount > 0 ? `${sparseCount} candidate${sparseCount === 1 ? " has" : "s have"} limited public information.` : "All candidates have sufficient data."}</p>
@@ -5251,9 +5287,9 @@ async function handleDataQuality(env) {
     <div class="dq-card" style="text-align:left;margin-bottom:1.5rem">
       <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:0.25rem">
         <span style="font-size:2rem;font-weight:800;color:${combinedBalanceScore !== null && combinedBalanceScore >= 90 ? "#16a34a" : combinedBalanceScore !== null && combinedBalanceScore >= 70 ? "#b45309" : combinedBalanceScore !== null ? "#dc2626" : "var(--blue)"}">${combinedBalanceScore !== null ? combinedBalanceScore : "N/A"}<span class="dq-unit">/100</span></span>
-        <span style="font-size:0.95rem;color:var(--text2)">balance score</span>
+        <span style="font-size:0.95rem;color:var(--text2)" data-t="balance score">balance score</span>
       </div>
-      <p style="font-size:0.9rem;color:var(--text);margin:0.5rem 0">Measures symmetry of strengths and concerns across candidates: equal count, similar detail level, and consistent coverage within each race.</p>
+      <p style="font-size:0.9rem;color:var(--text);margin:0.5rem 0" data-t="Measures symmetry of strengths and concerns across candidates: equal count, similar detail level, and consistent coverage within each race.">Measures symmetry of strengths and concerns across candidates: equal count, similar detail level, and consistent coverage within each race.</p>
       ${balanceHtml}
       <p class="dq-note" style="margin-top:0.75rem">Balance checks run automatically. <a href="/api/balance-check">View raw JSON report</a>. Voters can also report bias directly using the "Flag this info" button on any candidate card — reports go to <a href="mailto:flagged@txvotes.app">flagged@txvotes.app</a> and feed back into data quality improvements.</p>
     </div>
@@ -5287,6 +5323,7 @@ async function handleDataQuality(env) {
     var data=${checkerDataJson};
     var input=document.getElementById("county-input");
     var result=document.getElementById("county-result");
+    function es(){return document.documentElement.lang==='es'}
     input.addEventListener("input",function(){
       var v=input.value.trim().toLowerCase();
       result.className="dq-checker-result";
@@ -5295,25 +5332,25 @@ async function handleDataQuality(env) {
       var matches=Object.keys(data).filter(function(k){return k.indexOf(v)===0||k===v;});
       if(matches.length===0){
         result.className="dq-checker-result visible notfound";
-        result.textContent="No matching county found. Check your spelling and try again.";
+        result.textContent=es()?"No se encontr\u00F3 ning\u00FAn condado. Verifica la ortograf\u00EDa e intenta de nuevo.":"No matching county found. Check your spelling and try again.";
         return;
       }
       var county=matches[0];
       var d=data[county];
       var name=county.charAt(0).toUpperCase()+county.slice(1);
       var parts=[];
-      if(d.info)parts.push("voting info");
-      if(d.rep)parts.push("Republican ballot");
-      if(d.dem)parts.push("Democrat ballot");
+      if(d.info)parts.push(es()?"info de votaci\u00F3n":"voting info");
+      if(d.rep)parts.push(es()?"boleta Republicana":"Republican ballot");
+      if(d.dem)parts.push(es()?"boleta Dem\u00F3crata":"Democrat ballot");
       if(parts.length===3){
         result.className="dq-checker-result visible found";
-        result.textContent=name+" County has full coverage: "+parts.join(", ")+".";
+        result.textContent=es()?name+" County tiene cobertura completa: "+parts.join(", ")+".":name+" County has full coverage: "+parts.join(", ")+".";
       }else if(parts.length>0){
         result.className="dq-checker-result visible partial";
-        result.textContent=name+" County has partial coverage: "+parts.join(", ")+". More data is being added.";
+        result.textContent=es()?name+" County tiene cobertura parcial: "+parts.join(", ")+". Se est\u00E1n agregando m\u00E1s datos.":name+" County has partial coverage: "+parts.join(", ")+". More data is being added.";
       }else{
         result.className="dq-checker-result visible notfound";
-        result.textContent=name+" County does not have local data yet. Statewide and district races are still available.";
+        result.textContent=es()?name+" County a\u00FAn no tiene datos locales. Las contiendas estatales y de distrito siguen disponibles.":name+" County does not have local data yet. Statewide and district races are still available.";
       }
     });
   })();
@@ -5334,6 +5371,40 @@ async function handleDataQuality(env) {
     'Democrat local ballots': 'Boletas locales Dem\u00F3cratas',
     'Today\'s Update Activity': 'Actividad de Actualizaci\u00F3n de Hoy',
     'Browse all candidates with detailed information': 'Explora todos los candidatos con informaci\u00F3n detallada',
+    'Republican Ballot': 'Boleta Republicana',
+    'Democrat Ballot': 'Boleta Dem\u00F3crata',
+    'Not yet available': 'A\u00FAn no disponible',
+    'Republican': 'Republicano',
+    'Democrat': 'Dem\u00F3crata',
+    'races': 'contiendas',
+    'candidates': 'candidatos',
+    'propositions': 'proposiciones',
+    'overall completeness': 'completitud general',
+    'tokens': 'tokens',
+    'chars': 'caracteres',
+    'contested races': 'contiendas disputadas',
+    '% of context window': '% de ventana de contexto',
+    'Could not compute ballot size': 'No se pudo calcular el tama\u00F1o de la boleta',
+    'Party': 'Partido',
+    'Race': 'Contienda',
+    'Candidate': 'Candidato',
+    'Severity': 'Severidad',
+    'Detail': 'Detalle',
+    'No balance issues detected. All candidates have symmetric pros/cons coverage.': 'No se detectaron problemas de equilibrio. Todos los candidatos tienen cobertura sim\u00E9trica de pros/contras.',
+    'Show candidate scores': 'Mostrar puntuaciones de candidatos',
+    'critical': 'cr\u00EDtico',
+    'warning': 'advertencia',
+    'info': 'info',
+    'No flags': 'Sin alertas',
+    'View flag details': 'Ver detalles de alertas',
+    'Races checked': 'Contiendas verificadas',
+    'Updates applied': 'Actualizaciones aplicadas',
+    'Errors': 'Errores',
+    'Last check:': '\u00DAltima verificaci\u00F3n:',
+    'No updates yet today. Data is checked and refreshed daily.': 'No hay actualizaciones hoy a\u00FAn. Los datos se verifican y actualizan diariamente.',
+    'Type a county name (e.g., Travis, Harris, Bexar)...': 'Escribe un nombre de condado (ej., Travis, Harris, Bexar)...',
+    'balance score': 'puntuaci\u00F3n de equilibrio',
+    'Measures symmetry of strengths and concerns across candidates: equal count, similar detail level, and consistent coverage within each race.': 'Mide la simetr\u00EDa de fortalezas y preocupaciones entre candidatos: cantidad igual, nivel de detalle similar y cobertura consistente dentro de cada contienda.',
   })}
 </body>
 </html>`;
@@ -6930,6 +7001,12 @@ export default {
       // Health check endpoint (public, no auth)
       if (url.pathname === "/health") {
         return handleHealthCheck(env);
+      }
+      // LLM experiment page (auth-protected redirect to PWA hash route)
+      if (url.pathname === "/llm-experiment") {
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
+        return new Response(null, { status: 302, headers: { Location: "/app#/llm-experiment" } });
       }
       // Admin hub (GET with Basic/Bearer auth)
       if (url.pathname === "/admin") {
