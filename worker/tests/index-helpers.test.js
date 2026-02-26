@@ -48,6 +48,25 @@ function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function classifyConfidence(candidate) {
+  const hasSources = candidate.sources && candidate.sources.length > 0;
+  const hasOfficialSource = hasSources && candidate.sources.some(s =>
+    /ballotpedia|votesmart|sos\.state|sos\.texas|capitol|senate\.gov|house\.gov/i.test(s.url || '')
+  );
+  const hasMultipleSources = hasSources && candidate.sources.length >= 3;
+
+  return {
+    background: hasOfficialSource ? 'verified' : hasSources ? 'sourced' : 'ai-inferred',
+    keyPositions: hasOfficialSource ? 'verified' : hasSources ? 'sourced' : 'ai-inferred',
+    endorsements: candidate.endorsements && candidate.endorsements.length > 0
+      ? (hasOfficialSource ? 'verified' : 'sourced') : 'none',
+    polling: candidate.polling ? (hasMultipleSources ? 'verified' : 'sourced') : 'none',
+    fundraising: candidate.fundraising ? (hasMultipleSources ? 'verified' : 'sourced') : 'none',
+    pros: hasSources ? 'sourced' : 'ai-inferred',
+    cons: hasSources ? 'sourced' : 'ai-inferred',
+  };
+}
+
 function findBasename(geos, partialKey) {
   for (const key of Object.keys(geos)) {
     if (key.includes(partialKey) && geos[key].length > 0) {
@@ -573,6 +592,172 @@ describe("Candidate profile page", () => {
     );
     expect(profileBlock).toContain("ne.type");
     expect(profileBlock).toContain("typeLabel");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyConfidence — source-based confidence classification
+// ---------------------------------------------------------------------------
+describe("classifyConfidence — source-based confidence classification", () => {
+  it("returns 'verified' for fields when official sources present", () => {
+    const candidate = {
+      sources: [{ url: "https://ballotpedia.org/John_Smith" }],
+      keyPositions: ["Education"],
+      endorsements: [{ name: "AFL-CIO" }],
+      pros: ["Strong record"],
+      cons: ["Slow on housing"],
+      polling: "Leading",
+      fundraising: "$500k",
+    };
+    const conf = classifyConfidence(candidate);
+    expect(conf.background).toBe("verified");
+    expect(conf.keyPositions).toBe("verified");
+    expect(conf.endorsements).toBe("verified");
+  });
+
+  it("returns 'sourced' for fields when non-official sources present", () => {
+    const candidate = {
+      sources: [{ url: "https://texastribune.org/article" }],
+      keyPositions: ["Education"],
+      endorsements: [{ name: "AFL-CIO" }],
+      pros: ["Good"],
+      cons: ["Bad"],
+    };
+    const conf = classifyConfidence(candidate);
+    expect(conf.background).toBe("sourced");
+    expect(conf.keyPositions).toBe("sourced");
+    expect(conf.endorsements).toBe("sourced");
+    expect(conf.pros).toBe("sourced");
+    expect(conf.cons).toBe("sourced");
+  });
+
+  it("returns 'ai-inferred' when no sources present", () => {
+    const candidate = {
+      sources: [],
+      keyPositions: ["Education"],
+      pros: ["Good"],
+      cons: ["Bad"],
+    };
+    const conf = classifyConfidence(candidate);
+    expect(conf.background).toBe("ai-inferred");
+    expect(conf.keyPositions).toBe("ai-inferred");
+    expect(conf.pros).toBe("ai-inferred");
+    expect(conf.cons).toBe("ai-inferred");
+  });
+
+  it("returns 'ai-inferred' when sources is undefined", () => {
+    const candidate = { pros: ["Good"] };
+    const conf = classifyConfidence(candidate);
+    expect(conf.background).toBe("ai-inferred");
+    expect(conf.pros).toBe("ai-inferred");
+  });
+
+  it("returns 'none' for endorsements when empty", () => {
+    const candidate = { sources: [], endorsements: [] };
+    const conf = classifyConfidence(candidate);
+    expect(conf.endorsements).toBe("none");
+  });
+
+  it("returns 'none' for polling/fundraising when absent", () => {
+    const candidate = { sources: [{ url: "https://example.com" }] };
+    const conf = classifyConfidence(candidate);
+    expect(conf.polling).toBe("none");
+    expect(conf.fundraising).toBe("none");
+  });
+
+  it("returns 'verified' for polling/fundraising only with 3+ sources", () => {
+    const candidate = {
+      sources: [
+        { url: "https://ballotpedia.org/x" },
+        { url: "https://texastribune.org/y" },
+        { url: "https://apnews.com/z" },
+      ],
+      polling: "Leading by 5%",
+      fundraising: "$1M raised",
+    };
+    const conf = classifyConfidence(candidate);
+    expect(conf.polling).toBe("verified");
+    expect(conf.fundraising).toBe("verified");
+  });
+
+  it("returns 'sourced' for polling/fundraising with fewer than 3 sources", () => {
+    const candidate = {
+      sources: [{ url: "https://texastribune.org/x" }],
+      polling: "Leading",
+      fundraising: "$500k",
+    };
+    const conf = classifyConfidence(candidate);
+    expect(conf.polling).toBe("sourced");
+    expect(conf.fundraising).toBe("sourced");
+  });
+
+  it("recognizes all official source patterns", () => {
+    const patterns = [
+      "https://ballotpedia.org/test",
+      "https://votesmart.org/test",
+      "https://sos.state.tx.us/test",
+      "https://sos.texas.gov/test",
+      "https://capitol.texas.gov/test",
+      "https://senate.gov/test",
+      "https://house.gov/test",
+    ];
+    for (const url of patterns) {
+      const conf = classifyConfidence({ sources: [{ url }] });
+      expect(conf.background).toBe("verified");
+    }
+  });
+});
+
+describe("Candidate profile — confidence badges in source", () => {
+  it("uses classifyConfidence for badge generation", () => {
+    const profileBlock = indexSrc.slice(
+      indexSrc.indexOf("async function handleCandidateProfile"),
+      indexSrc.indexOf("async function handleCandidatesIndex")
+    );
+    expect(profileBlock).toContain("classifyConfidence(c)");
+    expect(profileBlock).toContain("confidenceBadge(");
+  });
+
+  it("includes three confidence levels in badge rendering", () => {
+    const profileBlock = indexSrc.slice(
+      indexSrc.indexOf("async function handleCandidateProfile"),
+      indexSrc.indexOf("async function handleCandidatesIndex")
+    );
+    expect(profileBlock).toContain("conf-verified");
+    expect(profileBlock).toContain("conf-sourced");
+    expect(profileBlock).toContain("conf-inferred");
+  });
+
+  it("includes data-t attributes for Spanish translation on badges", () => {
+    const profileBlock = indexSrc.slice(
+      indexSrc.indexOf("async function handleCandidateProfile"),
+      indexSrc.indexOf("async function handleCandidatesIndex")
+    );
+    expect(profileBlock).toContain('data-t="Verified"');
+    expect(profileBlock).toContain('data-t="Sourced"');
+    expect(profileBlock).toContain('data-t="AI-inferred"');
+  });
+
+  it("includes confidence legend with all three levels", () => {
+    const profileBlock = indexSrc.slice(
+      indexSrc.indexOf("async function handleCandidateProfile"),
+      indexSrc.indexOf("async function handleCandidatesIndex")
+    );
+    expect(profileBlock).toContain("conf-legend");
+    expect(profileBlock).toContain("Data Confidence");
+    expect(profileBlock).toContain("backed by official sources");
+    expect(profileBlock).toContain("from web sources cited below");
+    expect(profileBlock).toContain("generated by AI from available information");
+  });
+
+  it("includes Spanish translations for badge labels", () => {
+    const profileBlock = indexSrc.slice(
+      indexSrc.indexOf("async function handleCandidateProfile"),
+      indexSrc.indexOf("async function handleCandidatesIndex")
+    );
+    expect(profileBlock).toContain("Verificado");
+    expect(profileBlock).toContain("Con fuentes");
+    expect(profileBlock).toContain("Inferido por IA");
   });
 });
 

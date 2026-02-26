@@ -55,9 +55,10 @@ li{font-size:1rem;color:var(--text);margin-bottom:0.75rem}
 .cta-banner a.cta-btn:hover{opacity:0.9}
 .cta-banner .cta-sub{font-size:0.8rem;color:var(--text2);margin-top:0.35rem}
 .conf-badge{display:inline-block;font-size:0.7rem;font-weight:600;padding:0.15rem 0.5rem;border-radius:99px;vertical-align:middle;margin-left:0.4rem;letter-spacing:0.02em;cursor:help}
-.conf-verified{background:rgba(34,139,34,.12);color:#1a7a1a}
-.conf-inferred{background:rgba(128,128,128,.12);color:#666}
-@media(prefers-color-scheme:dark){.conf-verified{background:rgba(34,139,34,.2);color:#5cb85c}.conf-inferred{background:rgba(200,200,200,.15);color:#aaa}}
+.conf-verified{background:rgba(5,150,105,.1);color:#059669}
+.conf-sourced{background:rgba(37,99,235,.1);color:#2563eb}
+.conf-inferred{background:rgba(217,119,6,.1);color:#d97706}
+@media(prefers-color-scheme:dark){.conf-verified{background:rgba(5,150,105,.2);color:#34d399}.conf-sourced{background:rgba(37,99,235,.2);color:#60a5fa}.conf-inferred{background:rgba(217,119,6,.2);color:#fbbf24}}
 .conf-legend{margin-top:1.5rem;padding:0.75rem 1rem;background:rgba(128,128,128,.06);border:1px solid var(--border);border-radius:8px;font-size:0.85rem;color:var(--text2);line-height:1.8}
 .conf-legend strong{color:var(--text);font-size:0.85rem}
 </style>
@@ -268,6 +269,34 @@ function isSparseCandidate(c) {
   if (c.endorsements && (Array.isArray(c.endorsements) ? c.endorsements.length : true)) filled++;
   if (c.keyPositions && c.keyPositions.length) filled++;
   return filled < 2;
+}
+
+/**
+ * Classify data confidence for each candidate field based on source quality.
+ *
+ * Confidence levels:
+ *   - "verified"    — backed by official/institutional sources (.gov, Ballotpedia, Vote Smart, etc.)
+ *   - "sourced"     — has web sources but not from official databases
+ *   - "ai-inferred" — AI-generated without verifiable sources
+ *   - "none"        — field is empty/missing
+ */
+function classifyConfidence(candidate) {
+  const hasSources = candidate.sources && candidate.sources.length > 0;
+  const hasOfficialSource = hasSources && candidate.sources.some(s =>
+    /ballotpedia|votesmart|sos\.state|sos\.texas|capitol|senate\.gov|house\.gov/i.test(s.url || '')
+  );
+  const hasMultipleSources = hasSources && candidate.sources.length >= 3;
+
+  return {
+    background: hasOfficialSource ? 'verified' : hasSources ? 'sourced' : 'ai-inferred',
+    keyPositions: hasOfficialSource ? 'verified' : hasSources ? 'sourced' : 'ai-inferred',
+    endorsements: candidate.endorsements && candidate.endorsements.length > 0
+      ? (hasOfficialSource ? 'verified' : 'sourced') : 'none',
+    polling: candidate.polling ? (hasMultipleSources ? 'verified' : 'sourced') : 'none',
+    fundraising: candidate.fundraising ? (hasMultipleSources ? 'verified' : 'sourced') : 'none',
+    pros: hasSources ? 'sourced' : 'ai-inferred',
+    cons: hasSources ? 'sourced' : 'ai-inferred',
+  };
 }
 
 /**
@@ -4001,15 +4030,18 @@ async function handleCandidateProfile(slug, env) {
   const pros = resolveToneArray(c.pros);
   const cons = resolveToneArray(c.cons);
 
-  // Per-field confidence metadata (populated by updater.js)
-  const conf = c._confidence || {};
+  // Per-field confidence classification based on source quality
+  const conf = classifyConfidence(c);
   function confidenceBadge(fieldKey) {
-    const info = conf[fieldKey];
-    if (!info) return "";
-    if (info.level === "verified") {
-      return ` <span class="conf-badge conf-verified" title="Source: ${escapeHtml(info.source)}">Verified</span>`;
+    const level = conf[fieldKey];
+    if (!level || level === 'none') return "";
+    if (level === 'verified') {
+      return ` <span class="conf-badge conf-verified" data-t="Verified">&#10003; Verified</span>`;
     }
-    return ` <span class="conf-badge conf-inferred" title="Source: ${escapeHtml(info.source)}">AI-Inferred</span>`;
+    if (level === 'sourced') {
+      return ` <span class="conf-badge conf-sourced" data-t="Sourced">Sourced</span>`;
+    }
+    return ` <span class="conf-badge conf-inferred" data-t="AI-inferred">AI-inferred</span>`;
   }
 
   // Load manifest for data freshness timestamp
@@ -4151,11 +4183,12 @@ async function handleCandidateProfile(slug, env) {
     ${dataUpdatedAt ? `<p style="margin-top:2rem;font-size:0.85rem;color:var(--text2)" data-t="Data last verified">Data last verified: ${new Date(dataUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${c.sources && c.sources.length ? ` &middot; ${c.sources.length} source${c.sources.length === 1 ? "" : "s"} cited` : ""}</p>` : ""}
     <p style="margin-top:${dataUpdatedAt ? "0.5rem" : "2rem"};font-size:0.9rem;color:var(--text2)" data-t="See something wrong? Let us know and we'll fix it.">See something wrong? <a href="mailto:howdy@txvotes.app?subject=Data correction: ${encodeURIComponent(c.name)}">Let us know</a> and we'll fix it.</p>
 
-    ${Object.keys(conf).length > 0 ? `<div class="conf-legend" data-t="Data Confidence Legend">
+    <div class="conf-legend" data-t="Data Confidence Legend">
       <strong data-t="Data Confidence">Data Confidence</strong><br>
-      <span class="conf-badge conf-verified">Verified</span> Data backed by official filings, nonpartisan references, or established news sources (tiers 1&ndash;6)<br>
-      <span class="conf-badge conf-inferred">AI-Inferred</span> Data gathered via AI web search without a high-tier source. Hover any badge for the source type.
-    </div>` : ""}
+      <span class="conf-badge conf-verified" data-t="Verified">&#10003; Verified</span> <span data-t="backed by official sources (Ballotpedia, Vote Smart, .gov)">backed by official sources (Ballotpedia, Vote Smart, .gov)</span><br>
+      <span class="conf-badge conf-sourced" data-t="Sourced">Sourced</span> <span data-t="from web sources cited below">from web sources cited below</span><br>
+      <span class="conf-badge conf-inferred" data-t="AI-inferred">AI-inferred</span> <span data-t="generated by AI from available information">generated by AI from available information</span>
+    </div>
 
     <h2 data-t="Related">Related</h2>
     <ul class="related-links">
@@ -4184,6 +4217,12 @@ async function handleCandidateProfile(slug, env) {
     'Sources': 'Fuentes',
     'Data Confidence Legend': 'Leyenda de Confianza de Datos',
     'Data Confidence': 'Confianza de Datos',
+    'Verified': 'Verificado',
+    'Sourced': 'Con fuentes',
+    'AI-inferred': 'Inferido por IA',
+    'backed by official sources (Ballotpedia, Vote Smart, .gov)': 'respaldado por fuentes oficiales (Ballotpedia, Vote Smart, .gov)',
+    'from web sources cited below': 'de fuentes web citadas abajo',
+    'generated by AI from available information': 'generado por IA a partir de informaci\u00F3n disponible',
   })}
 </body>
 </html>`;
@@ -6301,6 +6340,35 @@ function injectBeacon(response, token) {
 
 // MARK: - Analytics Event Tracking
 
+/**
+ * Checks whether an analytics event request is from an admin session.
+ * Two detection methods:
+ *   1. Authorization header (Bearer token or Basic Auth) matching ADMIN_SECRET
+ *   2. _admin_key field in the event body matching ADMIN_SECRET
+ * When either matches, the event should be silently skipped to keep
+ * public stats clean of admin testing activity.
+ */
+function isAdminAnalytics(request, body, env) {
+  const secret = env.ADMIN_SECRET;
+  if (!secret) return false;
+
+  // Method 1: check Authorization header (works when admin has authenticated via Basic Auth)
+  const auth = request.headers.get("Authorization") || "";
+  if (auth === `Bearer ${secret}`) return true;
+  if (auth.startsWith("Basic ")) {
+    try {
+      const decoded = atob(auth.slice(6));
+      const password = decoded.includes(":") ? decoded.split(":").slice(1).join(":") : decoded;
+      if (password === secret) return true;
+    } catch {}
+  }
+
+  // Method 2: check _admin_key in event body (for sendBeacon which doesn't send auth headers)
+  if (body && body._admin_key === secret) return true;
+
+  return false;
+}
+
 const VALID_EVENTS = new Set([
   "interview_start", "interview_phase", "interview_complete",
   "interview_abandon", "tone_select",
@@ -6347,6 +6415,11 @@ async function handleAnalyticsEvent(request, env) {
     // Validate event name against allowlist
     if (!evt || !VALID_EVENTS.has(evt)) {
       return new Response(null, { status: 204 }); // silent drop
+    }
+
+    // Skip analytics for admin activity — check Authorization header and body _admin_key
+    if (env.ADMIN_SECRET && isAdminAnalytics(request, body, env)) {
+      return new Response(null, { status: 204 }); // silent skip for admins
     }
 
     const today = new Date().toISOString().slice(0, 10);

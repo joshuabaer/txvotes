@@ -8,6 +8,9 @@ worker/.wrangler/
 # Dependencies
 node_modules/
 
+# Environment files
+.env*
+
 # Swap files
 *.swp
 *~

@@ -366,10 +366,10 @@ describe("Phase 8: Building guide", () => {
     clickAction("skip-address");
   });
 
-  it("shows Building Your Guide screen", () => {
+  it("shows loading your ballot screen", () => {
     expect(S().phase).toBe(8);
     const html = getApp();
-    expect(html).toContain("Building");
+    expect(html).toContain("Loading your ballot");
   });
 
   it("triggers fetch to guide API", () => {

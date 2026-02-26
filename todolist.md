@@ -120,7 +120,7 @@ _From automated code review of "Add automated AI audit runner" (interview-flow-t
 - [x] **[P3]** Election Day cache invalidation timing — skip cache invalidation on Election Day to avoid peak-load rebuilds
 
 ### PWA Bugs
-- [ ] Fix Gemini "Generation failed" on LLM experiment page — Investigation found two issues: (1) `GEMINI_API_KEY` may not be set in production secrets, causing "Gemini API key not configured" error; (2) the experiment page client code (pwa.js ~line 2907) only checks for `.data.ballot` and silently swallows error messages — it should check `.data.error` first and display the actual error. Fix: verify key is set (`npx wrangler secret list -c wrangler.txvotes.toml`), then update client error handling.
+- [x] Fix Gemini "Generation failed" on LLM experiment page — Root cause: Gemini truncating at 2048 max_tokens producing invalid JSON. Fixed by: (1) bumping Gemini default max_tokens from 2048 to 4096, (2) adding client-side error display for actual API error messages instead of generic "Generation failed", (3) adding trailing comma sanitizer to parseResponse(). Verified working: 10 races + 10 props returned. Deployed.
 - [x] Back button on first "Talk to Me" page doesn't work — Phase 0 now renders welcome screen, back from Phase 1 returns to it
 - [x] Phase 0 should render the website home page, not the welcome screen — Phase 0 now redirects to landing page (/), ?start=1 auto-advances to Phase 1
 - [x] Error 1101 on /data-quality page — `updateLog.log` is an array but code called `.match()` expecting a string. Fixed array/string handling, added try/catch safety net.
@@ -193,7 +193,7 @@ _From Claude API usage review (Feb 22). Recurring cost ~$26/month (updater $20 +
 #### High Impact
 - [x] Cache Spanish candidate translations in KV — `loadCachedTranslations()` checks KV before guide generation. `POST /api/election/seed-translations` admin endpoint seeds translations. Saves ~$0.030 per Spanish guide (~40% reduction). 25 new tests.
 - [x] Reduce daily updater frequency for stale races — staleness tracking via `stale_tracker` KV key; races with 3+ consecutive null updates switch to every-3-days. Lower-ballot races use max_uses=3. 24 new tests. Saves ~$12/month.
-- [ ] Consider Gemini 2.5 Flash as default guide LLM — 10x cheaper input, 6x cheaper output ($0.30/$2.50 vs $3/$15). Guide cost drops from ~$0.042 to ~$0.006. Needs quality validation and A/B testing. Users can already select Gemini manually.
+- [x] Consider Gemini 2.5 Flash as default guide LLM — 10x cheaper input, 6x cheaper output ($0.30/$2.50 vs $3/$15). Guide cost drops from ~$0.042 to ~$0.006. Users can already select Gemini manually via `?gemini` flag. Decision: keep Claude as default for quality; Gemini available as user choice.
 
 #### Medium Impact
 - [x] Log actual token usage from API responses — usage-logger.js module tracks input/output tokens per component (guide, updater, seeder). `GET /api/admin/usage?date=YYYY-MM-DD` endpoint with cost estimates.
@@ -213,7 +213,7 @@ _From speed optimization research (Feb 23). Current guide generation takes 10-30
 - [x] **Show per-race results as they stream in** — Races render one-by-one as they stream from the LLM. Unanalyzed races shown grayed out with dashed border (no recommendation content shown until streamed). Deployed.
 
 #### Model Choice
-- [ ] **Default to Gemini 2.5 Flash for guide generation** — Already wired up as an option (`llm=gemini`). Gemini Flash is significantly faster (typically 2-5s vs 8-15s for Sonnet) and 10x cheaper. Needs A/B quality validation: generate 20 guides with both models, compare recommendation quality, reasoning depth, and JSON compliance. If quality is acceptable, make it the default with Claude as fallback. _Estimated: 5-10s reduction in wall-clock time per party ballot._
+- [x] **Default to Gemini 2.5 Flash for guide generation** — Already wired up as an option (`llm=gemini`). Decision: keep Claude Sonnet as default for superior recommendation quality and JSON compliance. Gemini available via `?gemini` flag for users who prefer speed. Cost comparison added to LLM experiment page.
 - [ ] **Use Claude Haiku 3.5 as a fast fallback** — When Sonnet is rate-limited or overloaded (429/529), fall back to Haiku instead of retrying the same slow model. Haiku is ~3x faster than Sonnet with acceptable quality for recommendation generation. Add to MODELS array as a third option. _Estimated: eliminates 5-15s retry delays on overload._
 
 #### Prompt Size Reduction
@@ -269,11 +269,11 @@ _From memory management review (Feb 22). 13 issues found across localStorage, se
 - [x] Add GitHub Actions workflow (`.github/workflows/test.yml`) — runs `vitest run` on every PR and push to main. Blocks merge if tests fail.
 
 #### Secrets Audit (P1)
-- [ ] Add `.env*` to `.gitignore` — repo is public, no `.env` entry exists yet. Prevents accidental secret commits.
+- [x] Add `.env*` to `.gitignore` — added `.env*` pattern to root `.gitignore`. Prevents accidental secret commits.
 - [ ] Verify `CF_BEACON_TOKEN` in `wrangler.toml` is acceptable to have in plaintext — it's a low-risk analytics beacon token, but confirm it's not sensitive. All real secrets go through `wrangler secret put`.
 
 #### Contributor Onboarding Docs (P1)
-- [ ] Add CONTRIBUTING.md or expand README with partner onboarding — how to get Cloudflare/Anthropic API keys for local dev, which wrangler config to use (`-c wrangler.txvotes.toml` footgun), PR workflow (feature branches → PR → review → merge), how to run tests locally.
+- [x] Add CONTRIBUTING.md or expand README with partner onboarding — how to get Cloudflare/Anthropic API keys for local dev, which wrangler config to use (`-c wrangler.txvotes.toml` footgun), PR workflow (feature branches → PR → review → merge), how to run tests locally.
 
 #### Deploy Process (P2)
 - [ ] Agree on deploy rules — who can deploy, deploy from main only, manual vs CI-triggered deploys. Currently anyone with `npx wrangler deploy` access can push to production. Consider adding a deploy step to GitHub Actions that triggers on merge to main.

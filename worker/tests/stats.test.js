@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -396,5 +396,133 @@ describe("Stats page: without ballot data", () => {
     const body = await res.text();
     expect(body).toContain("Stats");
     expect(body).toContain("Guides Generated");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Admin analytics filtering — admin activity excluded from stats
+// ---------------------------------------------------------------------------
+describe("Admin analytics filtering", () => {
+  /** Helper: POST an analytics event to /app/api/ev */
+  async function postEvent(body, headers = {}) {
+    const url = "https://txvotes.app/app/api/ev";
+    const request = new Request(url, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json", ...headers },
+    });
+    return worker.fetch(request, analyticsEnv);
+  }
+
+  // Mock ANALYTICS binding to track writeDataPoint calls
+  let writeDataPointCalls;
+  const analyticsEnv = {
+    ...mockEnv,
+    ANALYTICS: {
+      writeDataPoint: (dp) => {
+        writeDataPointCalls.push(dp);
+      },
+    },
+  };
+
+  // Reset before each test
+  beforeEach(() => {
+    writeDataPointCalls = [];
+  });
+
+  it("writes data point for regular (non-admin) events", async () => {
+    const res = await postEvent({ event: "guide_complete", props: { lang: "en" } });
+    expect(res.status).toBe(204);
+    expect(writeDataPointCalls.length).toBe(1);
+    expect(writeDataPointCalls[0].blobs[0]).toBe("guide_complete");
+  });
+
+  it("skips data point when Authorization header has valid Bearer token", async () => {
+    const res = await postEvent(
+      { event: "guide_complete", props: { lang: "en" } },
+      { Authorization: `Bearer ${mockEnv.ADMIN_SECRET}` }
+    );
+    expect(res.status).toBe(204);
+    expect(writeDataPointCalls.length).toBe(0);
+  });
+
+  it("skips data point when Authorization header has valid Basic auth", async () => {
+    const encoded = btoa(`admin:${mockEnv.ADMIN_SECRET}`);
+    const res = await postEvent(
+      { event: "interview_complete", props: { lang: "en" } },
+      { Authorization: `Basic ${encoded}` }
+    );
+    expect(res.status).toBe(204);
+    expect(writeDataPointCalls.length).toBe(0);
+  });
+
+  it("skips data point when body contains valid _admin_key", async () => {
+    const res = await postEvent({
+      event: "guide_complete",
+      props: { lang: "en" },
+      _admin_key: mockEnv.ADMIN_SECRET,
+    });
+    expect(res.status).toBe(204);
+    expect(writeDataPointCalls.length).toBe(0);
+  });
+
+  it("does NOT skip when _admin_key is wrong", async () => {
+    const res = await postEvent({
+      event: "guide_complete",
+      props: { lang: "en" },
+      _admin_key: "wrong-secret",
+    });
+    expect(res.status).toBe(204);
+    expect(writeDataPointCalls.length).toBe(1);
+  });
+
+  it("does NOT skip when Authorization header has wrong token", async () => {
+    const res = await postEvent(
+      { event: "guide_complete", props: { lang: "en" } },
+      { Authorization: "Bearer wrong-token" }
+    );
+    expect(res.status).toBe(204);
+    expect(writeDataPointCalls.length).toBe(1);
+  });
+
+  it("still returns 204 when admin event is skipped (silent to client)", async () => {
+    const res = await postEvent(
+      { event: "i_voted", props: {} },
+      { Authorization: `Bearer ${mockEnv.ADMIN_SECRET}` }
+    );
+    expect(res.status).toBe(204);
+  });
+
+  it("skips all event types for admin requests", async () => {
+    const events = ["interview_start", "guide_complete", "tone_select", "page_view", "i_voted"];
+    for (const evt of events) {
+      writeDataPointCalls = [];
+      await postEvent({
+        event: evt,
+        props: { lang: "en" },
+        _admin_key: mockEnv.ADMIN_SECRET,
+      });
+      expect(writeDataPointCalls.length).toBe(0);
+    }
+  });
+
+  it("does not skip when ADMIN_SECRET is not configured", async () => {
+    const noSecretEnv = {
+      ...analyticsEnv,
+      ADMIN_SECRET: undefined,
+    };
+    const url = "https://txvotes.app/app/api/ev";
+    const request = new Request(url, {
+      method: "POST",
+      body: JSON.stringify({
+        event: "guide_complete",
+        props: { lang: "en" },
+        _admin_key: "some-key",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await worker.fetch(request, noSecretEnv);
+    expect(res.status).toBe(204);
+    expect(writeDataPointCalls.length).toBe(1);
   });
 });

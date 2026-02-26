@@ -393,14 +393,6 @@ var CSS = [
   ".spinner{width:48px;height:48px;border:4px solid var(--border);border-top-color:var(--blue);border-bottom-color:var(--red);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 24px}",
   "@keyframes spin{to{transform:rotate(360deg)}}",
   ".loading-icon{font-size:56px;margin-bottom:16px}",
-  ".tug-arena{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px}",
-  ".tug-left,.tug-right{font-size:64px;display:inline-block}",
-  ".tug-left{animation:tugLeft 1.6s ease-in-out infinite;transform:scaleX(-1)}",
-  ".tug-right{animation:tugRight 1.6s ease-in-out infinite}",
-  ".tug-star{font-size:28px}",
-  "@keyframes tugLeft{0%,100%{transform:scaleX(-1) scaleY(1)}50%{transform:scaleX(-1.35) scaleY(1.35)}}",
-  "@keyframes tugRight{0%,100%{transform:scale(1.35)}50%{transform:scale(1)}}",
-  ".loading-msg{animation:fadeIn .4s ease}",
   "@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}",
   "@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}",
   ".stream-card-in{animation:cardIn .3s ease-out}",
@@ -577,8 +569,6 @@ var CSS = [
   // Accessibility: reduce motion
   "@media(prefers-reduced-motion:reduce){" +
     ".loading-icon{animation:none}" +
-    ".tug-left,.tug-right{animation:none}" +
-    ".loading-msg{animation:none}" +
     ".dot-active-red,.dot-active-white,.dot-active-blue{animation:none}" +
     ".spinner{animation:none}" +
     ".card-touch{transition:none}" +
@@ -655,7 +645,18 @@ var CSS = [
   ".exp-side-col .exp-reason{color:var(--text2)}",
   ".exp-loading{display:flex;align-items:center;gap:10px;padding:16px;font-size:14px}",
   ".exp-loading .llm-spinner{width:18px;height:18px}",
-  "@media(max-width:500px){.exp-stats{grid-template-columns:1fr}.exp-side{grid-template-columns:1fr}}",
+  ".exp-perf{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}",
+  ".exp-perf-card{background:var(--card);border-radius:var(--rs);padding:14px;box-shadow:0 1px 4px var(--shadow);text-align:center}",
+  ".exp-perf-card h4{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px}",
+  ".exp-perf-card .exp-perf-val{font-size:28px;font-weight:800;line-height:1.2}",
+  ".exp-perf-card .exp-perf-sub{font-size:11px;color:var(--text2);margin-top:4px}",
+  ".exp-perf-bar{height:8px;border-radius:4px;background:var(--border);margin-top:8px;overflow:hidden;position:relative}",
+  ".exp-perf-bar-fill{height:100%;border-radius:4px;transition:width .4s ease}",
+  ".exp-perf-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}",
+  ".exp-perf-row .exp-perf-name{font-size:12px;font-weight:600;width:70px;text-align:right;flex-shrink:0}",
+  ".exp-perf-row .exp-perf-bar{flex:1;margin-top:0}",
+  ".exp-perf-row .exp-perf-time{font-size:12px;font-weight:700;width:50px;flex-shrink:0}",
+  "@media(max-width:500px){.exp-stats{grid-template-columns:1fr}.exp-side{grid-template-columns:1fr}.exp-perf{grid-template-columns:1fr}}",
   "@keyframes spin{to{transform:rotate(360deg)}}",
 ].join("\n");
 
@@ -676,7 +677,10 @@ var APP_JS = [
 
   // ============ ANALYTICS ============
   // Fire-and-forget event tracking — never throws, respects DNT
+  // Admin mode: ?admin_key=SECRET excludes activity from public stats
   "var _trkSent={};",
+  "var _adminKey=(function(){try{var m=location.search.match(/[?&]admin_key=([^&]+)/);if(m)return decodeURIComponent(m[1]);return sessionStorage.getItem('_admin_key')||''}catch(x){return ''}}());",
+  "if(_adminKey)try{sessionStorage.setItem('_admin_key',_adminKey)}catch(x){}",
   "function trk(e,p){" +
     "try{" +
       "if(navigator.doNotTrack==='1')return;" +
@@ -684,7 +688,9 @@ var APP_JS = [
       "var now=Date.now();" +
       "if(_trkSent[key]&&now-_trkSent[key]<1000)return;" +
       "_trkSent[key]=now;" +
-      "var body=JSON.stringify({event:e,props:Object.assign({lang:LANG},p||{})});" +
+      "var obj={event:e,props:Object.assign({lang:LANG},p||{})};" +
+      "if(_adminKey)obj._admin_key=_adminKey;" +
+      "var body=JSON.stringify(obj);" +
       "if(navigator.sendBeacon){navigator.sendBeacon('/app/api/ev',body)}" +
       "else{fetch('/app/api/ev',{method:'POST',body:body,keepalive:true}).catch(function(){})}" +
     "}catch(x){}" +
@@ -749,13 +755,7 @@ var APP_JS = [
     "'You can skip the address \\u2014 we\\u2019ll show all races.':'Puedes omitir la direcci\\u00F3n \\u2014 mostraremos todas las contiendas.'," +
     "'Skip & Build Guide':'Omitir y crear gu\\u00EDa'," +
     // Building
-    "'Building Your Guide':'Creando tu gu\\u00EDa'," +
-    "'Finding your ballot...':'Buscando tu boleta...'," +
-    "'Looking up your districts...':'Buscando tus distritos...'," +
-    "'Researching candidates...':'Investigando candidatos...'," +
-    "'Researching Republicans...':'Investigando republicanos...'," +
-    "'Researching Democrats...':'Investigando dem\\u00F3cratas...'," +
-    "'Finalizing recommendations...':'Finalizando recomendaciones...'," +
+    "'Loading your ballot...':'Cargando tu boleta...'," +
     "'Failed to generate recommendations. Please try again.':'No se pudieron generar recomendaciones. Intenta de nuevo.'," +
     "'Try Again':'Intentar de nuevo'," +
     // Tab bar & nav
@@ -1345,6 +1345,13 @@ var APP_JS = [
     "'Agree':'Coinciden'," +
     "'Disagree':'Difieren'," +
     "'Disagreement Details':'Detalles de Diferencias'," +
+    "'Speed & Cost':'Velocidad y Costo'," +
+    "'Response Time':'Tiempo de Respuesta'," +
+    "'Est. Cost':'Costo Est.'," +
+    "'was':'fue'," +
+    "'faster':'m\\u00E1s r\\u00E1pido'," +
+    "'cheaper':'m\\u00E1s barato'," +
+    "'Cost estimated from response size (~4 chars/token)':'Costo estimado del tama\\u00F1o de respuesta (~4 caracteres/token)'," +
     "'Generating with':'Generando con'," +
     "'Back to My Ballot':'Volver a mi boleta'," +
     "'Near-perfect agreement.':'Concordancia casi perfecta.'," +
@@ -1539,7 +1546,7 @@ var APP_JS = [
     "countyBallotAvailable:null," +
     "repBallot:null,demBallot:null,selectedParty:'republican'," +
     "guideComplete:false,summary:null,districts:null," +
-    "isLoading:false,loadPhase:0,loadMsg:'',error:null,geolocating:false," +
+    "isLoading:false,error:null,geolocating:false," +
     "readingLevel:1," +
     "expanded:{'vi-dates':true,'vi-bring':true},disclaimerDismissed:false,hasVoted:false," +
     "staleBallot:false," +
@@ -1853,6 +1860,9 @@ var APP_JS = [
   "var expResults={};",
   "var expErrors={};",
   "var expExpandedRows={};",
+  "var expTiming={};",
+  "var expCosts={};",
+  "var EXP_COST={claude:{input:3,output:15},chatgpt:{input:2.5,output:10},gemini:{input:0.15,output:3.5},grok:{input:5,output:15}};",
   "function renderTone(){" +
     "var opts=TONE_OPTS.slice();" +
     "if(secretToneRevealed||eeCowboy||S.readingLevel===7){" +
@@ -2070,18 +2080,13 @@ var APP_JS = [
 
   "function renderBuilding(){" +
     "var h='<div class=\"loading\">';" +
-    "h+='<div class=\"tug-arena\"><span class=\"tug-left\">\u{1FACF}</span><span class=\"tug-star\">\u2B50</span><span class=\"tug-right\">\u{1F418}</span></div>';" +
-    "h+='<h2>'+t('Building Your Guide')+'</h2>';" +
+    "h+='<div class=\"spinner\"></div>';" +
+    "h+='<h2>'+t('Loading your ballot...')+'</h2>';" +
     "if(window._llmOverride){h+='<div style=\"text-align:center;margin-bottom:8px\"><span class=\"badge\" style=\"font-size:12px\">Powered by '+esc(llmLabel())+'</span></div>'}" +
-    "h+='<p style=\"min-height:24px\" class=\"loading-msg\" aria-live=\"polite\">'+t(S.loadMsg||'Finding your ballot...')+'</p>';" +
     "if(S.error){h+='<div class=\"error-box\" style=\"margin-top:16px\"><p>'+t(S.error)+'</p></div><button class=\"btn btn-primary mt-md\" data-action=\"retry\">'+t('Try Again')+'</button>'}" +
     "h+='<div class=\"dots\" style=\"margin-top:20px\">';" +
     "var _rwb=['red','white','blue'];" +
-    "for(var i=0;i<6;i++){" +
-      "var cls='dot';var cname=_rwb[i%3];" +
-      "if(i<S.loadPhase)cls+=' dot-done-'+cname;else if(i===S.loadPhase&&!S.error)cls+=' dot-active-'+cname;" +
-      "h+='<div class=\"'+cls+'\">\\u2605</div>'" +
-    "}" +
+    "for(var i=0;i<3;i++){h+='<div class=\"dot dot-active-'+_rwb[i]+'\">\\u2605</div>'}" +
     "h+='</div></div>';" +
     "return h;" +
   "}",
@@ -2896,21 +2901,29 @@ var APP_JS = [
     "render();" +
     "for(var gj=0;gj<toGen.length;gj++){" +
       "(function(llmKey){" +
+        "var t0=Date.now();" +
         "var promises=parties.map(function(party){" +
           "return fetch('/app/api/guide',{method:'POST',headers:{'Content-Type':'application/json'}," +
             "body:JSON.stringify({party:party,profile:profile,districts:S.districts,lang:LANG,countyFips:cFips,readingLevel:S.readingLevel,llm:llmKey})" +
-          "}).then(function(r){return r.json()}).then(function(d){return{party:party,data:d}})" +
+          "}).then(function(r){return r.text()}).then(function(txt){return{party:party,text:txt,data:JSON.parse(txt)}})" +
         "});" +
         "Promise.allSettled(promises).then(function(results){" +
+          "var elapsed=(Date.now()-t0)/1000;" +
+          "expTiming[llmKey]=elapsed;" +
           "expLoading[llmKey]=false;" +
-          "var ballots={};var apiErr=null;" +
+          "var ballots={};var apiErr=null;var totalChars=0;" +
           "for(var i=0;i<results.length;i++){" +
             "if(results[i].status==='fulfilled'){" +
+              "totalChars+=results[i].value.text.length;" +
               "if(results[i].value.data.error){apiErr=results[i].value.data.error}" +
               "else if(results[i].value.data.ballot){ballots[results[i].value.party]=results[i].value.data.ballot}" +
             "}else{apiErr=results[i].reason?results[i].reason.message:'Request failed'}" +
           "}" +
           "if(Object.keys(ballots).length===0){expErrors[llmKey]=apiErr||'Generation failed';render();return}" +
+          "var estOutputTokens=Math.ceil(totalChars/4);" +
+          "var estInputTokens=Math.ceil(estOutputTokens*1.5);" +
+          "var rates=EXP_COST[llmKey]||EXP_COST.claude;" +
+          "expCosts[llmKey]=((estInputTokens*rates.input)+(estOutputTokens*rates.output))/1000000;" +
           "expResults[llmKey]=ballots;" +
           "render()" +
         "}).catch(function(err){" +
@@ -3050,6 +3063,50 @@ var APP_JS = [
     "h+='</div>';" +
     "h+='<div class=\"exp-verdict-detail\">'+esc(analysis.verdict)+'</div>';" +
     "h+='</div>';" +
+    // Speed & Cost comparison
+    "if(expTiming.claude||expTiming[expChallenger]){" +
+      "var cTime=expTiming.claude;var chTime=expTiming[expChallenger];" +
+      "var cCost=expCosts.claude;var chCost=expCosts[expChallenger];" +
+      "var maxTime=Math.max(cTime||0,chTime||0)||1;" +
+      "h+='<div class=\"section-head\">'+t('Speed & Cost')+'</div>';" +
+      "h+='<div class=\"exp-perf\">';" +
+      // Speed card
+      "h+='<div class=\"exp-perf-card\">';" +
+      "h+='<h4>\\u23F1\\uFE0F '+t('Response Time')+'</h4>';" +
+      "if(cTime){" +
+        "h+='<div class=\"exp-perf-row\">';" +
+        "h+='<span class=\"exp-perf-name\" style=\"color:#7B61FF\">Claude</span>';" +
+        "h+='<div class=\"exp-perf-bar\"><div class=\"exp-perf-bar-fill\" style=\"width:'+Math.round((cTime/maxTime)*100)+'%;background:#7B61FF\"></div></div>';" +
+        "h+='<span class=\"exp-perf-time\">'+cTime.toFixed(1)+'s</span>';" +
+        "h+='</div>'" +
+      "}" +
+      "if(chTime){" +
+        "h+='<div class=\"exp-perf-row\">';" +
+        "h+='<span class=\"exp-perf-name\" style=\"color:'+chMeta.color+'\">'+chMeta.name+'</span>';" +
+        "h+='<div class=\"exp-perf-bar\"><div class=\"exp-perf-bar-fill\" style=\"width:'+Math.round((chTime/maxTime)*100)+'%;background:'+chMeta.color+'\"></div></div>';" +
+        "h+='<span class=\"exp-perf-time\">'+chTime.toFixed(1)+'s</span>';" +
+        "h+='</div>'" +
+      "}" +
+      "if(cTime&&chTime){" +
+        "var faster=cTime<chTime?'Claude':chMeta.name;" +
+        "var diff2=Math.abs(cTime-chTime);" +
+        "h+='<div class=\"exp-perf-sub\">'+faster+' '+t('was')+' '+diff2.toFixed(1)+'s '+t('faster')+'</div>'" +
+      "}" +
+      "h+='</div>';" +
+      // Cost card
+      "h+='<div class=\"exp-perf-card\">';" +
+      "h+='<h4>\\u{1F4B0} '+t('Est. Cost')+'</h4>';" +
+      "if(cCost!==undefined){h+='<div class=\"exp-perf-row\"><span class=\"exp-perf-name\" style=\"color:#7B61FF\">Claude</span><span class=\"exp-perf-time\">$'+cCost.toFixed(3)+'</span></div>'}" +
+      "if(chCost!==undefined){h+='<div class=\"exp-perf-row\"><span class=\"exp-perf-name\" style=\"color:'+chMeta.color+'\">'+chMeta.name+'</span><span class=\"exp-perf-time\">$'+chCost.toFixed(3)+'</span></div>'}" +
+      "if(cCost!==undefined&&chCost!==undefined){" +
+        "var cheaper=cCost<chCost?'Claude':chMeta.name;" +
+        "var ratio=cCost<chCost?(chCost/cCost):(cCost/chCost);" +
+        "h+='<div class=\"exp-perf-sub\">'+cheaper+' ~'+ratio.toFixed(1)+'x '+t('cheaper')+'</div>'" +
+      "}" +
+      "h+='</div>';" +
+      "h+='</div>';" +
+      "h+='<div style=\"text-align:center;font-size:11px;color:var(--text2);margin-bottom:16px\">'+t('Cost estimated from response size (~4 chars/token)')+'</div>'" +
+    "}" +
     // Stats cards
     "h+='<div class=\"exp-stats\">';" +
     // Confidence comparison
@@ -3542,32 +3599,7 @@ var APP_JS = [
   "window.addEventListener('hashchange',render);",
 
   // ============ BUILD GUIDE ============
-  // Funny rotating messages for easter egg modes during loading
-  "var cowboyLoadMsgs=[" +
-    "'Wranglin\\u2019 up them Republican candidates...'," +
-    "'Roundin\\u2019 up the Democrat herd...'," +
-    "'Checkin\\u2019 the brands on these here politicians...'," +
-    "'Ridin\\u2019 the range for your ballot, partner...'," +
-    "'Tyin\\u2019 up your votin\\u2019 guide, yeehaw...'," +
-    "'Askin\\u2019 the ol\\u2019 campfire oracle...'," +
-    "'Dustin\\u2019 off the ballot box...'," +
-    "'Saddlin\\u2019 up your recommendations...'," +
-    "'Hitchin\\u2019 the horses to the votin\\u2019 wagon...'," +
-    "'Brewin\\u2019 some cowboy coffee while we wait...'," +
-    "'Consultin\\u2019 the tumbleweeds for wisdom...'," +
-    "'Hot diggity! Almost got yer guide ready...'" +
-  "];",
-  "function lm(key){" +
-    "var cowboy={" +
-      "'Finding your ballot...':'Roundin\\u2019 up yer ballot, partner...'," +
-      "'Researching candidates...':'Scoutin\\u2019 out the candidates, y\\u2019all...'," +
-      "'Researching Republicans...':'Ridin\\u2019 through Republican territory...'," +
-      "'Researching Democrats...':'Moseyin\\u2019 through Democrat country...'," +
-      "'Finalizing recommendations...':'Puttin\\u2019 the final brand on yer guide...'" +
-    "};" +
-    "if(S.readingLevel===7)return cowboy[key]||t(key);" +
-    "return t(key)" +
-  "}",
+  "function lm(key){return t(key)}",
   // ============ SSE STREAMING GUIDE ============
   "function handleGuideEvent(party,type,data){" +
     "if(type==='meta'){" +
@@ -3674,14 +3706,12 @@ var APP_JS = [
   "function buildGuide(){" +
     "trk('interview_complete',{d1:''+S.readingLevel,d2:S.spectrum,ms:Date.now()-(S._iStart||Date.now())});" +
     "trk('guide_start');" +
-    "S.phase=8;S.error=null;S.loadPhase=0;S.loadMsg=lm('Finding your ballot...');S.isLoading=true;S._streaming=false;render();" +
+    "S.phase=8;S.error=null;S.isLoading=true;S._streaming=false;render();" +
     "doGuide();" +
   "}",
 
   "async function doGuide(){" +
     "try{" +
-      // Districts already resolved before buildGuide — skip to profile
-      "S.loadPhase=1;S.loadMsg=lm('Finding your ballot...');render();" +
       // Build profile object for API
       "var profile={" +
         "topIssues:S.issues," +
@@ -3694,24 +3724,12 @@ var APP_JS = [
       "var demFirst=false;" +
       "if(S.spectrum==='Progressive'||S.spectrum==='Liberal')demFirst=true;" +
       "else if(S.spectrum==='Moderate'||S.spectrum==='Independent / Issue-by-Issue')demFirst=Math.random()<0.5;" +
-      "S.loadPhase=2;S.loadMsg=lm('Researching candidates...');render();" +
       "var cFips=S.districts&&S.districts.countyFips?S.districts.countyFips:null;" +
       "var _llm=window._llmOverride||null;" +
       // Use streaming for both parties in parallel
       "var repP=streamGuide('republican',profile,S.districts,cFips,_llm);" +
       "var demP=streamGuide('democrat',profile,S.districts,cFips,_llm);" +
-      // Rotate messages while streaming
-      "var msgs=demFirst?[lm('Researching Democrats...'),lm('Researching Republicans...')]:['Researching Republicans...','Researching Democrats...'].map(lm);" +
-      "var funnyMsgs=S.readingLevel===7?cowboyLoadMsgs:null;" +
-      "var mi=0;" +
-      // Only show rotating messages during initial loading (before first meta event transitions to ballot)
-      "var rotateTimer=setInterval(function(){" +
-        "if(!S.isLoading){clearInterval(rotateTimer);return}" +
-        "if(funnyMsgs){mi=(mi+1)%funnyMsgs.length;S.loadPhase=Math.min(Math.max(S.loadPhase,3),4);S.loadMsg=funnyMsgs[mi]}" +
-        "else{mi=1-mi;S.loadPhase=Math.max(S.loadPhase,mi===0?3:4);S.loadMsg=msgs[mi]}" +
-        ";render()},funnyMsgs?2500:3000);" +
       "var results=await Promise.allSettled([repP,demP]);" +
-      "clearInterval(rotateTimer);" +
       "var repResult=results[0].status==='fulfilled'?results[0].value:null;" +
       "var demResult=results[1].status==='fulfilled'?results[1].value:null;" +
       // Store county ballot availability
@@ -3783,7 +3801,7 @@ var APP_JS = [
 
   // ============ REPROCESS GUIDE ============
   "function reprocessGuide(){" +
-    "S.guideComplete=false;S.phase=8;S.error=null;S.loadPhase=0;S.loadMsg=lm('Finding your ballot...');S.isLoading=true;S._streaming=false;render();" +
+    "S.guideComplete=false;S.phase=8;S.error=null;S.isLoading=true;S._streaming=false;render();" +
     "doGuide();" +
   "}",
 
@@ -4241,7 +4259,9 @@ var APP_JS = [
   // Track interview abandonment when page is hidden mid-interview
   "document.addEventListener('visibilitychange',function(){" +
     "if(document.visibilityState==='hidden'&&S.phase>0&&S.phase<8&&!S.guideComplete){" +
-      "navigator.sendBeacon('/app/api/ev',JSON.stringify({event:'interview_abandon',props:{lang:LANG,d1:'phase_'+S.phase,ms:Date.now()-(S._iStart||Date.now())}}))" +
+      "var _ab={event:'interview_abandon',props:{lang:LANG,d1:'phase_'+S.phase,ms:Date.now()-(S._iStart||Date.now())}};" +
+      "if(_adminKey)_ab._admin_key=_adminKey;" +
+      "navigator.sendBeacon('/app/api/ev',JSON.stringify(_ab))" +
     "}" +
   "});",
 ].join("\n");

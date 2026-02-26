@@ -1094,7 +1094,7 @@ describe("Full interview happy path", () => {
     // Phase 7: Skip address
     clickAction("skip-address");
     expect(S().phase).toBe(8);
-    expect(getApp()).toContain("Building Your Guide");
+    expect(getApp()).toContain("Loading your ballot");
   });
 });
 
@@ -1376,7 +1376,7 @@ describe("Phase 8: Building guide", () => {
     clickAction("skip-address");
     expect(S().phase).toBe(8);
     const html = getApp();
-    expect(html).toContain("Building Your Guide");
+    expect(html).toContain("Loading your ballot");
   });
 });
 
