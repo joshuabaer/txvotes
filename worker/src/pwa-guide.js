@@ -738,10 +738,11 @@ export async function handleSeedTranslations(env, party, countyFips) {
 
 // MARK: - Claude API Call
 
-async function callClaude(env, system, userMessage, lang, component, _isRetry) {
+async function callClaude(env, system, userMessage, lang, component, _isRetry, specificModel) {
   var maxTokens = _isRetry || (lang === "es" ? 8192 : (lang === "es_cached" ? 4096 : 2048));
-  for (var i = 0; i < MODELS.length; i++) {
-    var model = MODELS[i];
+  var modelList = specificModel ? [specificModel] : MODELS;
+  for (var i = 0; i < modelList.length; i++) {
+    var model = modelList[i];
     for (var attempt = 0; attempt <= 1; attempt++) {
       var res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -782,7 +783,7 @@ async function callClaude(env, system, userMessage, lang, component, _isRetry) {
         if (stopReason === "max_tokens" && !_isRetry && maxTokens < 8192) {
           var newMax = Math.min(maxTokens * 2, 8192);
           console.log("[TOKEN RETRY] Retrying with " + newMax + " max_tokens (was " + maxTokens + ")");
-          return callClaude(env, system, userMessage, lang, component, newMax);
+          return callClaude(env, system, userMessage, lang, component, newMax, specificModel);
         }
 
         return text;
@@ -796,7 +797,7 @@ async function callClaude(env, system, userMessage, lang, component, _isRetry) {
           continue;
         }
         // Second 429 — try next model
-        if (i < MODELS.length - 1) break;
+        if (i < modelList.length - 1) break;
         throw new Error("Rate limited — please try again in a minute");
       }
 
@@ -808,13 +809,13 @@ async function callClaude(env, system, userMessage, lang, component, _isRetry) {
           continue;
         }
         // Second 529 — try next model
-        if (i < MODELS.length - 1) break;
+        if (i < modelList.length - 1) break;
         throw new Error("All models overloaded");
       }
 
       // Other error — try next model
       var body = await res.text();
-      if (i < MODELS.length - 1) break;
+      if (i < modelList.length - 1) break;
       throw new Error("API error " + res.status + ": " + body.slice(0, 200));
     }
   }
@@ -900,9 +901,10 @@ async function callOpenAICompatible(env, system, userMessage, lang, endpoint, ap
 
 // MARK: - Gemini API Call
 
-async function callGemini(env, system, userMessage, lang, component, _isRetry) {
+async function callGemini(env, system, userMessage, lang, component, _isRetry, geminiModel) {
   var maxTokens = _isRetry || (lang === "es" ? 8192 : (lang === "es_cached" ? 4096 : 4096));
-  var endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + env.GEMINI_API_KEY;
+  var modelName = geminiModel || "gemini-2.5-flash";
+  var endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + env.GEMINI_API_KEY;
 
   for (var attempt = 0; attempt <= 1; attempt++) {
     var res = await fetch(endpoint, {
@@ -925,8 +927,8 @@ async function callGemini(env, system, userMessage, lang, component, _isRetry) {
       // Log token usage (Gemini format: usageMetadata.promptTokenCount / candidatesTokenCount)
       if (data.usageMetadata && component) {
         var geminiUsage = { input_tokens: data.usageMetadata.promptTokenCount || 0, output_tokens: data.usageMetadata.candidatesTokenCount || 0 };
-        console.log("Token usage [" + component + "] model=gemini-2.5-flash input=" + geminiUsage.input_tokens + " output=" + geminiUsage.output_tokens);
-        logTokenUsage(env, component, geminiUsage, "gemini-2.5-flash").catch(function() {});
+        console.log("Token usage [" + component + "] model=" + modelName + " input=" + geminiUsage.input_tokens + " output=" + geminiUsage.output_tokens);
+        logTokenUsage(env, component, geminiUsage, modelName).catch(function() {});
       }
 
       // Token utilization warning
@@ -943,7 +945,7 @@ async function callGemini(env, system, userMessage, lang, component, _isRetry) {
       if (finishReason === "MAX_TOKENS" && !_isRetry && maxTokens < 8192) {
         var newMax = Math.min(maxTokens * 2, 8192);
         console.log("[TOKEN RETRY] Retrying with " + newMax + " max_tokens (was " + maxTokens + ")");
-        return callGemini(env, system, userMessage, lang, component, newMax);
+        return callGemini(env, system, userMessage, lang, component, newMax, geminiModel);
       }
 
       return text;
@@ -973,17 +975,33 @@ async function callGemini(env, system, userMessage, lang, component, _isRetry) {
 
 // MARK: - LLM Router
 
-var VALID_LLMS = ["claude", "chatgpt", "gemini", "grok"];
+var VALID_LLMS = ["claude", "claude-haiku", "claude-opus", "chatgpt", "gpt-4o-mini", "gemini", "gemini-pro", "grok"];
 
 async function callLLM(env, system, userMessage, lang, llm) {
   if (!llm || llm === "claude") {
     return callClaude(env, system, userMessage, lang);
   }
 
+  if (llm === "claude-haiku") {
+    if (!env.ANTHROPIC_API_KEY) throw new Error("Anthropic API key not configured");
+    return callClaude(env, system, userMessage, lang, null, null, "claude-haiku-4-5-20251001");
+  }
+
+  if (llm === "claude-opus") {
+    if (!env.ANTHROPIC_API_KEY) throw new Error("Anthropic API key not configured");
+    return callClaude(env, system, userMessage, lang, null, null, "claude-opus-4-6");
+  }
+
   if (llm === "chatgpt") {
     if (!env.OPENAI_API_KEY) throw new Error("OpenAI API key not configured");
     return callOpenAICompatible(env, system, userMessage, lang,
       "https://api.openai.com/v1/chat/completions", env.OPENAI_API_KEY, "gpt-4o");
+  }
+
+  if (llm === "gpt-4o-mini") {
+    if (!env.OPENAI_API_KEY) throw new Error("OpenAI API key not configured");
+    return callOpenAICompatible(env, system, userMessage, lang,
+      "https://api.openai.com/v1/chat/completions", env.OPENAI_API_KEY, "gpt-4o-mini");
   }
 
   if (llm === "grok") {
@@ -995,6 +1013,11 @@ async function callLLM(env, system, userMessage, lang, llm) {
   if (llm === "gemini") {
     if (!env.GEMINI_API_KEY) throw new Error("Gemini API key not configured");
     return callGemini(env, system, userMessage, lang);
+  }
+
+  if (llm === "gemini-pro") {
+    if (!env.GEMINI_API_KEY) throw new Error("Gemini API key not configured");
+    return callGemini(env, system, userMessage, lang, null, null, "gemini-2.5-pro");
   }
 
   throw new Error("Unknown LLM: " + llm + ". Valid options: " + VALID_LLMS.join(", "));
@@ -2195,4 +2218,4 @@ export async function handlePWA_GuideStream(request, env) {
   });
 }
 
-export { sortOrder, parseResponse, filterBallotToDistricts, buildUserPrompt, mergeRecommendations, buildCondensedBallotDescription, callLLM, VALID_LLMS, scorePartisanBalance, CONFIDENCE_SCORES, loadCachedTranslations, hashGuideKey, repairTruncatedGuide, createIncrementalParser, callClaudeStreaming };
+export { sortOrder, parseResponse, filterBallotToDistricts, buildUserPrompt, mergeRecommendations, buildCondensedBallotDescription, callLLM, VALID_LLMS, scorePartisanBalance, CONFIDENCE_SCORES, loadCachedTranslations, hashGuideKey, repairTruncatedGuide, createIncrementalParser, callClaudeStreaming, SYSTEM_PROMPT };

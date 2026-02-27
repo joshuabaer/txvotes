@@ -373,7 +373,7 @@ describe("Static pages in index.js source", () => {
 describe("Worker routing patterns", () => {
   it("has a fetch handler export", () => {
     expect(indexSrc).toContain("export default");
-    expect(indexSrc).toContain("async fetch(request, env)");
+    expect(indexSrc).toContain("async fetch(request, env, ctx)");
   });
 
   it("has a scheduled handler for cron", () => {
@@ -1009,5 +1009,55 @@ describe("Admin KV cleanup endpoint", () => {
     const fnBody = indexSrc.slice(fnIdx, fnIdx + 5000);
     expect(fnBody).toContain("deleteErrors");
     expect(fnBody).toContain("catch");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Admin hub LLM Experiment link
+// ---------------------------------------------------------------------------
+describe("Admin hub LLM Experiment link", () => {
+  it("admin hub dashboard includes LLM Compare stat card", () => {
+    const adminBlock = indexSrc.slice(
+      indexSrc.indexOf("function handleAdmin()"),
+      indexSrc.indexOf("function handleAdmin()") + 3000
+    );
+    expect(adminBlock).toContain("LLM Compare");
+    expect(adminBlock).toContain('/app#/llm-experiment"');
+  });
+
+  it("LLM Experiment card has descriptive text", () => {
+    const adminBlock = indexSrc.slice(
+      indexSrc.indexOf("function handleAdmin()"),
+      indexSrc.indexOf("function handleAdmin()") + 3000
+    );
+    expect(adminBlock).toContain("Compare guide output across LLM providers");
+  });
+
+  it("LLM Compare card uses stat-card class", () => {
+    const adminBlock = indexSrc.slice(
+      indexSrc.indexOf("function handleAdmin()"),
+      indexSrc.indexOf("function handleAdmin()") + 3000
+    );
+    expect(adminBlock).toContain('class="stat-card"><h3>LLM Compare</h3>');
+  });
+
+  it("admin hub dashboard includes LLM Benchmark stat card", () => {
+    const adminBlock = indexSrc.slice(
+      indexSrc.indexOf("function handleAdmin()"),
+      indexSrc.indexOf("function handleAdmin()") + 3000
+    );
+    expect(adminBlock).toContain("LLM Benchmark");
+    expect(adminBlock).toContain('/admin/llm-benchmark"');
+  });
+
+  it("/llm-experiment route redirects to /app#/llm-experiment", () => {
+    expect(indexSrc).toContain('url.pathname === "/llm-experiment"');
+    expect(indexSrc).toContain('Location: "/app#/llm-experiment"');
+  });
+
+  it("/llm-experiment route requires admin auth", () => {
+    const routeIdx = indexSrc.indexOf('url.pathname === "/llm-experiment"');
+    const nextLines = indexSrc.slice(routeIdx, routeIdx + 200);
+    expect(nextLines).toContain("checkAdminAuth");
   });
 });

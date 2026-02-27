@@ -6,6 +6,7 @@ import { runAudit } from "./audit-runner.js";
 import { checkBallotBalance, formatBalanceSummary } from "./balance-check.js";
 import { getUsageLog, estimateCost } from "./usage-logger.js";
 import { checkRateLimit, rateLimitResponse } from "./rate-limit.js";
+import { runSingleExperiment, runFullExperiment, getExperimentStatus, getExperimentResults, EXPERIMENT_PROFILES, VALID_LLMS as EXPERIMENT_LLMS } from "./llm-experiment.js";
 
 // Shared CSS for static pages — matches app design tokens from pwa.js
 const PAGE_CSS = `<meta name="theme-color" content="rgb(33,89,143)" media="(prefers-color-scheme:light)"><meta name="theme-color" content="rgb(28,28,31)" media="(prefers-color-scheme:dark)">
@@ -5599,6 +5600,8 @@ function handleAdmin() {
       <a href="/admin/coverage" class="stat-card"><h3>Coverage</h3><p>Candidate completeness, tone variants, county data</p></a>
       <a href="/admin/analytics" class="stat-card"><h3>Analytics</h3><p>Usage events, interview funnel, guide timing</p></a>
       <a href="/admin/errors" class="stat-card"><h3>AI Errors</h3><p>Error log, failure categories, daily breakdown</p></a>
+      <a href="/app#/llm-experiment" class="stat-card"><h3>LLM Compare</h3><p>Compare guide output across LLM providers side-by-side</p></a>
+      <a href="/admin/llm-benchmark" class="stat-card"><h3>LLM Benchmark</h3><p>Automated 8-model experiment: scoring, consensus, speed, cost rankings</p></a>
     </div>
 
     <h2>API Endpoints</h2>
@@ -5619,6 +5622,9 @@ function handleAdmin() {
       <tr><td>POST</td><td><code>/api/admin/cleanup</code></td><td>List/delete stale KV keys</td></tr>
       <tr><td>POST</td><td><code>/api/admin/baseline/seed</code></td><td>Seed baseline from current data</td></tr>
       <tr><td>POST</td><td><code>/api/admin/baseline/update</code></td><td>Update candidate baseline fields</td></tr>
+      <tr><td>POST</td><td><code>/api/admin/llm-experiment</code></td><td>Start LLM model comparison experiment</td></tr>
+      <tr><td>GET</td><td><code>/api/admin/llm-experiment/status</code></td><td>Experiment progress</td></tr>
+      <tr><td>GET</td><td><code>/api/admin/llm-experiment/results</code></td><td>Experiment results &amp; analysis</td></tr>
     </table>
 
     ${generateAdminFooter()}
@@ -6376,6 +6382,7 @@ const VALID_EVENTS = new Set([
   "i_voted", "share_app", "share_race", "share_voted",
   "cheatsheet_print", "party_switch", "lang_toggle",
   "race_view", "cheatsheet_view", "page_view",
+  "override_set", "override_undo", "override_feedback",
 ]);
 
 // Simple in-memory rate limiter: max 100 events per IP per minute
@@ -6446,6 +6453,51 @@ async function handleAnalyticsEvent(request, env) {
     // Never fail — analytics should not break the app
   }
   return new Response(null, { status: 204 });
+}
+
+// ---------------------------------------------------------------------------
+// MARK: - Override Feedback
+// ---------------------------------------------------------------------------
+async function handleOverrideFeedback(request, env) {
+  try {
+    // Rate limit by IP
+    const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+    if (isRateLimited(ip)) {
+      return new Response(null, { status: 429 });
+    }
+
+    const body = await request.json();
+    const { party, race, from, to, reason, lang } = body;
+
+    // Validate required fields
+    if (!party || !race || !from || !to) {
+      return new Response("Missing required fields", { status: 400 });
+    }
+
+    // Sanitize reason (max 500 chars)
+    const safeReason = (reason || "").slice(0, 500);
+
+    const kvKey = `feedback:overrides:${party}:${race}`;
+    const existing = await env.ELECTION_DATA.get(kvKey, "json") || [];
+
+    // Cap at 500 entries per race to prevent unbounded growth
+    if (existing.length >= 500) {
+      existing.shift(); // drop oldest
+    }
+
+    existing.push({
+      from,
+      to,
+      reason: safeReason,
+      lang: lang || "en",
+      ts: new Date().toISOString(),
+    });
+
+    await env.ELECTION_DATA.put(kvKey, JSON.stringify(existing));
+    return new Response(null, { status: 204 });
+  } catch (e) {
+    return new Response("Invalid request", { status: 400 });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -6761,6 +6813,253 @@ async function handleAdminCleanup(url, env) {
   });
 }
 
+// MARK: - Admin LLM Benchmark Dashboard
+
+async function handleAdminBenchmark(env) {
+  const [status, results] = await Promise.all([
+    getExperimentStatus(env),
+    getExperimentResults(env),
+  ]);
+
+  const isRunning = status && status.status === "running";
+  const hasResults = results && results.ranking && results.ranking.length > 0;
+
+  // Status banner
+  let statusHtml = "";
+  if (isRunning) {
+    const total = status.totalCalls || status.total || 0;
+    const pct = total > 0 ? Math.round((status.completed / total) * 100) : 0;
+    statusHtml = `<div class="card" style="background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.3);margin-bottom:1.5rem">
+      <h3 style="margin:0 0 8px;color:var(--blue)">Experiment Running...</h3>
+      <div style="background:var(--border);border-radius:8px;height:24px;overflow:hidden;margin-bottom:8px">
+        <div style="background:var(--blue);height:100%;width:${pct}%;transition:width .3s;border-radius:8px"></div>
+      </div>
+      <p style="margin:0;font-size:14px;color:var(--text2)">${status.completed || 0} / ${total || "?"} calls complete (${pct}%)${status.currentModel ? " — now testing " + status.currentModel : ""}</p>
+      <p style="margin:4px 0 0;font-size:12px;color:var(--text2)">Keep this page open — your browser drives the experiment.</p>
+    </div>`;
+  }
+
+  // Start button
+  const startDisabled = isRunning ? " disabled" : "";
+  const resetBtn = isRunning ? ` <button onclick="resetExperiment()" class="btn-start" style="background:#dc2626;font-size:12px;padding:6px 12px">Reset</button>` : "";
+  const startHtml = `<div style="margin-bottom:1.5rem;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+    <button onclick="startExperiment(1)" class="btn-start"${startDisabled}>Start (1 run, ~$19)</button>
+    <button onclick="startExperiment(3)" class="btn-start btn-alt"${startDisabled}>Start (3 runs, ~$56)</button>${resetBtn}
+    <span style="font-size:12px;color:var(--text2)">Runs 7 profiles × 8 models. Keep page open (~15-30 min).</span>
+  </div>`;
+
+  // Results table
+  let resultsHtml = "";
+  if (hasResults) {
+    const ranking = results.ranking; // array of model name strings, sorted by composite
+    const modelData = results.models || {}; // per-model score objects
+
+    // Summary cards
+    resultsHtml += `<div class="stat-grid" style="margin-bottom:1.5rem">
+      <div class="stat-card"><div class="num">${ranking.length}</div><div class="label">Models Tested</div></div>
+      <div class="stat-card"><div class="num">${results.totalResults || 0}</div><div class="label">Total API Calls</div></div>
+      <div class="stat-card"><div class="num">${results.consensusRaces || 0}</div><div class="label">Consensus Races</div></div>
+      <div class="stat-card"><div class="num">${ranking[0] || "-"}</div><div class="label">Top Model</div></div>
+    </div>`;
+
+    // Rankings table
+    resultsHtml += `<h2>Model Rankings</h2>
+    <div class="scroll-table"><table>
+      <tr><th>#</th><th>Model</th><th>Composite</th><th>Quality</th><th>Reasoning</th><th>JSON</th><th>Balance</th><th>Speed</th><th>Cost</th><th>Robust</th></tr>`;
+    for (let i = 0; i < ranking.length; i++) {
+      const modelName = ranking[i];
+      const m = modelData[modelName] || {};
+      const cs = m.criterionScores || {};
+      const rowStyle = i === 0 ? ' style="background:rgba(34,197,94,.08);font-weight:600"' : "";
+      resultsHtml += `<tr${rowStyle}>
+        <td>${i + 1}</td>
+        <td>${modelName}</td>
+        <td>${(m.compositeScore || 0).toFixed(2)}</td>
+        <td>${(cs.quality || 0).toFixed(1)}</td>
+        <td>${(cs.reasoning || 0).toFixed(1)}</td>
+        <td>${(cs.json || 0).toFixed(1)}</td>
+        <td>${(cs.balance || 0).toFixed(1)}</td>
+        <td>${(cs.speed || 0).toFixed(1)}</td>
+        <td>${(cs.cost || 0).toFixed(1)}</td>
+        <td>${(cs.robustness || 0).toFixed(1)}</td>
+      </tr>`;
+    }
+    resultsHtml += `</table></div>`;
+
+    // Per-model details
+    resultsHtml += `<h2>Speed &amp; Cost Details</h2><div class="scroll-table"><table>
+      <tr><th>Model</th><th>Median (s)</th><th>p90 (s)</th><th>Avg Cost/Guide</th><th>Monthly @100/day</th><th>Errors</th><th>Truncations</th></tr>`;
+    for (const modelName of ranking) {
+      const m = modelData[modelName] || {};
+      const medianS = ((m.medianTimingMs || 0) / 1000).toFixed(1);
+      const p90S = ((m.p90TimingMs || 0) / 1000).toFixed(1);
+      const costGuide = (m.avgCost || 0).toFixed(4);
+      const monthly = ((m.avgCost || 0) * 100 * 30).toFixed(0);
+      const errors = m.errorCount || 0;
+      const truncations = m.truncatedCount || 0;
+      resultsHtml += `<tr><td>${modelName}</td><td>${medianS}</td><td>${p90S}</td><td>$${costGuide}</td><td>$${monthly}</td><td>${errors}</td><td>${truncations}</td></tr>`;
+    }
+    resultsHtml += `</table></div>`;
+
+    // Summary info
+    if (results.summary) {
+      const s = results.summary;
+      const elapsed = s.completedAt && s.startedAt ? Math.round((new Date(s.completedAt) - new Date(s.startedAt)) / 60000) : "?";
+      resultsHtml += `<p style="font-size:12px;color:var(--text2);margin-top:1rem">${s.completed || 0} calls completed in ${elapsed} min · ${results.missingResults || 0} missing results · <a href="/api/admin/llm-experiment/results">Raw JSON</a> · <a href="/api/admin/llm-experiment/status">Status JSON</a></p>`;
+    }
+  } else if (!isRunning) {
+    resultsHtml = `<div class="card" style="text-align:center;color:var(--text2);padding:2rem">
+      <p style="font-size:1.2rem;margin:0 0 8px">No experiment results yet</p>
+      <p style="margin:0;font-size:14px">Click "Start" above to run the LLM benchmark.</p>
+    </div>`;
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${pageHead({
+    title: "LLM Benchmark — Texas Votes Admin",
+    description: "LLM model comparison experiment results.",
+  })}
+  <style>
+    .container{max-width:1100px}
+    table{width:100%;border-collapse:collapse;margin-bottom:0;font-size:0.9rem}
+    th,td{padding:6px 10px;border:1px solid var(--border);text-align:left}
+    th{background:var(--blue);color:#fff;font-weight:600;font-size:0.85rem;position:sticky;top:0}
+    td:nth-child(n+3){text-align:center}
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem}
+    .stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:1rem;text-align:center}
+    .stat-card .num{font-size:1.5rem;font-weight:800;color:var(--blue)}
+    .stat-card .label{font-size:0.8rem;color:var(--text2)}
+    .scroll-table{max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:1.5rem}
+    .scroll-table table{margin-bottom:0}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:1.25rem}
+    .btn-start{background:var(--blue);color:#fff;border:none;padding:10px 20px;border-radius:var(--rs);font-size:14px;font-weight:600;cursor:pointer}
+    .btn-start:hover{opacity:.9}
+    .btn-start:disabled{opacity:.5;cursor:not-allowed}
+    .btn-alt{background:var(--text2)}
+    #start-msg{margin-top:8px;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/admin" class="back-top">&larr; Admin Hub</a>
+    <h1>LLM Benchmark</h1>
+    <p class="subtitle">Automated comparison of 8 LLM models across 7 voter profiles.</p>
+
+    ${statusHtml}
+    ${startHtml}
+    <div id="start-msg"></div>
+    ${resultsHtml}
+
+    ${generateAdminFooter()}
+  </div>
+  <script>
+    var _polling = ${isRunning ? "true" : "false"};
+    var _pollTimer = null;
+
+    function resetExperiment() {
+      if (!confirm('Cancel the running experiment?')) return;
+      fetch('/api/admin/llm-experiment', { method: 'DELETE', credentials: 'same-origin' })
+        .then(function(r) { return r.json() })
+        .then(function() { location.reload() })
+        .catch(function(e) { alert('Reset failed: ' + e.message) });
+    }
+
+    function startExperiment(runs) {
+      if (!confirm('Start LLM benchmark with ' + runs + ' run(s)? This will make ' + (7 * 8 * runs) + ' API calls (~$' + (runs === 1 ? '19' : '56') + ').')) return;
+      var msg = document.getElementById('start-msg');
+      msg.textContent = 'Starting...';
+      msg.style.color = 'var(--blue)';
+      document.querySelectorAll('.btn-start').forEach(function(b){b.disabled=true});
+      fetch('/api/admin/llm-experiment', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runs: runs })
+      }).then(function(r) { return r.json() }).then(function(d) {
+        if (d.error) { msg.textContent = 'Error: ' + d.error; msg.style.color = 'var(--bad)'; document.querySelectorAll('.btn-start').forEach(function(b){b.disabled=false}) }
+        else { msg.innerHTML = 'Experiment started! ' + d.totalCalls + ' calls queued.'; msg.style.color = 'var(--ok)'; _totalCalls = d.totalCalls; startRunning() }
+      }).catch(function(e) { msg.textContent = 'Failed: ' + e.message; msg.style.color = 'var(--bad)'; document.querySelectorAll('.btn-start').forEach(function(b){b.disabled=false}) });
+    }
+
+    var _totalCalls = 0;
+    var _running = false;
+
+    function startRunning() {
+      if (_running) return;
+      _running = true;
+      ensureStatusBanner();
+      runNext();
+    }
+
+    function ensureStatusBanner() {
+      if (document.getElementById('live-status')) return;
+      var banner = document.createElement('div');
+      banner.id = 'live-status';
+      banner.className = 'card';
+      banner.style.cssText = 'background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.3);margin-bottom:1.5rem';
+      banner.innerHTML = '<h3 style="margin:0 0 8px;color:var(--blue)">Experiment Running...</h3>'
+        + '<div id="live-bar" style="background:var(--border);border-radius:8px;height:24px;overflow:hidden;margin-bottom:8px"><div id="live-fill" style="background:var(--blue);height:100%;width:0%;transition:width .3s;border-radius:8px"></div></div>'
+        + '<p id="live-text" style="margin:0;font-size:14px;color:var(--text2)">Starting first call...</p>';
+      var container = document.querySelector('.container');
+      var startDiv = document.querySelector('.container > div:nth-of-type(1)');
+      if (!startDiv) startDiv = container.children[3];
+      container.insertBefore(banner, startDiv);
+    }
+
+    function updateProgress(completed, total, model, profile, error) {
+      var pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+      var fill = document.getElementById('live-fill');
+      var txt = document.getElementById('live-text');
+      if (fill) fill.style.width = pct + '%';
+      var detail = completed + ' / ' + total + ' calls (' + pct + '%)';
+      if (model) detail += ' — last: ' + model + (profile ? ' / ' + profile : '');
+      if (error) detail += ' (error)';
+      if (txt) txt.textContent = detail;
+    }
+
+    function runNext() {
+      if (!_running) return;
+      fetch('/api/admin/llm-experiment/run-next', {
+        method: 'POST',
+        credentials: 'same-origin'
+      })
+        .then(function(r) { return r.json() })
+        .then(function(d) {
+          if (d.status === 'no_experiment') { _running = false; return }
+          if (d.status === 'complete') {
+            _running = false;
+            location.reload();
+            return;
+          }
+          if (d.status === 'busy') {
+            setTimeout(runNext, 3000);
+            return;
+          }
+          var total = d.totalCalls || _totalCalls || 0;
+          updateProgress(d.completed || 0, total, d.currentModel, d.currentProfile, d.error);
+          setTimeout(runNext, 500);
+        })
+        .catch(function(e) {
+          var txt = document.getElementById('live-text');
+          if (txt) txt.textContent += ' — retrying after error...';
+          setTimeout(runNext, 5000);
+        });
+    }
+
+    if (_polling) {
+      _running = true;
+      ensureStatusBanner();
+      runNext();
+    }
+  </script>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8" } });
+}
+
 // MARK: - Admin AI Error Log Dashboard
 
 async function handleAdminErrors(request, env) {
@@ -6948,7 +7247,7 @@ async function handleAdminErrors(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // Redirect atxvotes.app → txvotes.app
@@ -6957,11 +7256,11 @@ export default {
       return Response.redirect(dest.toString(), 301);
     }
 
-    const response = await this.handleRequest(request, env, url);
+    const response = await this.handleRequest(request, env, url, ctx);
     return injectBeacon(response, env.CF_BEACON_TOKEN);
   },
 
-  async handleRequest(request, env, url) {
+  async handleRequest(request, env, url, ctx) {
     // Return 404 for missing static assets (so onerror fallback works in browsers)
     if (url.pathname.startsWith("/headshots/") || url.pathname.startsWith("/assets/")) {
       return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
@@ -7112,34 +7411,60 @@ export default {
         if (deny) return deny;
         return handleAdminErrors(request, env);
       }
-      // Admin API usage endpoint (GET with Bearer auth)
+      // Admin LLM benchmark dashboard (GET with Basic/Bearer auth)
+      if (url.pathname === "/admin/llm-benchmark") {
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
+        return handleAdminBenchmark(env);
+      }
+      // Admin API usage endpoint (GET with Basic/Bearer auth)
       if (url.pathname === "/api/admin/usage") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         const date = url.searchParams.get("date") || new Date().toISOString().slice(0, 10);
         const usageLog = await getUsageLog(env, date);
         const costs = estimateCost(usageLog);
         return jsonResponse({ date, usage: usageLog, estimatedCosts: costs });
       }
-      // Admin baseline view (GET with Bearer auth)
+      // Admin baseline view (GET with Basic/Bearer auth)
       if (url.pathname === "/api/admin/baseline") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         return handleAdminBaselineView(url, env);
       }
-      // Admin baseline fallback log (GET with Bearer auth)
+      // Admin baseline fallback log (GET with Basic/Bearer auth)
       if (url.pathname === "/api/admin/baseline/log") {
-        const auth = request.headers.get("Authorization");
-        if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
         return handleAdminBaselineLog(env);
       }
+      // Admin LLM experiment status (GET with Basic/Bearer auth)
+      if (url.pathname === "/api/admin/llm-experiment/status") {
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
+        const status = await getExperimentStatus(env);
+        return jsonResponse(status || { status: "no_experiment", message: "No experiment has been started." });
+      }
+      // Admin LLM experiment results (GET with Basic/Bearer auth)
+      if (url.pathname === "/api/admin/llm-experiment/results") {
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
+        const results = await getExperimentResults(env);
+        return jsonResponse(results);
+      }
       return handleLandingPage();
+    }
+
+    // DELETE: reset/cancel a stuck experiment
+    if (request.method === "DELETE") {
+      if (url.pathname === "/api/admin/llm-experiment") {
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
+        await env.ELECTION_DATA.delete("experiment:progress");
+        await env.ELECTION_DATA.delete("experiment:lock");
+        return jsonResponse({ status: "reset", message: "Experiment cleared." });
+      }
+      return new Response("Not found", { status: 404 });
     }
 
     // CORS preflight for PWA API routes
@@ -7162,6 +7487,11 @@ export default {
     // Analytics event endpoint (no auth — public, rate-limited)
     if (url.pathname === "/app/api/ev") {
       return handleAnalyticsEvent(request, env);
+    }
+
+    // Override feedback endpoint (no auth — public, rate-limited)
+    if (url.pathname === "/app/api/override-feedback") {
+      return handleOverrideFeedback(request, env);
     }
 
     // PWA POST routes (no auth — server-side guide gen protects secrets)
@@ -7279,6 +7609,162 @@ export default {
       const txCountyFips = body.countyFips || null;
       const result = await handleSeedTranslations(env, txParty, txCountyFips);
       return jsonResponse(result);
+    }
+
+    // POST: /api/admin/llm-experiment — create experiment plan in KV (client drives execution)
+    if (url.pathname === "/api/admin/llm-experiment") {
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
+
+      // Check if experiment is already running (allow override if stuck — no queue)
+      const existingStatus = await getExperimentStatus(env);
+      if (existingStatus && existingStatus.status === "running" && existingStatus.queue && existingStatus.queue.length > 0) {
+        return jsonResponse({
+          error: "Experiment already running",
+          progress: existingStatus,
+        }, 409);
+      }
+
+      const body = await request.json().catch(() => ({}));
+      const models = body.models || EXPERIMENT_LLMS.slice();
+      const profileIds = body.profiles || EXPERIMENT_PROFILES.map(p => p.id);
+      const runs = body.runs || 3;
+      const totalCalls = models.length * profileIds.length * runs;
+
+      // Build the task queue: ordered list of [model, profile, run]
+      const queue = [];
+      for (const model of models) {
+        for (const profileId of profileIds) {
+          for (let r = 1; r <= runs; r++) {
+            queue.push({ model, profile: profileId, run: r });
+          }
+        }
+      }
+
+      // Store experiment plan and progress in KV
+      const progress = {
+        status: "running",
+        totalCalls,
+        completed: 0,
+        errors: 0,
+        startedAt: new Date().toISOString(),
+        currentModel: null,
+        currentProfile: null,
+        currentRun: null,
+        queue,
+        models,
+        profiles: profileIds,
+        runs,
+      };
+      await env.ELECTION_DATA.put("experiment:progress", JSON.stringify(progress), { expirationTtl: 86400 });
+
+      return jsonResponse({
+        status: "started",
+        totalCalls,
+        models: models.length,
+        profiles: profileIds.length,
+        runs,
+        message: "Experiment plan created. Client will drive execution via /run-next.",
+      });
+    }
+
+    // POST: /api/admin/llm-experiment/run-next — execute one experiment call
+    if (url.pathname === "/api/admin/llm-experiment/run-next") {
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
+
+      const progress = await getExperimentStatus(env);
+      if (!progress || progress.status !== "running") {
+        return jsonResponse({ status: "no_experiment", message: "No experiment is running." });
+      }
+
+      // Lock to prevent concurrent calls (60s TTL as safety fallback)
+      const lock = await env.ELECTION_DATA.get("experiment:lock");
+      if (lock) {
+        const lockAge = Date.now() - parseInt(lock, 10);
+        if (lockAge < 120000) { // lock valid for up to 2 min
+          return jsonResponse({ status: "busy", message: "Another call is in progress. Retry shortly." });
+        }
+      }
+      await env.ELECTION_DATA.put("experiment:lock", String(Date.now()), { expirationTtl: 120 });
+
+      const queue = progress.queue || [];
+      const completed = progress.completed || 0;
+
+      if (completed >= queue.length) {
+        // All done — mark complete
+        progress.status = "complete";
+        progress.completedAt = new Date().toISOString();
+        delete progress.queue; // save KV space
+        await env.ELECTION_DATA.put("experiment:progress", JSON.stringify(progress), { expirationTtl: 86400 });
+
+        // Store summary
+        const summary = {
+          totalCalls: progress.totalCalls,
+          completed: progress.completed,
+          errors: progress.errors,
+          startedAt: progress.startedAt,
+          completedAt: progress.completedAt,
+          models: progress.models,
+          profiles: progress.profiles,
+          runs: progress.runs,
+        };
+        await env.ELECTION_DATA.put("experiment:summary", JSON.stringify(summary), { expirationTtl: 604800 });
+        await env.ELECTION_DATA.delete("experiment:lock");
+
+        return jsonResponse({ status: "complete", completed, total: progress.totalCalls });
+      }
+
+      // Get the next task
+      const task = queue[completed];
+      progress.currentModel = task.model;
+      progress.currentProfile = task.profile;
+      progress.currentRun = task.run;
+      await env.ELECTION_DATA.put("experiment:progress", JSON.stringify(progress), { expirationTtl: 86400 });
+
+      // Run single experiment call
+      const result = await runSingleExperiment(env, task.profile, task.model, task.run);
+
+      // Store individual result (strip raw response to save space)
+      const storedResult = Object.assign({}, result);
+      delete storedResult.responseText;
+      const resultKey = "experiment:result:" + task.model + ":" + task.profile + ":" + task.run;
+      await env.ELECTION_DATA.put(resultKey, JSON.stringify(storedResult), { expirationTtl: 604800 });
+
+      // Update progress
+      progress.completed = completed + 1;
+      if (result.error) progress.errors = (progress.errors || 0) + 1;
+
+      // Check if this was the last one
+      if (progress.completed >= queue.length) {
+        progress.status = "complete";
+        progress.completedAt = new Date().toISOString();
+        delete progress.queue;
+        const summary = {
+          totalCalls: progress.totalCalls,
+          completed: progress.completed,
+          errors: progress.errors,
+          startedAt: progress.startedAt,
+          completedAt: progress.completedAt,
+          models: progress.models,
+          profiles: progress.profiles,
+          runs: progress.runs,
+        };
+        await env.ELECTION_DATA.put("experiment:summary", JSON.stringify(summary), { expirationTtl: 604800 });
+      }
+
+      await env.ELECTION_DATA.put("experiment:progress", JSON.stringify(progress), { expirationTtl: 86400 });
+      await env.ELECTION_DATA.delete("experiment:lock");
+
+      return jsonResponse({
+        status: progress.status,
+        completed: progress.completed,
+        totalCalls: progress.totalCalls,
+        currentModel: task.model,
+        currentProfile: task.profile,
+        error: result.error || null,
+        timingMs: result.timingMs,
+      });
     }
 
     // POST: /api/admin/cleanup — list/delete stale KV keys

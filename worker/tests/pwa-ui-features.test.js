@@ -610,3 +610,352 @@ describe("PWA source confidence badges", () => {
     expect(APP_JS).toContain("'Data Confidence':'Confianza de Datos'");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Admin hash routes bypass render() interview guard
+// ---------------------------------------------------------------------------
+describe("Admin hash routes bypass interview guard in render()", () => {
+  it("render() checks for _adminHash variable", () => {
+    expect(APP_JS).toContain("var _adminHash=location.hash==='#/llm-experiment'||location.hash==='#/debug/compare'");
+  });
+
+  it("render() skips interview early-return when _adminHash is true", () => {
+    expect(APP_JS).toContain("if(!S.guideComplete&&!_adminHash){");
+  });
+
+  it("routes #/llm-experiment to renderExperiment()", () => {
+    expect(APP_JS).toContain("else if(h==='#/llm-experiment'){app.innerHTML=renderExperiment()");
+  });
+
+  it("routes #/debug/compare to renderLLMCompare()", () => {
+    expect(APP_JS).toContain("else if(h==='#/debug/compare'){app.innerHTML=renderLLMCompare()");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Init guard exempts admin hash routes
+// ---------------------------------------------------------------------------
+describe("Init guard exempts admin hash routes", () => {
+  it("init guard checks for #/llm-experiment exemption", () => {
+    expect(APP_JS).toContain("location.hash!=='#/llm-experiment'");
+  });
+
+  it("init guard checks for #/debug/compare exemption", () => {
+    expect(APP_JS).toContain("location.hash!=='#/debug/compare'");
+  });
+
+  it("init guard resets non-exempt hashes to #/ when guide is incomplete", () => {
+    expect(APP_JS).toContain(
+      "if(!S.guideComplete&&location.hash&&location.hash!=='#/'&&location.hash!=='#/llm-experiment'&&location.hash!=='#/debug/compare')location.hash='#/'"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// expGenerate() default profile fallback
+// ---------------------------------------------------------------------------
+describe("expGenerate() default profile fallback", () => {
+  it("expGenerate reads profile from localStorage", () => {
+    expect(APP_JS).toContain("localStorage.getItem('tx_votes_profile')");
+  });
+
+  it("provides a default profile when none exists in localStorage", () => {
+    expect(APP_JS).toContain(
+      "if(!profile){profile={tone:'balanced',issues:['Economy','Education','Healthcare','Immigration','Public Safety'],qualities:['Integrity','Experience','Leadership'],readingLevel:3}}"
+    );
+  });
+
+  it("default profile has balanced tone", () => {
+    expect(APP_JS).toContain("tone:'balanced'");
+  });
+
+  it("default profile has 5 default issues", () => {
+    expect(APP_JS).toContain("issues:['Economy','Education','Healthcare','Immigration','Public Safety']");
+  });
+
+  it("default profile has 3 default qualities", () => {
+    expect(APP_JS).toContain("qualities:['Integrity','Experience','Leadership']");
+  });
+
+  it("default profile has readingLevel 3", () => {
+    // The default profile fallback sets readingLevel:3
+    const match = APP_JS.match(/if\(!profile\)\{profile=\{[^}]+readingLevel:(\d+)/);
+    expect(match).not.toBeNull();
+    expect(match[1]).toBe("3");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Experiment always generates both LLMs fresh (no seeding from existing ballot)
+// ---------------------------------------------------------------------------
+describe("expGenerate() always generates fresh — no ballot seeding", () => {
+  // Extract the full expGenerate function body using its known termination pattern.
+  // The function starts at "function expGenerate(){" and ends at "})(toGen[gj])}}".
+  const fnStart = APP_JS.indexOf("function expGenerate(){");
+  const endMarker = "})(toGen[gj])}}";
+  const markerPos = APP_JS.indexOf(endMarker, fnStart);
+  const fnBody = APP_JS.slice(fnStart, markerPos + endMarker.length);
+
+  it("extracts expGenerate function body successfully", () => {
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(markerPos).toBeGreaterThan(fnStart);
+    expect(fnBody.length).toBeGreaterThan(100);
+  });
+
+  it("expGenerate does not reference S.repBallot", () => {
+    expect(fnBody).not.toContain("S.repBallot");
+  });
+
+  it("expGenerate does not reference S.demBallot", () => {
+    expect(fnBody).not.toContain("S.demBallot");
+  });
+
+  it("expGenerate always calls fetch for both Claude and challenger", () => {
+    expect(fnBody).toContain("fetch('/app/api/guide'");
+    expect(fnBody).toContain("body:JSON.stringify({party:party,profile:profile");
+    expect(fnBody).toContain("llm:llmKey");
+  });
+
+  it("expGenerate generates for both parties (republican and democrat)", () => {
+    expect(fnBody).toContain("var parties=['republican','democrat']");
+    expect(fnBody).toContain("parties.map(function(party)");
+  });
+
+  it("expGenerate records timing data for each LLM", () => {
+    expect(fnBody).toContain("var t0=Date.now()");
+    expect(fnBody).toContain("expTiming[llmKey]=elapsed");
+  });
+
+  it("expGenerate computes cost estimates for each LLM", () => {
+    expect(fnBody).toContain("expCosts[llmKey]=");
+    expect(fnBody).toContain("EXP_COST[llmKey]");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LLM_META — all 8 models with required fields
+// ---------------------------------------------------------------------------
+describe("LLM_META — expanded 8-model support", () => {
+  const ALL_LLM_KEYS = [
+    "claude", "claude-haiku", "claude-opus",
+    "chatgpt", "gpt-4o-mini",
+    "gemini", "gemini-pro",
+    "grok",
+  ];
+
+  it("LLM_META has entries for all 8 models", () => {
+    // Keys with hyphens are quoted, simple keys are unquoted in the JS source
+    const quotedKeys = ["claude-haiku", "claude-opus", "gpt-4o-mini", "gemini-pro"];
+    const unquotedKeys = ["claude", "chatgpt", "gemini", "grok"];
+    for (const key of quotedKeys) {
+      expect(APP_JS).toContain("'" + key + "':{name:");
+    }
+    for (const key of unquotedKeys) {
+      expect(APP_JS).toContain(key + ":{name:");
+    }
+  });
+
+  it("each LLM_META entry has a name field", () => {
+    // Verify specific names
+    expect(APP_JS).toContain("name:'Claude Sonnet'");
+    expect(APP_JS).toContain("name:'Claude Haiku'");
+    expect(APP_JS).toContain("name:'Claude Opus'");
+    expect(APP_JS).toContain("name:'GPT-4o'");
+    expect(APP_JS).toContain("name:'GPT-4o mini'");
+    expect(APP_JS).toContain("name:'Gemini Flash'");
+    expect(APP_JS).toContain("name:'Gemini Pro'");
+    expect(APP_JS).toContain("name:'Grok 3'");
+  });
+
+  it("each LLM_META entry has an icon field", () => {
+    // All Anthropic models use purple circle
+    expect(APP_JS).toContain("claude:{name:'Claude Sonnet',icon:'\\u{1F7E3}'");
+    expect(APP_JS).toContain("'claude-haiku':{name:'Claude Haiku',icon:'\\u{1F7E3}'");
+    expect(APP_JS).toContain("'claude-opus':{name:'Claude Opus',icon:'\\u{1F7E3}'");
+    // OpenAI models use green circle
+    expect(APP_JS).toContain("chatgpt:{name:'GPT-4o',icon:'\\u{1F7E2}'");
+    expect(APP_JS).toContain("'gpt-4o-mini':{name:'GPT-4o mini',icon:'\\u{1F7E2}'");
+    // Google models use blue circle
+    expect(APP_JS).toContain("gemini:{name:'Gemini Flash',icon:'\\u{1F535}'");
+    expect(APP_JS).toContain("'gemini-pro':{name:'Gemini Pro',icon:'\\u{1F535}'");
+    // xAI uses black circle
+    expect(APP_JS).toContain("grok:{name:'Grok 3',icon:'\\u26AB'");
+  });
+
+  it("each LLM_META entry has a color field", () => {
+    expect(APP_JS).toContain("color:'#7B61FF'");   // Claude Sonnet
+    expect(APP_JS).toContain("color:'#B39DFF'");   // Claude Haiku
+    expect(APP_JS).toContain("color:'#5B3FCC'");   // Claude Opus
+    expect(APP_JS).toContain("color:'#10A37F'");   // ChatGPT / GPT-4o
+    expect(APP_JS).toContain("color:'#6BCF9F'");   // GPT-4o mini
+    expect(APP_JS).toContain("color:'#4285F4'");   // Gemini Flash
+    expect(APP_JS).toContain("color:'#1A73E8'");   // Gemini Pro
+    expect(APP_JS).toContain("color:'#1DA1F2'");   // Grok
+  });
+
+  it("each LLM_META entry has a provider field", () => {
+    expect(APP_JS).toContain("provider:'Anthropic'");
+    expect(APP_JS).toContain("provider:'OpenAI'");
+    expect(APP_JS).toContain("provider:'Google'");
+    expect(APP_JS).toContain("provider:'xAI'");
+  });
+
+  it("claude models have provider Anthropic", () => {
+    // Match the full entry pattern for each Anthropic model
+    expect(APP_JS).toContain("claude:{name:'Claude Sonnet',icon:'\\u{1F7E3}',color:'#7B61FF',provider:'Anthropic'}");
+    expect(APP_JS).toContain("'claude-haiku':{name:'Claude Haiku',icon:'\\u{1F7E3}',color:'#B39DFF',provider:'Anthropic'}");
+    expect(APP_JS).toContain("'claude-opus':{name:'Claude Opus',icon:'\\u{1F7E3}',color:'#5B3FCC',provider:'Anthropic'}");
+  });
+
+  it("OpenAI models have provider OpenAI", () => {
+    expect(APP_JS).toContain("chatgpt:{name:'GPT-4o',icon:'\\u{1F7E2}',color:'#10A37F',provider:'OpenAI'}");
+    expect(APP_JS).toContain("'gpt-4o-mini':{name:'GPT-4o mini',icon:'\\u{1F7E2}',color:'#6BCF9F',provider:'OpenAI'}");
+  });
+
+  it("Google models have provider Google", () => {
+    expect(APP_JS).toContain("gemini:{name:'Gemini Flash',icon:'\\u{1F535}',color:'#4285F4',provider:'Google'}");
+    expect(APP_JS).toContain("'gemini-pro':{name:'Gemini Pro',icon:'\\u{1F535}',color:'#1A73E8',provider:'Google'}");
+  });
+
+  it("grok has provider xAI", () => {
+    expect(APP_JS).toContain("grok:{name:'Grok 3',icon:'\\u26AB',color:'#1DA1F2',provider:'xAI'}");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EXP_COST — pricing entries for all 8 models
+// ---------------------------------------------------------------------------
+describe("EXP_COST — pricing for all 8 models", () => {
+  // Parse the EXP_COST object from source
+  const expCostMatch = APP_JS.match(/var EXP_COST=(\{[^;]+\});/);
+
+  it("EXP_COST object exists in APP_JS", () => {
+    expect(expCostMatch).not.toBeNull();
+  });
+
+  let expCost;
+  try {
+    expCost = new Function("return " + expCostMatch[1])();
+  } catch (e) {
+    expCost = {};
+  }
+
+  it("has pricing for all 8 LLM keys", () => {
+    const expectedKeys = ["claude", "claude-haiku", "claude-opus", "chatgpt", "gpt-4o-mini", "gemini", "gemini-pro", "grok"];
+    for (const key of expectedKeys) {
+      expect(expCost).toHaveProperty(key);
+    }
+  });
+
+  it("each pricing entry has input and output rates", () => {
+    const keys = Object.keys(expCost);
+    for (const key of keys) {
+      expect(expCost[key]).toHaveProperty("input");
+      expect(expCost[key]).toHaveProperty("output");
+      expect(typeof expCost[key].input).toBe("number");
+      expect(typeof expCost[key].output).toBe("number");
+      expect(expCost[key].input).toBeGreaterThan(0);
+      expect(expCost[key].output).toBeGreaterThan(0);
+    }
+  });
+
+  it("claude-haiku is cheaper than claude (sonnet)", () => {
+    expect(expCost["claude-haiku"].input).toBeLessThan(expCost.claude.input);
+    expect(expCost["claude-haiku"].output).toBeLessThan(expCost.claude.output);
+  });
+
+  it("claude-opus is more expensive than claude (sonnet)", () => {
+    expect(expCost["claude-opus"].input).toBeGreaterThan(expCost.claude.input);
+    expect(expCost["claude-opus"].output).toBeGreaterThan(expCost.claude.output);
+  });
+
+  it("gpt-4o-mini is cheaper than chatgpt (gpt-4o)", () => {
+    expect(expCost["gpt-4o-mini"].input).toBeLessThan(expCost.chatgpt.input);
+    expect(expCost["gpt-4o-mini"].output).toBeLessThan(expCost.chatgpt.output);
+  });
+
+  it("gemini-pro is more expensive than gemini (flash)", () => {
+    expect(expCost["gemini-pro"].input).toBeGreaterThan(expCost.gemini.input);
+    expect(expCost["gemini-pro"].output).toBeGreaterThan(expCost.gemini.output);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Experiment dropdown — optgroup provider grouping
+// ---------------------------------------------------------------------------
+describe("Experiment dropdown — optgroup provider grouping", () => {
+  it("uses optgroup elements for organizing models by provider", () => {
+    expect(APP_JS).toContain("<optgroup");
+    expect(APP_JS).toContain("</optgroup>");
+  });
+
+  it("has Anthropic optgroup with claude-haiku and claude-opus", () => {
+    expect(APP_JS).toContain("{label:'Anthropic',models:['claude-haiku','claude-opus']}");
+  });
+
+  it("has OpenAI optgroup with chatgpt and gpt-4o-mini", () => {
+    expect(APP_JS).toContain("{label:'OpenAI',models:['chatgpt','gpt-4o-mini']}");
+  });
+
+  it("has Google optgroup with gemini and gemini-pro", () => {
+    expect(APP_JS).toContain("{label:'Google',models:['gemini','gemini-pro']}");
+  });
+
+  it("has xAI optgroup with grok", () => {
+    expect(APP_JS).toContain("{label:'xAI',models:['grok']}");
+  });
+
+  it("expGroups array contains all 4 provider groups", () => {
+    expect(APP_JS).toContain("var expGroups=[");
+    // The full groups definition
+    expect(APP_JS).toContain(
+      "var expGroups=[" +
+      "{label:'Anthropic',models:['claude-haiku','claude-opus']}," +
+      "{label:'OpenAI',models:['chatgpt','gpt-4o-mini']}," +
+      "{label:'Google',models:['gemini','gemini-pro']}," +
+      "{label:'xAI',models:['grok']}" +
+      "]"
+    );
+  });
+
+  it("dropdown iterates over expGroups to build optgroup HTML", () => {
+    expect(APP_JS).toContain("h+='<optgroup label=\"'+grp.label+'\">'");
+    expect(APP_JS).toContain("h+='</optgroup>'");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LLM Compare page — references all 8 model keys
+// ---------------------------------------------------------------------------
+describe("LLM Compare page — all 8 models referenced", () => {
+  it("llmKeys array in renderLLMCompare contains all 8 models", () => {
+    expect(APP_JS).toContain(
+      "var llmKeys=['claude','claude-haiku','claude-opus','chatgpt','gpt-4o-mini','gemini','gemini-pro','grok']"
+    );
+  });
+
+  it("LLM compare iterates over all llmKeys for button grid", () => {
+    expect(APP_JS).toContain("for(var i=0;i<llmKeys.length;i++)");
+    expect(APP_JS).toContain("var key=llmKeys[i];var meta=LLM_META[key]");
+  });
+
+  it("LLM compare page loads cached results for all models", () => {
+    expect(APP_JS).toContain("for(var li=0;li<llmKeys.length;li++)");
+    expect(APP_JS).toContain("var lk=llmKeys[li]");
+    expect(APP_JS).toContain("localStorage.getItem('tx_votes_llm_compare_'+lk)");
+  });
+
+  it("LLM compare has llm-generate data action for triggering generation", () => {
+    expect(APP_JS).toContain('data-action="llm-generate"');
+    expect(APP_JS).toContain('data-llm="');
+  });
+
+  it("LLM compare stores results per model in localStorage", () => {
+    expect(APP_JS).toContain("localStorage.setItem('tx_votes_llm_compare_'+llmKey");
+  });
+
+  it("LLM compare uses LLM_META for display in button grid", () => {
+    expect(APP_JS).toContain("meta.icon");
+    expect(APP_JS).toContain("meta.name");
+  });
+});

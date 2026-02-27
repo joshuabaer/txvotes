@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import {
@@ -8,6 +8,7 @@ import {
   buildUserPrompt,
   mergeRecommendations,
   buildCondensedBallotDescription,
+  callLLM,
   VALID_LLMS,
   scorePartisanBalance,
   CONFIDENCE_SCORES,
@@ -716,14 +717,18 @@ describe("mergeRecommendations — proposition edge cases", () => {
 // VALID_LLMS
 // ---------------------------------------------------------------------------
 describe("VALID_LLMS", () => {
-  it("contains exactly 4 LLM options", () => {
-    expect(VALID_LLMS).toHaveLength(4);
+  it("contains all 8 LLM options", () => {
+    expect(VALID_LLMS).toHaveLength(8);
   });
 
-  it("includes claude, chatgpt, gemini, and grok", () => {
+  it("includes all supported LLM variants", () => {
     expect(VALID_LLMS).toContain("claude");
+    expect(VALID_LLMS).toContain("claude-haiku");
+    expect(VALID_LLMS).toContain("claude-opus");
     expect(VALID_LLMS).toContain("chatgpt");
+    expect(VALID_LLMS).toContain("gpt-4o-mini");
     expect(VALID_LLMS).toContain("gemini");
+    expect(VALID_LLMS).toContain("gemini-pro");
     expect(VALID_LLMS).toContain("grok");
   });
 });
@@ -2025,5 +2030,451 @@ describe("buildCondensedBallotDescription — caching", () => {
     expect(desc).toContain("Alice");
     expect(desc).not.toContain("Bob");
     expect(desc).toContain("[UNCONTESTED]");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// callLLM — routing to correct provider/model for all 8 LLMs
+// ---------------------------------------------------------------------------
+describe("callLLM — routing for expanded 8-model support", () => {
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  // Helper: create mock env with all API keys
+  function mockEnv() {
+    return {
+      ANTHROPIC_API_KEY: "test-anthropic-key",
+      OPENAI_API_KEY: "test-openai-key",
+      GEMINI_API_KEY: "test-gemini-key",
+      GROK_API_KEY: "test-grok-key",
+    };
+  }
+
+  // Helper: mock fetch that captures the request and returns a success response
+  function mockFetchCapture(responseBuilder) {
+    const calls = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      calls.push({ url, opts });
+      return responseBuilder ? responseBuilder(url, opts) : {
+        status: 200,
+        json: async () => ({
+          // Anthropic format
+          content: [{ text: '{"test": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+          // OpenAI format
+          choices: [{ message: { content: '{"test": true}' }, finish_reason: "stop" }],
+          // Gemini format
+          candidates: [{ content: { parts: [{ text: '{"test": true}' }] }, finishReason: "STOP" }],
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 50 },
+        }),
+        headers: { get: () => null },
+      };
+    });
+    return calls;
+  }
+
+  // --- claude-haiku routing ---
+  it("routes claude-haiku to callClaude with specificModel=claude-haiku-4-5-20251001", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "claude-haiku");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("api.anthropic.com");
+    const body = JSON.parse(calls[0].opts.body);
+    expect(body.model).toBe("claude-haiku-4-5-20251001");
+  });
+
+  // --- claude-opus routing ---
+  it("routes claude-opus to callClaude with specificModel=claude-opus-4-6", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "claude-opus");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("api.anthropic.com");
+    const body = JSON.parse(calls[0].opts.body);
+    expect(body.model).toBe("claude-opus-4-6");
+  });
+
+  // --- gpt-4o-mini routing ---
+  it("routes gpt-4o-mini to callOpenAICompatible with model=gpt-4o-mini", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "gpt-4o-mini");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("api.openai.com");
+    const body = JSON.parse(calls[0].opts.body);
+    expect(body.model).toBe("gpt-4o-mini");
+  });
+
+  // --- gemini-pro routing ---
+  it("routes gemini-pro to callGemini with geminiModel=gemini-2.5-pro", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "gemini-pro");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("gemini-2.5-pro");
+    expect(calls[0].url).toContain("generativelanguage.googleapis.com");
+  });
+
+  // --- default claude routing (no llm param or "claude") ---
+  it("routes default/null LLM to Claude with MODELS array (not specific model)", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", null);
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("api.anthropic.com");
+    const body = JSON.parse(calls[0].opts.body);
+    // Default uses MODELS array, first entry is claude-sonnet-4-6
+    expect(body.model).toBe("claude-sonnet-4-6");
+  });
+
+  it("routes 'claude' explicitly to same default path", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "claude");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("api.anthropic.com");
+    const body = JSON.parse(calls[0].opts.body);
+    expect(body.model).toBe("claude-sonnet-4-6");
+  });
+
+  // --- chatgpt routing ---
+  it("routes chatgpt to callOpenAICompatible with model=gpt-4o", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "chatgpt");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("api.openai.com");
+    const body = JSON.parse(calls[0].opts.body);
+    expect(body.model).toBe("gpt-4o");
+  });
+
+  // --- gemini (default flash) routing ---
+  it("routes gemini to callGemini with default gemini-2.5-flash model", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "gemini");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("gemini-2.5-flash");
+    expect(calls[0].url).toContain("generativelanguage.googleapis.com");
+  });
+
+  // --- grok routing ---
+  it("routes grok to callOpenAICompatible with model=grok-3", async () => {
+    const calls = mockFetchCapture();
+    const env = mockEnv();
+    await callLLM(env, "system", "user msg", "en", "grok");
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("api.x.ai");
+    const body = JSON.parse(calls[0].opts.body);
+    expect(body.model).toBe("grok-3");
+  });
+
+  // --- Invalid LLM rejection ---
+  it("throws error for unknown LLM name", async () => {
+    const env = mockEnv();
+    await expect(callLLM(env, "system", "user msg", "en", "llama-99"))
+      .rejects.toThrow("Unknown LLM: llama-99");
+  });
+
+  it("error message for unknown LLM lists all valid options", async () => {
+    const env = mockEnv();
+    await expect(callLLM(env, "system", "user msg", "en", "invalid-model"))
+      .rejects.toThrow("Valid options: claude, claude-haiku, claude-opus, chatgpt, gpt-4o-mini, gemini, gemini-pro, grok");
+  });
+
+  // --- API key validation ---
+  it("throws when claude-haiku is requested but ANTHROPIC_API_KEY is missing", async () => {
+    const env = { ANTHROPIC_API_KEY: undefined };
+    await expect(callLLM(env, "system", "user msg", "en", "claude-haiku"))
+      .rejects.toThrow("Anthropic API key not configured");
+  });
+
+  it("throws when claude-opus is requested but ANTHROPIC_API_KEY is missing", async () => {
+    const env = { ANTHROPIC_API_KEY: undefined };
+    await expect(callLLM(env, "system", "user msg", "en", "claude-opus"))
+      .rejects.toThrow("Anthropic API key not configured");
+  });
+
+  it("throws when gpt-4o-mini is requested but OPENAI_API_KEY is missing", async () => {
+    const env = { OPENAI_API_KEY: undefined };
+    await expect(callLLM(env, "system", "user msg", "en", "gpt-4o-mini"))
+      .rejects.toThrow("OpenAI API key not configured");
+  });
+
+  it("throws when gemini-pro is requested but GEMINI_API_KEY is missing", async () => {
+    const env = { GEMINI_API_KEY: undefined };
+    await expect(callLLM(env, "system", "user msg", "en", "gemini-pro"))
+      .rejects.toThrow("Gemini API key not configured");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// callClaude — specificModel parameter behavior
+// ---------------------------------------------------------------------------
+describe("callClaude — specificModel uses only that model (no MODELS array fallback)", () => {
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("with specificModel, uses only that model and never falls back to MODELS array", async () => {
+    const modelsUsed = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      modelsUsed.push(body.model);
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"test": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    // Call via callLLM with claude-haiku which passes specificModel
+    await callLLM(env, "system", "user msg", "en", "claude-haiku");
+    // Only one model should have been used
+    expect(modelsUsed).toEqual(["claude-haiku-4-5-20251001"]);
+  });
+
+  it("with specificModel, does not try claude-sonnet-4-6 or claude-sonnet-4-20250514", async () => {
+    const modelsUsed = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      modelsUsed.push(body.model);
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"test": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    await callLLM(env, "system", "user msg", "en", "claude-opus");
+    expect(modelsUsed).toEqual(["claude-opus-4-6"]);
+    expect(modelsUsed).not.toContain("claude-sonnet-4-6");
+    expect(modelsUsed).not.toContain("claude-sonnet-4-20250514");
+  });
+
+  it("without specificModel (default claude), uses MODELS array starting with claude-sonnet-4-6", async () => {
+    const modelsUsed = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      modelsUsed.push(body.model);
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"test": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    await callLLM(env, "system", "user msg", "en", "claude");
+    expect(modelsUsed[0]).toBe("claude-sonnet-4-6");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// callGemini — geminiModel parameter behavior
+// ---------------------------------------------------------------------------
+describe("callGemini — geminiModel uses custom model name in API URL", () => {
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("gemini-pro uses gemini-2.5-pro in the API endpoint URL", async () => {
+    const urls = [];
+    globalThis.fetch = vi.fn(async (url) => {
+      urls.push(url);
+      return {
+        status: 200,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: '{"test": true}' }] }, finishReason: "STOP" }],
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 50 },
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { GEMINI_API_KEY: "test-gemini-key" };
+    await callLLM(env, "system", "user msg", "en", "gemini-pro");
+    expect(urls[0]).toContain("/models/gemini-2.5-pro:");
+    expect(urls[0]).not.toContain("gemini-2.5-flash");
+  });
+
+  it("default gemini uses gemini-2.5-flash in the API endpoint URL", async () => {
+    const urls = [];
+    globalThis.fetch = vi.fn(async (url) => {
+      urls.push(url);
+      return {
+        status: 200,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: '{"test": true}' }] }, finishReason: "STOP" }],
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 50 },
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { GEMINI_API_KEY: "test-gemini-key" };
+    await callLLM(env, "system", "user msg", "en", "gemini");
+    expect(urls[0]).toContain("/models/gemini-2.5-flash:");
+    expect(urls[0]).not.toContain("gemini-2.5-pro");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// callLLM — provider endpoint verification
+// ---------------------------------------------------------------------------
+describe("callLLM — all 8 models use correct provider endpoints", () => {
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function setupFetch() {
+    const urls = [];
+    globalThis.fetch = vi.fn(async (url) => {
+      urls.push(url);
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"test": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+          choices: [{ message: { content: '{"test": true}' }, finish_reason: "stop" }],
+          candidates: [{ content: { parts: [{ text: '{"test": true}' }] }, finishReason: "STOP" }],
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 50 },
+        }),
+        headers: { get: () => null },
+      };
+    });
+    return urls;
+  }
+
+  const env = {
+    ANTHROPIC_API_KEY: "test-key",
+    OPENAI_API_KEY: "test-key",
+    GEMINI_API_KEY: "test-key",
+    GROK_API_KEY: "test-key",
+  };
+
+  it("claude uses api.anthropic.com", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "claude");
+    expect(urls[0]).toContain("api.anthropic.com");
+  });
+
+  it("claude-haiku uses api.anthropic.com", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "claude-haiku");
+    expect(urls[0]).toContain("api.anthropic.com");
+  });
+
+  it("claude-opus uses api.anthropic.com", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "claude-opus");
+    expect(urls[0]).toContain("api.anthropic.com");
+  });
+
+  it("chatgpt uses api.openai.com", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "chatgpt");
+    expect(urls[0]).toContain("api.openai.com");
+  });
+
+  it("gpt-4o-mini uses api.openai.com", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "gpt-4o-mini");
+    expect(urls[0]).toContain("api.openai.com");
+  });
+
+  it("gemini uses generativelanguage.googleapis.com", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "gemini");
+    expect(urls[0]).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("gemini-pro uses generativelanguage.googleapis.com", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "gemini-pro");
+    expect(urls[0]).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("grok uses api.x.ai", async () => {
+    const urls = setupFetch();
+    await callLLM(env, "s", "u", "en", "grok");
+    expect(urls[0]).toContain("api.x.ai");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hashGuideKey — different LLMs produce different cache keys
+// ---------------------------------------------------------------------------
+describe("hashGuideKey — LLM parameter affects cache key", () => {
+  const profile = { topIssues: ["Economy"], politicalSpectrum: "Moderate", candidateQualities: [], policyViews: {}, freeform: "" };
+  const testBallot = { races: [{ office: "Governor", district: null, candidates: [{ name: "Alice" }] }], propositions: [] };
+
+  it("produces different hashes for different LLMs", async () => {
+    const hashes = await Promise.all(
+      VALID_LLMS.map(llm => hashGuideKey(profile, testBallot, "democrat", "en", 3, llm))
+    );
+    const uniqueHashes = new Set(hashes);
+    expect(uniqueHashes.size).toBe(VALID_LLMS.length);
+  });
+
+  it("claude-haiku and claude produce different cache keys", async () => {
+    const hash1 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "claude");
+    const hash2 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "claude-haiku");
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it("claude-opus and claude produce different cache keys", async () => {
+    const hash1 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "claude");
+    const hash2 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "claude-opus");
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it("gpt-4o-mini and chatgpt produce different cache keys", async () => {
+    const hash1 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "chatgpt");
+    const hash2 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "gpt-4o-mini");
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it("gemini-pro and gemini produce different cache keys", async () => {
+    const hash1 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "gemini");
+    const hash2 = await hashGuideKey(profile, testBallot, "democrat", "en", 3, "gemini-pro");
+    expect(hash1).not.toBe(hash2);
   });
 });

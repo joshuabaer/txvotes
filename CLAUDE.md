@@ -39,6 +39,7 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 - **worker/src/updater.js** — Daily updater cron (runs on usvotes-api)
 - **worker/src/audit-runner.js** — Automated AI audit runner (submits methodology export to ChatGPT, Gemini, Grok, Claude APIs for bias scoring)
 - **worker/src/balance-check.js** — API balance/quota checker (`/api/balance-check` endpoint)
+- **worker/src/llm-experiment.js** — LLM model comparison experiment runner (7 voter profiles, automated scoring, consensus analysis)
 
 ## Testing
 
@@ -46,7 +47,7 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 cd worker && npx vitest run
 ```
 
-1424 tests across 18 test files:
+1629 tests across 19 test files:
 
 - **interview-flow.test.js** — Interview flow UI tests (happy-dom + vitest)
 - **index-helpers.test.js** — Helper functions, route patterns, candidate profiles, data quality
@@ -66,6 +67,7 @@ cd worker && npx vitest run
 - **smoke.test.js** — Basic smoke tests for deployment validation
 - **stats.test.js** — Public stats page rendering, security, caching, i18n, graceful degradation
 - **rate-limit.test.js** — Rate limiting logic and edge cases
+- **llm-experiment.test.js** — LLM experiment profiles, runner, analysis, scoring, admin endpoints
 
 ## Key Patterns
 
@@ -127,5 +129,5 @@ When making code changes, ALWAYS use the feature branch workflow:
 ## README
 
 - **Always update README.md** when making changes that affect architecture, file structure, test counts, features, or deployment
-- Keep test count (`1424+ tests across 18 test files`) current after adding/removing tests
+- Keep test count (`1629+ tests across 19 test files`) current after adding/removing tests
 - Keep file structure tree current after adding/removing source files

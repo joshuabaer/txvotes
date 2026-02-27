@@ -573,3 +573,129 @@ describe("Quality ordering", () => {
     expect(S()._pickedQuals).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Admin hash routes bypass render() interview guard (runtime)
+// ---------------------------------------------------------------------------
+describe("Admin hash routes bypass interview guard (runtime)", () => {
+  it("renders experiment page on #/llm-experiment even without guideComplete", () => {
+    // Verify guide is not complete
+    expect(S().guideComplete).toBe(false);
+    // Navigate to the experiment page
+    location.hash = "#/llm-experiment";
+    window.render();
+    const html = getApp();
+    // Should render the experiment page, not the interview
+    expect(html).toContain("LLM Experiment");
+    expect(html).not.toContain("Talk to me like");
+  });
+
+  it("renders debug compare page on #/debug/compare even without guideComplete", () => {
+    expect(S().guideComplete).toBe(false);
+    location.hash = "#/debug/compare";
+    window.render();
+    const html = getApp();
+    // Should render the LLM compare page, not the interview
+    expect(html).not.toContain("Talk to me like");
+  });
+
+  it("still renders interview on non-admin hashes without guideComplete", () => {
+    expect(S().guideComplete).toBe(false);
+    location.hash = "#/ballot";
+    window.render();
+    const html = getApp();
+    // Should render the interview since guide isn't complete
+    expect(html).toContain("Talk to me like");
+  });
+
+  it("still renders interview on #/profile without guideComplete", () => {
+    expect(S().guideComplete).toBe(false);
+    location.hash = "#/profile";
+    window.render();
+    const html = getApp();
+    expect(html).toContain("Talk to me like");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Init guard exempts admin hash routes (runtime)
+//
+// The init code runs: if(!S.guideComplete&&location.hash&&location.hash!=='#/'
+//   &&location.hash!=='#/llm-experiment'&&location.hash!=='#/debug/compare')location.hash='#/';
+// We test this by setting the hash AFTER boot (simulating the user navigating)
+// and then calling render() to verify the render guard works.
+// The source-level init guard pattern is tested in pwa-ui-features.test.js.
+// ---------------------------------------------------------------------------
+describe("Init guard exempts admin hash routes (runtime via render)", () => {
+  it("#/llm-experiment is not redirected by render() guard", () => {
+    expect(S().guideComplete).toBe(false);
+    location.hash = "#/llm-experiment";
+    window.render();
+    // Hash should remain — not reset by render()
+    expect(location.hash).toBe("#/llm-experiment");
+    // And the rendered content should be the experiment page, not interview
+    const html = getApp();
+    expect(html).toContain("LLM Experiment");
+  });
+
+  it("#/debug/compare is not redirected by render() guard", () => {
+    expect(S().guideComplete).toBe(false);
+    location.hash = "#/debug/compare";
+    window.render();
+    expect(location.hash).toBe("#/debug/compare");
+    // Should NOT show the interview
+    const html = getApp();
+    expect(html).not.toContain("Talk to me like");
+  });
+
+  it("#/profile IS redirected by render() guard when guide incomplete", () => {
+    expect(S().guideComplete).toBe(false);
+    location.hash = "#/profile";
+    window.render();
+    // The render() guard should show interview content, not profile
+    const html = getApp();
+    expect(html).toContain("Talk to me like");
+    expect(html).not.toContain("Your Profile");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Default profile fallback in expGenerate (runtime)
+// ---------------------------------------------------------------------------
+describe("Default profile fallback in expGenerate (runtime)", () => {
+  it("expGenerate function exists globally after boot", () => {
+    expect(typeof window.expGenerate).toBe("function");
+  });
+
+  it("expGenerate does not throw when no profile in localStorage", () => {
+    // Remove the profile that save() stored during init
+    localStorage.removeItem("tx_votes_profile");
+    // expGenerate should not throw — it uses the default profile fallback
+    expect(() => {
+      window.expGenerate();
+    }).not.toThrow();
+  });
+
+  it("expGenerate calls fetch with guide API when no profile exists", () => {
+    // Remove the profile that save() stored during init
+    localStorage.removeItem("tx_votes_profile");
+    // Clear any previous fetch calls
+    fetch.mockClear();
+    window.expGenerate();
+    // Should have called fetch for the guide API (both parties for 2 LLMs = 4 calls)
+    expect(fetch).toHaveBeenCalled();
+    const guideCalls = fetch.mock.calls.filter(c => c[0] === "/app/api/guide");
+    expect(guideCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("expGenerate uses existing profile from localStorage when available", () => {
+    // The app's save() already stored a profile during init
+    const stored = localStorage.getItem("tx_votes_profile");
+    expect(stored).not.toBeNull();
+    // expGenerate should work with the stored profile too
+    fetch.mockClear();
+    expect(() => {
+      window.expGenerate();
+    }).not.toThrow();
+  });
+});

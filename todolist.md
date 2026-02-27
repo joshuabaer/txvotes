@@ -13,6 +13,13 @@ _From data audit (Feb 23). All 254 counties now have ballot keys. Some have empt
 - [x] Retry failed county ballots — Galveston (48167) and Jefferson (48245) both seeded successfully
 - [x] Seed missing party ballots — Kaufman (48257), Nueces (48303), McLennan (48309), Gregg (48183) all now have both party ballots
 - [ ] Re-seed empty county ballots — Randall (48381), Smith (48423), Archer (48009), Austin County (48015) have 0 races but real contested races exist. Seeder silently returned empty arrays. (Investigation documented in docs/plans/empty_county_investigation.md)
+  - Run with `reset` flag to clear stale progress:
+    ```
+    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48381","countyName":"Randall","reset":true}'
+    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48423","countyName":"Smith","reset":true}'
+    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48009","countyName":"Archer","reset":true}'
+    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48015","countyName":"Austin","reset":true}'
+    ```
 
 #### Statewide Candidate Data Gaps
 _From data audit. 65 statewide candidates, most fields 95%+ filled._
@@ -26,6 +33,20 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 
 #### County Info
 - [ ] Enrich county_info for remaining ~104 counties — elections websites, phone numbers, vote center status for smallest/rural counties. 150/254 now have real data, ~104 still have template info
+  - Get list of under-enriched counties from coverage page, then bulk seed:
+    ```
+    curl -s -u "admin:$ADMIN_SECRET" "https://txvotes.app/admin/coverage" \
+      | grep -oP '48\d{3}(?=</td><td class="cov-no">)' | sort -u > missing_counties.txt
+    while read fips; do
+      echo "Seeding $fips..."
+      curl -s -X POST "https://txvotes.app/api/election/seed-county" \
+        -H "Authorization: Bearer $ADMIN_SECRET" \
+        -H "Content-Type: application/json" \
+        -d "{\"countyFips\":\"$fips\",\"countyName\":\"County $fips\"}"
+      echo ""
+      sleep 2
+    done < missing_counties.txt
+    ```
 
 #### Other Data Tasks
 - [x] Fix seeding script error handling — added error classification (AUTH/RATE_LIMIT/SERVER/etc), KV-based progress tracking, failed steps NOT marked completed, `reset` option via API, auth errors abort immediately. 16 new tests (50 total).
@@ -33,8 +54,9 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 
 ### Features
 - [ ] Remove old ballot generation loading animation — the "Building Your Guide" screen with 6 stars and loading messages now only shows for 1-2 seconds since SSE streaming populates races directly on the ballot page. Either remove it entirely and go straight to the ballot view, or simplify to a brief spinner.
-- [ ] Add speed and cost comparison to the LLM experiment page — show response time and estimated token cost for each LLM provider side-by-side so users can compare performance
+- [x] Add speed and cost comparison to the LLM experiment page — both Claude and challenger now always generate fresh API calls so timing/cost data is captured for both. Speed bars and cost estimates shown side-by-side. Expanded to 8 models (Claude Sonnet/Haiku/Opus, GPT-4o/4o-mini, Gemini Flash/Pro, Grok 3) with optgroup dropdown, per-model pricing, and provider color coding. LLM experiment page accessible from /admin hub. 33 new tests. Deployed.
 - [x] Show Share + Regenerate Summary buttons side by side on wide screens — Added `flex-direction:column` default with `@media(min-width:600px)` breakpoint for row layout. Profile page buttons also wrapped in `.actions` container. Deployed.
+- [ ] Run LLM benchmark experiment to completion and publish findings — Infrastructure built: `llm-experiment.js` runner with 7 voter profiles × 8 models, consensus-based scoring (quality 50%, reasoning 15%, JSON 10%, balance 10%, speed 5%, cost 5%, robustness 5%), `/admin/llm-benchmark` dashboard with progress bar, start/reset buttons, results tables. Client-driven execution (one API call per worker request) with KV lock to prevent concurrent runs. 69 tests. Plan at `docs/plans/plan_llm_experiment.md`. **Next:** run the benchmark (1 run = 56 calls, ~$19, ~15-30 min), review results, decide on default model.
 - [ ] Design a candidate/community data submission system — allow candidates and others to submit data for races with limited info. Must be trusted, not spammable or gameable (needs verification/moderation design)
 - [x] Add filter by county to candidates list — dropdown with All Counties / Statewide Only / per-county options, race count indicator, statewide races always visible per county, Spanish translations
 - [ ] Make city/region support self-service — configuration-driven approach so any city/region can set up their own voting guide without code changes

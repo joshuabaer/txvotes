@@ -41,7 +41,7 @@ Visit `http://localhost:8787/app` for the PWA, or `http://localhost:8787/` for t
 cd worker && npx vitest run
 ```
 
-1450+ tests across 18 test files. Tests use **vitest** + **happy-dom** for DOM testing. Always run the full test suite before submitting a PR.
+1629+ tests across 19 test files. Tests use **vitest** + **happy-dom** for DOM testing. Always run the full test suite before submitting a PR.
 
 ## Architecture Overview
 

@@ -1361,7 +1361,22 @@ var APP_JS = [
     "'Moderate agreement.':'Concordancia moderada.'," +
     "'Significant differences \\u2014 review carefully before switching.':'Diferencias significativas \\u2014 revisa cuidadosamente antes de cambiar.'," +
     "'Low agreement.':'Baja concordancia.'," +
-    "'makes substantially different recommendations.':'hace recomendaciones sustancialmente diferentes.'" +
+    "'makes substantially different recommendations.':'hace recomendaciones sustancialmente diferentes.'," +
+    // Override feature translations
+    "'You changed this':'Cambiaste esto'," +
+    "'AI pick':'Elecci\\u00F3n de IA'," +
+    "'Your Pick':'Tu elecci\\u00F3n'," +
+    "'AI recommended':'La IA recomend\\u00F3'," +
+    "'but you chose':'pero elegiste'," +
+    "'Restore AI pick':'Restaurar elecci\\u00F3n de IA'," +
+    "'Choose this candidate':'Elegir este candidato'," +
+    "'Why did you change this?':'\\u00BFPor qu\\u00E9 cambiaste esto?'," +
+    "'What made you choose differently? (optional, anonymous)':'\\u00BFQu\\u00E9 te hizo elegir diferente? (opcional, an\\u00F3nimo)'," +
+    "'Submit feedback':'Enviar comentario'," +
+    "'Skip':'Omitir'," +
+    "'This feedback is anonymous and helps improve recommendations for everyone.':'Este comentario es an\\u00F3nimo y ayuda a mejorar las recomendaciones para todos.'," +
+    "'Feedback sent':'Comentario enviado'," +
+    "'your pick':'tu elecci\\u00F3n'" +
   "};",
   "function t(s){return LANG==='es'&&TR[s]||s}",
 
@@ -1550,7 +1565,8 @@ var APP_JS = [
     "readingLevel:1," +
     "expanded:{'vi-dates':true,'vi-bring':true},disclaimerDismissed:false,hasVoted:false," +
     "staleBallot:false," +
-    "electionExpired:false" +
+    "electionExpired:false," +
+    "overrides:{}" +
     "};",
 
   // Shuffled arrays (set once per question display)
@@ -1698,6 +1714,44 @@ var APP_JS = [
     "return total" +
   "}",
 
+  // Override helper functions
+  "function getRaceKey(race){" +
+    "return race.office+(race.district?' \\u2014 '+race.district:'')" +
+  "}",
+  "function getOverride(race){" +
+    "var party=S.selectedParty;" +
+    "var key=getRaceKey(race);" +
+    "return S.overrides[party]&&S.overrides[party][key]||null" +
+  "}",
+  "function setOverride(race,candidateName){" +
+    "var party=S.selectedParty;" +
+    "if(!S.overrides[party])S.overrides[party]={};" +
+    "var key=getRaceKey(race);" +
+    "var orig=race.recommendation?race.recommendation.candidateName:null;" +
+    "S.overrides[party][key]={" +
+      "originalCandidate:orig," +
+      "chosenCandidate:candidateName," +
+      "reason:''," +
+      "reasonSubmitted:false," +
+      "timestamp:new Date().toISOString()" +
+    "};" +
+    "save()" +
+  "}",
+  "function clearOverride(race){" +
+    "var party=S.selectedParty;" +
+    "var key=getRaceKey(race);" +
+    "if(S.overrides[party]){" +
+      "delete S.overrides[party][key];" +
+      "if(Object.keys(S.overrides[party]).length===0)delete S.overrides[party];" +
+      "save()" +
+    "}" +
+  "}",
+  "function getEffectiveChoice(race){" +
+    "var ov=getOverride(race);" +
+    "if(ov)return ov.chosenCandidate;" +
+    "return race.recommendation?race.recommendation.candidateName:null" +
+  "}",
+
   "function save(){" +
     "try{" +
     "localStorage.setItem('tx_votes_profile',JSON.stringify({" +
@@ -1711,6 +1765,7 @@ var APP_JS = [
     "if(S.demDataUpdatedAt)localStorage.setItem('tx_votes_data_updated_democrat',S.demDataUpdatedAt);" +
     "localStorage.setItem('tx_votes_selected_party',S.selectedParty);" +
     "localStorage.setItem('tx_votes_has_voted',S.hasVoted?'1':'');" +
+    "if(Object.keys(S.overrides).length){localStorage.setItem('tx_votes_overrides',JSON.stringify(S.overrides))}else{localStorage.removeItem('tx_votes_overrides')}" +
     "if(!localStorage.getItem('tx_votes_election_date'))localStorage.setItem('tx_votes_election_date','2026-03-03');" +
     "}catch(e){" +
       "if(e&&e.name==='QuotaExceededError'){" +
@@ -1747,6 +1802,7 @@ var APP_JS = [
     "var sp=localStorage.getItem('tx_votes_selected_party');" +
     "if(sp)S.selectedParty=sp;" +
     "S.hasVoted=!!localStorage.getItem('tx_votes_has_voted');" +
+    "var _ov=localStorage.getItem('tx_votes_overrides');if(_ov){try{S.overrides=JSON.parse(_ov)}catch(e){S.overrides={}}}" +
     "if(S.repBallot||S.demBallot){S.guideComplete=true}" +
     // Check if election cycle has expired (>7 days past election date)
     "var _ed=localStorage.getItem('tx_votes_election_date');" +
@@ -1772,7 +1828,8 @@ var APP_JS = [
     "var app=document.getElementById('app');" +
     "var tabs=document.getElementById('tabs');" +
     "var tnav=document.getElementById('topnav');" +
-    "if(!S.guideComplete){app.innerHTML=renderInterview();tabs.innerHTML='';tnav.innerHTML='';" +
+    "var _adminHash=location.hash==='#/llm-experiment'||location.hash==='#/debug/compare';" +
+    "if(!S.guideComplete&&!_adminHash){app.innerHTML=renderInterview();tabs.innerHTML='';tnav.innerHTML='';" +
       "if(S.phase===2)initSortable('sort-issues','issues');" +
       "if(S.phase===5)initSortable('sort-qualities','qualities');" +
     "return}" +
@@ -1862,7 +1919,7 @@ var APP_JS = [
   "var expExpandedRows={};",
   "var expTiming={};",
   "var expCosts={};",
-  "var EXP_COST={claude:{input:3,output:15},chatgpt:{input:2.5,output:10},gemini:{input:0.15,output:3.5},grok:{input:5,output:15}};",
+  "var EXP_COST={claude:{input:3,output:15},'claude-haiku':{input:0.80,output:4},'claude-opus':{input:15,output:75},chatgpt:{input:2.5,output:10},'gpt-4o-mini':{input:0.15,output:0.60},gemini:{input:0.15,output:3.5},'gemini-pro':{input:1.25,output:10},grok:{input:5,output:15}};",
   "function renderTone(){" +
     "var opts=TONE_OPTS.slice();" +
     "if(secretToneRevealed||eeCowboy||S.readingLevel===7){" +
@@ -2296,7 +2353,10 @@ var APP_JS = [
         "var r=contested[i];" +
         "var star=r.isKeyRace?'<span class=\"cs-star\">\u2B50</span>':'';" +
         "var label=esc(r.office)+(r.district?' \\u2014 '+esc(r.district):'');" +
-        "var vote=r.recommendation?esc(r.recommendation.candidateName):'\\u2014';" +
+        "var _csOv=getOverride(r);" +
+        "var _csOverridden=_csOv&&_csOv.chosenCandidate!==_csOv.originalCandidate;" +
+        "var vote=_csOv?esc(_csOv.chosenCandidate):(r.recommendation?esc(r.recommendation.candidateName):'\\u2014');" +
+        "if(_csOverridden){vote+=' <span style=\"font-size:11px;color:#92400e\" data-t=\"(your pick)\">('+t('your pick')+')</span>'}" +
         "h+='<tr><td>'+star+label+'</td><td class=\"cs-vote\">'+vote+'</td></tr>'" +
       "}" +
       "h+='</tbody></table>'" +
@@ -2347,7 +2407,10 @@ var APP_JS = [
 
   "function renderRaceCard(race,allRaces){" +
     "var idx=-1;for(var i=0;i<allRaces.length;i++){if(allRaces[i].office===race.office&&allRaces[i].district===race.district){idx=i;break}}" +
-    "var label=race.office+(race.district?' \\u2014 '+race.district:'')+(race.recommendation?' \\u2014 Recommended: '+race.recommendation.candidateName:'');" +
+    "var _ov=getOverride(race);" +
+    "var _ovActive=_ov&&_ov.chosenCandidate!==_ov.originalCandidate;" +
+    "var _effName=_ov?_ov.chosenCandidate:(race.recommendation?race.recommendation.candidateName:null);" +
+    "var label=race.office+(race.district?' \\u2014 '+race.district:'')+(_effName?' \\u2014 Recommended: '+_effName:'');" +
     "var _streamClass=race._streamed?' stream-card-in':'';" +
     "var _isPending=(!race._streamed&&S._streaming);" +
     "var _pendingClass=_isPending?' stream-pending':'';" +
@@ -2356,13 +2419,19 @@ var APP_JS = [
     "h+='<div style=\"display:flex;justify-content:space-between;align-items:center;gap:6px\">';" +
     "h+='<div style=\"flex:1;min-width:0;font-size:14px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(race.isKeyRace?'<span class=\"star\">\u2B50</span> ':'')+esc(race.office)+(race.district?' \\u2014 '+esc(race.district):'')+'</div>';" +
     "h+='<div style=\"display:flex;align-items:center;gap:6px;flex-shrink:0\">';" +
+    "if(_ovActive){h+='<span class=\"badge\" style=\"background:#fef3c7;color:#92400e;font-size:11px\" data-t=\"You changed this\">'+t('You changed this')+'</span>'}" +
     "if(race.recommendation&&!_isPending){h+=confBadge(race.recommendation.confidence)}" +
     "h+='<span style=\"color:var(--text2);font-size:18px\">&rsaquo;</span>';" +
     "h+='</div></div>';" +
     // Full-width content below (hide during streaming for pending races)
     "if(race.recommendation&&!_isPending){" +
-      "h+='<div style=\"font-size:17px;font-weight:700;margin-top:4px\">'+esc(race.recommendation.candidateName)+'</div>';" +
-      "h+='<div style=\"font-size:13px;color:var(--text2);margin-top:2px;line-height:1.4\">'+esc(race.recommendation.reasoning)+'</div>'" +
+      "if(_ovActive){" +
+        "h+='<div style=\"font-size:17px;font-weight:700;margin-top:4px;color:#92400e\">'+esc(_ov.chosenCandidate)+'</div>';" +
+        "h+='<div style=\"font-size:12px;color:var(--text2);margin-top:2px\"><s>'+esc(race.recommendation.candidateName)+'</s> <span data-t=\"(AI pick)\">('+t('AI pick')+')</span></div>'" +
+      "}else{" +
+        "h+='<div style=\"font-size:17px;font-weight:700;margin-top:4px\">'+esc(race.recommendation.candidateName)+'</div>';" +
+        "h+='<div style=\"font-size:13px;color:var(--text2);margin-top:2px;line-height:1.4\">'+esc(race.recommendation.reasoning)+'</div>'" +
+      "}" +
     "}" +
     "var activeCands=race.candidates.filter(function(c){return !c.withdrawn});" +
     "h+='<div style=\"font-size:13px;color:var(--text2);margin-top:4px\">'+activeCands.length+' '+(activeCands.length!==1?t('candidates'):t('candidate'))+'</div>';" +
@@ -2373,7 +2442,8 @@ var APP_JS = [
       "var slug=c.name.toLowerCase().replace(/[^a-z0-9 -]/g,'').replace(/\\s+/g,'-');" +
       "var initial=getInitials(c.name);" +
       "var ac=colors[j%colors.length];" +
-      "var bdr=c.isRecommended?'2px solid var(--blue)':'2px solid transparent';" +
+      "var _isUserPick=_ovActive&&c.name===_ov.chosenCandidate;" +
+      "var bdr=_isUserPick?'2px solid #d97706':c.isRecommended&&!_ovActive?'2px solid var(--blue)':'2px solid transparent';" +
       "h+='<div style=\"width:30px;height:30px;border-radius:50%;background:'+ac+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;overflow:hidden;border:'+bdr+';flex-shrink:0\">';" +
       "h+='<img src=\"/headshots/'+slug+'.jpg\" alt=\"\" style=\"width:100%;height:100%;object-fit:cover;border-radius:50%\" onerror=\"if(this.src.indexOf(\\'.jpg\\')>0){this.src=this.src.replace(\\'.jpg\\',\\'.png\\')}else{this.style.display=\\'none\\';this.nextSibling.style.display=\\'\\';}\">';" +
       "h+='<span style=\"display:none\">'+initial+'</span></div>'" +
@@ -2475,6 +2545,8 @@ var APP_JS = [
     "var races=b.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)});" +
     "var race=races[idx];if(!race)return '<p>Race not found</p>';" +
     "var candidates=shuffle(race.candidates.filter(function(c){return !c.withdrawn}));" +
+    "var _ov=getOverride(race);" +
+    "var _ovActive=_ov&&_ov.chosenCandidate!==_ov.originalCandidate;" +
     "var h='<button class=\"back-btn\" data-action=\"nav\" data-to=\"#/ballot\">&larr; '+t('Back to My Ballot')+'</button>';" +
     // Novelty tone compact warning on race detail
     "if(S.readingLevel===7){" +
@@ -2485,40 +2557,52 @@ var APP_JS = [
     "h+='<h2 style=\"font-size:22px;font-weight:800;margin-bottom:4px\">'+esc(race.office)+'</h2>';" +
     "if(race.district)h+='<div style=\"font-size:15px;color:var(--text2);margin-bottom:16px\">'+esc(race.district)+'</div>';" +
     "else h+='<div style=\"margin-bottom:16px\"></div>';" +
-    // Recommendation box
+    // Recommendation box — modified for overrides
     "if(race.recommendation){" +
       "var rec=race.recommendation;" +
-      "h+='<div class=\"rec-box\">';" +
-      "h+='<div style=\"display:flex;justify-content:space-between;align-items:center\">';" +
-      "h+='<h4>\u2705 '+esc(rec.candidateName)+'</h4>';" +
-      "h+=confBadge(rec.confidence);" +
-      "h+='</div>';" +
-      "h+='<p>'+esc(rec.reasoning)+'</p>';" +
-      "if(rec.matchFactors&&rec.matchFactors.length){" +
-        "h+='<div style=\"margin-top:8px;padding:8px 10px;background:rgba(74,144,217,.08);border-radius:8px\">';" +
-        "h+='<div style=\"font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px\">'+t('Why this match?')+'</div>';" +
-        "h+='<ul style=\"margin:0;padding-left:18px;font-size:13px;color:var(--text);line-height:1.5\">';" +
-        "for(var mf=0;mf<rec.matchFactors.length;mf++){h+='<li>'+esc(rec.matchFactors[mf])+'</li>'}" +
-        "h+='</ul></div>'" +
+      "if(_ovActive){" +
+        // Overridden: show dimmed rec box with strikethrough
+        "h+='<div class=\"rec-box\" style=\"opacity:0.6;border-left:4px solid #d97706\">';" +
+        "h+='<div style=\"display:flex;justify-content:space-between;align-items:center\">';" +
+        "h+='<h4 style=\"text-decoration:line-through;color:var(--text2)\">\u2705 '+esc(rec.candidateName)+'</h4>';" +
+        "h+=confBadge(rec.confidence);" +
+        "h+='</div>';" +
+        "h+='<p style=\"font-size:13px;color:#92400e\" data-t=\"AI recommended {from}, but you chose {to}\">'+t('AI recommended')+' '+esc(rec.candidateName)+', '+t('but you chose')+' '+esc(_ov.chosenCandidate)+'</p>';" +
+        "h+='<button class=\"btn btn-secondary\" style=\"font-size:13px;padding:6px 14px;margin-top:8px\" data-action=\"undo-override\" data-race-idx=\"'+idx+'\" data-t=\"Restore AI pick\">'+t('Restore AI pick')+'</button>';" +
+        "h+='</div>'" +
+      "}else{" +
+        "h+='<div class=\"rec-box\">';" +
+        "h+='<div style=\"display:flex;justify-content:space-between;align-items:center\">';" +
+        "h+='<h4>\u2705 '+esc(rec.candidateName)+'</h4>';" +
+        "h+=confBadge(rec.confidence);" +
+        "h+='</div>';" +
+        "h+='<p>'+esc(rec.reasoning)+'</p>';" +
+        "if(rec.matchFactors&&rec.matchFactors.length){" +
+          "h+='<div style=\"margin-top:8px;padding:8px 10px;background:rgba(74,144,217,.08);border-radius:8px\">';" +
+          "h+='<div style=\"font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px\">'+t('Why this match?')+'</div>';" +
+          "h+='<ul style=\"margin:0;padding-left:18px;font-size:13px;color:var(--text);line-height:1.5\">';" +
+          "for(var mf=0;mf<rec.matchFactors.length;mf++){h+='<li>'+esc(rec.matchFactors[mf])+'</li>'}" +
+          "h+='</ul></div>'" +
+        "}" +
+        "var _rc=candidates.find(function(c){return c.isRecommended});" +
+        "if(_rc&&_rc.pros&&_rc.pros.length){" +
+          "h+='<div style=\"margin-top:8px;padding:8px 10px;background:rgba(90,180,90,.08);border-radius:8px\">';" +
+          "h+='<div style=\"font-size:12px;font-weight:700;color:var(--ok);margin-bottom:4px\">\u2705 '+t('Strengths')+'</div>';" +
+          "h+='<ul style=\"margin:0;padding-left:18px;font-size:13px;color:var(--text);line-height:1.5\">';" +
+          "for(var si=0;si<_rc.pros.length;si++){h+='<li>'+esc(tp(_rc.pros[si]))+'</li>'}" +
+          "h+='</ul></div>'" +
+        "}" +
+        "if(_rc&&_rc.cons&&_rc.cons.length){" +
+          "h+='<div style=\"margin-top:8px;padding:8px 10px;background:rgba(220,120,60,.08);border-radius:8px\">';" +
+          "h+='<div style=\"font-size:12px;font-weight:700;color:var(--bad);margin-bottom:4px\">\u26A0\uFE0F '+t('Concerns')+'</div>';" +
+          "h+='<ul style=\"margin:0;padding-left:18px;font-size:13px;color:var(--text);line-height:1.5\">';" +
+          "for(var ci2=0;ci2<_rc.cons.length;ci2++){h+='<li>'+esc(tp(_rc.cons[ci2]))+'</li>'}" +
+          "h+='</ul></div>'" +
+        "}" +
+        "if(rec.strategicNotes)h+='<p style=\"margin-top:6px\"><b>'+t('Strategy:')+'</b> '+esc(rec.strategicNotes)+'</p>';" +
+        "if(rec.caveats)h+='<p style=\"margin-top:6px\"><b>'+t('Note:')+'</b> '+esc(rec.caveats)+'</p>';" +
+        "h+='</div>'" +
       "}" +
-      "var _rc=candidates.find(function(c){return c.isRecommended});" +
-      "if(_rc&&_rc.pros&&_rc.pros.length){" +
-        "h+='<div style=\"margin-top:8px;padding:8px 10px;background:rgba(90,180,90,.08);border-radius:8px\">';" +
-        "h+='<div style=\"font-size:12px;font-weight:700;color:var(--ok);margin-bottom:4px\">\u2705 '+t('Strengths')+'</div>';" +
-        "h+='<ul style=\"margin:0;padding-left:18px;font-size:13px;color:var(--text);line-height:1.5\">';" +
-        "for(var si=0;si<_rc.pros.length;si++){h+='<li>'+esc(tp(_rc.pros[si]))+'</li>'}" +
-        "h+='</ul></div>'" +
-      "}" +
-      "if(_rc&&_rc.cons&&_rc.cons.length){" +
-        "h+='<div style=\"margin-top:8px;padding:8px 10px;background:rgba(220,120,60,.08);border-radius:8px\">';" +
-        "h+='<div style=\"font-size:12px;font-weight:700;color:var(--bad);margin-bottom:4px\">\u26A0\uFE0F '+t('Concerns')+'</div>';" +
-        "h+='<ul style=\"margin:0;padding-left:18px;font-size:13px;color:var(--text);line-height:1.5\">';" +
-        "for(var ci2=0;ci2<_rc.cons.length;ci2++){h+='<li>'+esc(tp(_rc.cons[ci2]))+'</li>'}" +
-        "h+='</ul></div>'" +
-      "}" +
-      "if(rec.strategicNotes)h+='<p style=\"margin-top:6px\"><b>'+t('Strategy:')+'</b> '+esc(rec.strategicNotes)+'</p>';" +
-      "if(rec.caveats)h+='<p style=\"margin-top:6px\"><b>'+t('Note:')+'</b> '+esc(rec.caveats)+'</p>';" +
-      "h+='</div>'" +
     "}" +
     // Candidates
     "h+='<div class=\"section-head\">'+t('All Candidates')+'</div>';" +
@@ -2530,7 +2614,13 @@ var APP_JS = [
       "var avatarColor=colors[i%colors.length];" +
       "var initial=getInitials(c.name);" +
       "var slug=c.name.toLowerCase().replace(/[^a-z0-9 -]/g,'').replace(/\\s+/g,'-');" +
-      "h+='<div class=\"cand-card'+(c.isRecommended?' recommended':'')+'\">';" +
+      "var _isUserPick=_ovActive&&c.name===_ov.chosenCandidate;" +
+      "var _candCardCls='cand-card';" +
+      "if(_isUserPick)_candCardCls+=' override-pick';" +
+      "else if(c.isRecommended&&!_ovActive)_candCardCls+=' recommended';" +
+      "h+='<div class=\"'+_candCardCls+'\"';" +
+      "if(_isUserPick)h+=' style=\"border-left:4px solid #d97706\"';" +
+      "h+='>';" +
       "h+='<div style=\"display:flex;gap:12px;align-items:center\">';" +
       "h+='<div class=\"cand-avatar\" style=\"background:'+avatarColor+'\">';" +
       "h+='<img src=\"/headshots/'+slug+'.jpg\" alt=\"\" style=\"width:100%;height:100%;object-fit:cover;border-radius:50%\" onerror=\"if(this.src.indexOf(\\'.jpg\\')>0){this.src=this.src.replace(\\'.jpg\\',\\'.png\\')}else{this.style.display=\\'none\\';this.nextSibling.style.display=\\'\\';}\">';" +
@@ -2540,7 +2630,8 @@ var APP_JS = [
       "h+='<div class=\"cand-name\">'+esc(c.name)+'</div>';" +
       "h+='<div class=\"cand-tags\">';" +
       "if(c.isIncumbent)h+='<span class=\"badge badge-blue\">'+t('Incumbent')+'</span>';" +
-      "if(c.isRecommended)h+='<span class=\"badge badge-ok\">'+t('Recommended')+'</span>';" +
+      "if(_isUserPick)h+='<span class=\"badge\" style=\"background:#fef3c7;color:#92400e\" data-t=\"Your Pick\">'+t('Your Pick')+'</span>';" +
+      "else if(c.isRecommended)h+='<span class=\"badge badge-ok\">'+t('Recommended')+'</span>';" +
       "var _fd=0;if(c.pros&&c.pros.length)_fd++;if(c.cons&&c.cons.length)_fd++;if(c.endorsements&&c.endorsements.length)_fd++;if(c.keyPositions&&c.keyPositions.length)_fd++;" +
       "if(_fd<2)h+='<span class=\"badge\" style=\"color:var(--text2);background:rgba(128,128,128,.12);font-size:12px\">'+t('Limited public info')+'</span>';" +
       "h+='</div></div>';" +
@@ -2575,7 +2666,26 @@ var APP_JS = [
       "h+='<button class=\"report-link\" data-action=\"report-issue\" data-candidate=\"'+esc(c.name)+'\" data-race=\"'+esc(race.office+(race.district?' \\u2014 '+race.district:''))+'\">" +
         "&#9873; '+t('Flag this info')+'" +
       "</button>';" +
+      // "Choose this candidate" button (only if multiple candidates and not already their pick)
+      "if(candidates.length>1&&!_isUserPick){" +
+        "h+='<button class=\"btn btn-secondary\" style=\"width:100%;margin-top:8px;font-size:13px;padding:8px 14px\" data-action=\"override-candidate\" data-race-idx=\"'+idx+'\" data-candidate=\"'+esc(c.name)+'\" data-t=\"Choose this candidate\">'+t('Choose this candidate')+'</button>'" +
+      "}" +
       "h+='</div>'" +
+    "}" +
+    // Override feedback area (shown when override is active)
+    "if(_ovActive&&_ov&&!_ov.reasonSubmitted){" +
+      "h+='<div id=\"override-feedback-area\" style=\"margin-top:16px;padding:16px;background:var(--card);border:1.5px solid #d97706;border-radius:12px\">';" +
+      "h+='<div style=\"font-size:14px;font-weight:600;margin-bottom:8px\" data-t=\"Why did you change this?\">'+t('Why did you change this?')+'</div>';" +
+      "h+='<textarea id=\"override-reason\" rows=\"3\" style=\"width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;resize:vertical;background:var(--bg);color:var(--text)\" placeholder=\"'+t('What made you choose differently? (optional, anonymous)')+'\" data-t-placeholder=\"What made you choose differently? (optional, anonymous)\"></textarea>';" +
+      "h+='<div style=\"display:flex;gap:8px;margin-top:8px;align-items:center\">';" +
+      "h+='<button class=\"btn btn-primary\" style=\"font-size:13px;padding:6px 14px\" data-action=\"submit-override-feedback\" data-race-idx=\"'+idx+'\" data-t=\"Submit feedback\">'+t('Submit feedback')+'</button>';" +
+      "h+='<button class=\"btn btn-secondary\" style=\"font-size:13px;padding:6px 14px\" data-action=\"dismiss-override-feedback\" data-race-idx=\"'+idx+'\" data-t=\"Skip\">'+t('Skip')+'</button>';" +
+      "h+='</div>';" +
+      "h+='<div style=\"font-size:11px;color:var(--text2);margin-top:6px\" data-t=\"This feedback is anonymous and helps improve recommendations for everyone.\">'+t('This feedback is anonymous and helps improve recommendations for everyone.')+'</div>';" +
+      "h+='</div>'" +
+    "}" +
+    "if(_ovActive&&_ov&&_ov.reasonSubmitted){" +
+      "h+='<div style=\"margin-top:12px;font-size:13px;color:var(--ok);display:flex;align-items:center;gap:6px\">\u2705 <span data-t=\"Feedback sent\">'+t('Feedback sent')+'</span></div>'" +
     "}" +
     // Share this race button
     "h+='<div style=\"margin-top:20px\">';" +
@@ -2673,10 +2783,14 @@ var APP_JS = [
 
   // ============ LLM COMPARE (DEBUG) ============
   "var LLM_META={" +
-    "claude:{name:'Claude',icon:'\\u{1F7E3}',color:'#7B61FF'}," +
-    "chatgpt:{name:'ChatGPT',icon:'\\u{1F7E2}',color:'#10A37F'}," +
-    "gemini:{name:'Gemini',icon:'\\u{1F535}',color:'#4285F4'}," +
-    "grok:{name:'Grok',icon:'\\u26AB',color:'#1DA1F2'}" +
+    "claude:{name:'Claude Sonnet',icon:'\\u{1F7E3}',color:'#7B61FF',provider:'Anthropic'}," +
+    "'claude-haiku':{name:'Claude Haiku',icon:'\\u{1F7E3}',color:'#B39DFF',provider:'Anthropic'}," +
+    "'claude-opus':{name:'Claude Opus',icon:'\\u{1F7E3}',color:'#5B3FCC',provider:'Anthropic'}," +
+    "chatgpt:{name:'GPT-4o',icon:'\\u{1F7E2}',color:'#10A37F',provider:'OpenAI'}," +
+    "'gpt-4o-mini':{name:'GPT-4o mini',icon:'\\u{1F7E2}',color:'#6BCF9F',provider:'OpenAI'}," +
+    "gemini:{name:'Gemini Flash',icon:'\\u{1F535}',color:'#4285F4',provider:'Google'}," +
+    "'gemini-pro':{name:'Gemini Pro',icon:'\\u{1F535}',color:'#1A73E8',provider:'Google'}," +
+    "grok:{name:'Grok 3',icon:'\\u26AB',color:'#1DA1F2',provider:'xAI'}" +
   "};",
 
   "function llmGenerate(llmKey){" +
@@ -2721,7 +2835,7 @@ var APP_JS = [
     "h+='<div class=\"card\" style=\"text-align:center;margin-bottom:16px\">';" +
     "h+='<div style=\"font-size:14px;color:var(--text2)\">Comparing '+partyLabel+' Primary ballots</div>';" +
     "h+='</div>';" +
-    "var llmKeys=['claude','chatgpt','gemini','grok'];" +
+    "var llmKeys=['claude','claude-haiku','claude-opus','chatgpt','gpt-4o-mini','gemini','gemini-pro','grok'];" +
     "for(var li=0;li<llmKeys.length;li++){" +
       "var lk=llmKeys[li];" +
       "if(!llmCompareResults[lk]){" +
@@ -2881,17 +2995,9 @@ var APP_JS = [
   "function expGenerate(){" +
     "if(expLoading.claude||expLoading[expChallenger])return;" +
     "var profile=null;try{var p=localStorage.getItem('tx_votes_profile');if(p)profile=JSON.parse(p)}catch(e){}" +
-    "if(!profile){expErrors[expChallenger]='No profile found';render();return}" +
-    // Seed Claude from existing ballot if available
-    "if(!expResults.claude&&(S.repBallot||S.demBallot)){" +
-      "var cb={};if(S.repBallot)cb.republican=S.repBallot;if(S.demBallot)cb.democrat=S.demBallot;" +
-      "expResults.claude=cb" +
-    "}" +
+    "if(!profile){profile={tone:'balanced',issues:['Economy','Education','Healthcare','Immigration','Public Safety'],qualities:['Integrity','Experience','Leadership'],readingLevel:3}}" +
     "var cFips=S.districts&&S.districts.countyFips?S.districts.countyFips:null;" +
-    "var parties=[];" +
-    "if(S.repBallot)parties.push('republican');" +
-    "if(S.demBallot)parties.push('democrat');" +
-    "if(!parties.length)parties=['republican','democrat'];" +
+    "var parties=['republican','democrat'];" +
     // Determine which LLMs need generation
     "var toGen=[];" +
     "if(!expResults.claude)toGen.push('claude');" +
@@ -3015,10 +3121,20 @@ var APP_JS = [
     "h+='<div class=\"exp-controls\">';" +
     "h+='<span style=\"font-size:14px;font-weight:600\">Claude vs</span>';" +
     "h+='<select class=\"exp-select\" data-action=\"exp-select-model\">';" +
-    "var challengers=['gemini','chatgpt','grok'];" +
-    "for(var ci=0;ci<challengers.length;ci++){" +
-      "var ck=challengers[ci];var cm=LLM_META[ck];" +
-      "h+='<option value=\"'+ck+'\"'+(expChallenger===ck?' selected':'')+'>'+cm.icon+' '+cm.name+'</option>'" +
+    "var expGroups=[" +
+      "{label:'Anthropic',models:['claude-haiku','claude-opus']}," +
+      "{label:'OpenAI',models:['chatgpt','gpt-4o-mini']}," +
+      "{label:'Google',models:['gemini','gemini-pro']}," +
+      "{label:'xAI',models:['grok']}" +
+    "];" +
+    "for(var gi=0;gi<expGroups.length;gi++){" +
+      "var grp=expGroups[gi];" +
+      "h+='<optgroup label=\"'+grp.label+'\">';" +
+      "for(var ci=0;ci<grp.models.length;ci++){" +
+        "var ck=grp.models[ci];var cm=LLM_META[ck];" +
+        "h+='<option value=\"'+ck+'\"'+(expChallenger===ck?' selected':'')+'>'+cm.icon+' '+cm.name+'</option>'" +
+      "}" +
+      "h+='</optgroup>'" +
     "}" +
     "h+='</select>';" +
     "var anyLoading=expLoading.claude||expLoading[expChallenger];" +
@@ -3453,13 +3569,14 @@ var APP_JS = [
         "S.phase=0;S.issues=[];S._pickedIssues=0;S.spectrum=null;S.policyViews={};S.qualities=[];S._pickedQuals=0;S.freeform='';S.readingLevel=1;" +
         "S.address={street:'',city:'',state:'TX',zip:''};S.ddIndex=0;S.ddQuestions=[];S.countyInfo=null;S.countyBallotAvailable=null;" +
         "S.repBallot=null;S.demBallot=null;S.selectedParty='republican';" +
-        "S.guideComplete=false;S.summary=null;S.districts=null;S.expanded={};S.addressError=null;S.verifyingAddress=false;S.electionExpired=false;" +
+        "S.guideComplete=false;S.summary=null;S.districts=null;S.expanded={};S.addressError=null;S.verifyingAddress=false;S.electionExpired=false;S.overrides={};" +
         "shuffledSpectrum=null;shuffledDD={};" +
         "try{localStorage.removeItem('tx_votes_profile');localStorage.removeItem('tx_votes_ballot_republican');" +
         "localStorage.removeItem('tx_votes_ballot_democrat');localStorage.removeItem('tx_votes_selected_party');localStorage.removeItem('tx_votes_has_voted');localStorage.removeItem('tx_votes_sharePromptSeen');" +
         "localStorage.removeItem('tx_votes_data_updated_republican');localStorage.removeItem('tx_votes_data_updated_democrat');" +
         "localStorage.removeItem('tx_votes_llm_compare_claude');localStorage.removeItem('tx_votes_llm_compare_chatgpt');localStorage.removeItem('tx_votes_llm_compare_gemini');localStorage.removeItem('tx_votes_llm_compare_grok');" +
         "localStorage.removeItem('tx_votes_election_date');localStorage.removeItem('tx_votes_post_election_dismissed');" +
+        "localStorage.removeItem('tx_votes_overrides');" +
         "localStorage.removeItem('atx_votes_profile');localStorage.removeItem('atx_votes_ballot_republican');" +
         "localStorage.removeItem('atx_votes_ballot_democrat');localStorage.removeItem('atx_votes_selected_party');localStorage.removeItem('atx_votes_has_voted')}catch(e){}" +
         "location.hash='#/';render()" +
@@ -3474,13 +3591,14 @@ var APP_JS = [
       "S.phase=0;S.issues=[];S._pickedIssues=0;S.spectrum=null;S.policyViews={};S.qualities=[];S._pickedQuals=0;S.freeform='';S.readingLevel=1;" +
       "S.address={street:'',city:'',state:'TX',zip:''};S.ddIndex=0;S.ddQuestions=[];S.countyInfo=null;S.countyBallotAvailable=null;" +
       "S.repBallot=null;S.demBallot=null;S.selectedParty='republican';" +
-      "S.guideComplete=false;S.summary=null;S.districts=null;S.expanded={};S.addressError=null;S.verifyingAddress=false;S.electionExpired=false;" +
+      "S.guideComplete=false;S.summary=null;S.districts=null;S.expanded={};S.addressError=null;S.verifyingAddress=false;S.electionExpired=false;S.overrides={};" +
       "shuffledSpectrum=null;shuffledDD={};" +
       "try{localStorage.removeItem('tx_votes_profile');localStorage.removeItem('tx_votes_ballot_republican');" +
       "localStorage.removeItem('tx_votes_ballot_democrat');localStorage.removeItem('tx_votes_selected_party');localStorage.removeItem('tx_votes_has_voted');localStorage.removeItem('tx_votes_sharePromptSeen');" +
       "localStorage.removeItem('tx_votes_data_updated_republican');localStorage.removeItem('tx_votes_data_updated_democrat');" +
       "localStorage.removeItem('tx_votes_llm_compare_claude');localStorage.removeItem('tx_votes_llm_compare_chatgpt');localStorage.removeItem('tx_votes_llm_compare_gemini');localStorage.removeItem('tx_votes_llm_compare_grok');" +
       "localStorage.removeItem('tx_votes_election_date');localStorage.removeItem('tx_votes_post_election_dismissed');" +
+      "localStorage.removeItem('tx_votes_overrides');" +
       "localStorage.removeItem('atx_votes_profile');localStorage.removeItem('atx_votes_ballot_republican');" +
       "localStorage.removeItem('atx_votes_ballot_democrat');localStorage.removeItem('atx_votes_selected_party');localStorage.removeItem('atx_votes_has_voted')}catch(e){}" +
       "location.hash='#/';render()" +
@@ -3499,6 +3617,63 @@ var APP_JS = [
     "else if(action==='share-app'){trk('share_app');shareApp()}" +
     "else if(action==='share-race'){trk('share_race',{d1:el.dataset.idx});shareRace(parseInt(el.dataset.idx))}" +
     "else if(action==='report-issue'){trk('report_issue',{d1:el.dataset.candidate});showReportModal(el.dataset.candidate,el.dataset.race)}" +
+    "else if(action==='override-candidate'){" +
+      "var _oIdx=parseInt(el.dataset.raceIdx);" +
+      "var _oName=el.dataset.candidate;" +
+      "var _ob=getBallot();if(_ob){" +
+        "var _oRaces=_ob.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)});" +
+        "var _oRace=_oRaces[_oIdx];" +
+        "if(_oRace){" +
+          "setOverride(_oRace,_oName);" +
+          "trk('override_set',{d1:getRaceKey(_oRace),d2:_oName});" +
+          "render()" +
+        "}" +
+      "}" +
+    "}" +
+    "else if(action==='undo-override'){" +
+      "var _uIdx=parseInt(el.dataset.raceIdx);" +
+      "var _ub=getBallot();if(_ub){" +
+        "var _uRaces=_ub.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)});" +
+        "var _uRace=_uRaces[_uIdx];" +
+        "if(_uRace){" +
+          "trk('override_undo',{d1:getRaceKey(_uRace)});" +
+          "clearOverride(_uRace);" +
+          "render()" +
+        "}" +
+      "}" +
+    "}" +
+    "else if(action==='submit-override-feedback'){" +
+      "var _fIdx=parseInt(el.dataset.raceIdx);" +
+      "var _fb=getBallot();if(_fb){" +
+        "var _fRaces=_fb.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)});" +
+        "var _fRace=_fRaces[_fIdx];" +
+        "if(_fRace){" +
+          "var _fOv=getOverride(_fRace);" +
+          "var _fTa=document.getElementById('override-reason');" +
+          "var _fReason=_fTa?_fTa.value.trim():'';" +
+          "if(_fOv){" +
+            "var _fKey=getRaceKey(_fRace);" +
+            "_fOv.reason=_fReason;" +
+            "_fOv.reasonSubmitted=true;" +
+            "save();" +
+            "trk('override_feedback',{d1:_fKey});" +
+            "fetch('/app/api/override-feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({party:S.selectedParty,race:_fKey,from:_fOv.originalCandidate,to:_fOv.chosenCandidate,reason:_fReason,lang:LANG})}).catch(function(){});" +
+            "render()" +
+          "}" +
+        "}" +
+      "}" +
+    "}" +
+    "else if(action==='dismiss-override-feedback'){" +
+      "var _dIdx=parseInt(el.dataset.raceIdx);" +
+      "var _db=getBallot();if(_db){" +
+        "var _dRaces=_db.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)});" +
+        "var _dRace=_dRaces[_dIdx];" +
+        "if(_dRace){" +
+          "var _dOv=getOverride(_dRace);" +
+          "if(_dOv){_dOv.reasonSubmitted=true;save();render()}" +
+        "}" +
+      "}" +
+    "}" +
     "else if(action==='share-profile'){trk('share_profile');shareProfileSummary()}" +
     "else if(action==='regen-summary'){regenerateSummary()}" +
     "else if(action==='reprocess-guide'){reprocessGuide()}" +
@@ -4251,7 +4426,7 @@ var APP_JS = [
   "(function(){var m=location.search.match(/tone=(\\d+)/);if(m&&!S.guideComplete){var tn=parseInt(m[1]);S.readingLevel=tn;if(tn===7&&!eeCowboy){eeCowboy=true;localStorage.setItem('tx_votes_ee_cowboy','1')}if(S.phase<2)S.phase=2;save()}}());",
   "(function(){var s=location.search.toLowerCase();var llms=['gemini','grok','chatgpt'];for(var i=0;i<llms.length;i++){if(s.indexOf(llms[i])!==-1){window._llmOverride=llms[i];break}}}());",
   "if(location.search)history.replaceState(null,'',location.pathname+location.hash);",
-  "if(!S.guideComplete&&location.hash&&location.hash!=='#/')location.hash='#/';",
+  "if(!S.guideComplete&&location.hash&&location.hash!=='#/'&&location.hash!=='#/llm-experiment'&&location.hash!=='#/debug/compare')location.hash='#/';",
   "render();",
   "refreshBallots();",
   "if('serviceWorker' in navigator){navigator.serviceWorker.register('/app/sw.js').catch(function(){})}",
