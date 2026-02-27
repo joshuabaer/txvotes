@@ -158,6 +158,8 @@ _From automated code review of "Add automated AI audit runner" (interview-flow-t
 - [x] County filter on /candidates page not filtering — county ballot data in KV was missing `countyName` field. Fixed by extracting FIPS from KV key name and looking up county name. Travis County now appears.
 - [x] Ballot page footer showed "Nonpartisan by Design · Privacy Policy · v25" — changed to "Texas Votes · How It Works · Privacy"
 
+- [ ] **Bug: Sharing a race shares AI recommendation instead of user's override pick** — When a user overrides the AI recommendation with "Choose this candidate instead" and then shares that race, the share text/content still shows the original AI pick, not the user's chosen candidate. Audit all places that reference the recommended candidate (share text, cheat sheet, summary, etc.) to ensure they use `getEffectiveChoice()` instead of the raw AI recommendation.
+
 ### Daily Updater & Freshness
 - [ ] Add county ballots and voting info to daily updater refresh — currently only statewide races are auto-updated; county ballots, county_info, and precinct maps are seeded once and never refreshed
 - [ ] Design a post-Election Day site and have it ready to automatically switch when the polls close — currently the site shows stale "March 3, 2026" messaging with no post-election UX, no runoff messaging, no results. After election ends, app still shows "Vote Now" CTAs and generates guides for concluded races.
