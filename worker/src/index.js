@@ -8,6 +8,7 @@ import { getUsageLog, estimateCost } from "./usage-logger.js";
 import { checkRateLimit, rateLimitResponse } from "./rate-limit.js";
 import { runSingleExperiment, runFullExperiment, getExperimentStatus, getExperimentResults, EXPERIMENT_PROFILES, VALID_LLMS as EXPERIMENT_LLMS } from "./llm-experiment.js";
 import { STATE_CONFIG, VALID_STATES, DEFAULT_STATE } from "./state-config.js";
+import { resolveDCAddress } from "./dc-mar.js";
 
 // Shared CSS for static pages — matches app design tokens from pwa.js
 const PAGE_CSS = `<meta name="theme-color" content="rgb(33,89,143)" media="(prefers-color-scheme:light)"><meta name="theme-color" content="rgb(28,28,31)" media="(prefers-color-scheme:dark)">
@@ -525,6 +526,89 @@ function findGeo(geos, partialKey) {
     }
   }
   return null;
+}
+
+async function handleDCDistricts(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { street, city, state, zip } = body;
+  if (!street) {
+    return jsonResponse({ error: "Missing street address" }, 400);
+  }
+
+  // Try the DC MAR API first
+  const marResult = await resolveDCAddress(street, {
+    city: city || "Washington",
+    state: state || "DC",
+    zip: zip || "",
+    kv: env.ELECTION_DATA,
+  });
+
+  if (marResult.districts) {
+    const d = marResult.districts;
+    return jsonResponse({
+      ward: d.ward ? `Ward ${d.ward}` : null,
+      anc: d.anc ? `ANC ${d.anc}` : null,
+      smd: d.smd ? `SMD ${d.smd}` : null,
+      votingPrecinct: d.votingPrecinct ? `Precinct ${d.votingPrecinct}` : null,
+      congressional: "At-Large",
+      latitude: d.latitude,
+      longitude: d.longitude,
+      confidence: d.confidence,
+      fullAddress: d.fullAddress,
+      source: "dc_mar",
+      cached: marResult.cached || false,
+    });
+  }
+
+  // Fall back to Census geocoder for basic geographic data
+  const params = new URLSearchParams({
+    street,
+    city: city || "Washington",
+    state: state || "DC",
+    zip: zip || "",
+    benchmark: "Public_AR_Current",
+    vintage: "Current_Current",
+    format: "json",
+  });
+
+  let censusData;
+  try {
+    const res = await fetch(
+      `https://geocoding.geo.census.gov/geocoder/geographies/address?${params}`
+    );
+    censusData = await res.json();
+  } catch {
+    // Both MAR and Census failed
+    return jsonResponse({ error: marResult.error || "census_unavailable" }, 502);
+  }
+
+  const matches = censusData?.result?.addressMatches;
+  if (!matches || matches.length === 0) {
+    return jsonResponse({ error: "address_not_found" }, 404);
+  }
+
+  const geos = matches[0].geographies;
+  const coords = matches[0].coordinates;
+
+  return jsonResponse({
+    ward: null,
+    anc: null,
+    smd: null,
+    votingPrecinct: null,
+    congressional: "At-Large",
+    latitude: coords?.y || null,
+    longitude: coords?.x || null,
+    confidence: null,
+    fullAddress: matches[0].matchedAddress || null,
+    source: "census_fallback",
+    cached: false,
+  });
 }
 
 function jsonResponse(data, status = 200) {
@@ -7563,6 +7647,9 @@ export default {
     }
     if (url.pathname === "/tx/app/api/districts") {
       return handleDistricts(request, env);
+    }
+    if (url.pathname === "/dc/app/api/districts") {
+      return handleDCDistricts(request, env);
     }
 
     // POST: /api/audit/run — trigger automated AI audit
