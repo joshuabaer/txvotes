@@ -126,7 +126,7 @@ describe("Stats page: basic rendering", () => {
     const res = await get("/stats");
     const body = await res.text();
     expect(body).toContain("Build My Voting Guide");
-    expect(body).toContain("/app?start=1");
+    expect(body).toContain("/tx/app?start=1");
   });
 
   it("contains footer", async () => {
@@ -403,9 +403,9 @@ describe("Stats page: without ballot data", () => {
 // Admin analytics filtering — admin activity excluded from stats
 // ---------------------------------------------------------------------------
 describe("Admin analytics filtering", () => {
-  /** Helper: POST an analytics event to /app/api/ev */
+  /** Helper: POST an analytics event to /tx/app/api/ev */
   async function postEvent(body, headers = {}) {
-    const url = "https://txvotes.app/app/api/ev";
+    const url = "https://txvotes.app/tx/app/api/ev";
     const request = new Request(url, {
       method: "POST",
       body: JSON.stringify(body),
@@ -511,7 +511,7 @@ describe("Admin analytics filtering", () => {
       ...analyticsEnv,
       ADMIN_SECRET: undefined,
     };
-    const url = "https://txvotes.app/app/api/ev";
+    const url = "https://txvotes.app/tx/app/api/ev";
     const request = new Request(url, {
       method: "POST",
       body: JSON.stringify({

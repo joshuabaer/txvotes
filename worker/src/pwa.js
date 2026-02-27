@@ -1,8 +1,16 @@
 // PWA — Full web app served as a single HTML page
 // All CSS and JS inline — no build step
 
-export function handlePWA() {
-  return new Response(APP_HTML, {
+export function handlePWA(stateCode = 'tx') {
+  const base = '/' + stateCode + '/app';
+  // Inject state config and rewrite /app paths to state-prefixed paths
+  const stateHtml = APP_HTML
+    .replace('<script>', '<script>var _STATE="' + stateCode + '";var _APP_BASE="' + base + '";')
+    .replaceAll('/app/api/', base + '/api/')
+    .replaceAll('/app/sw.js', base + '/sw.js')
+    .replaceAll('href="/app/manifest.json"', 'href="' + base + '/manifest.json"')
+    .replaceAll('content="https://txvotes.app/app"', 'content="https://txvotes.app' + base + '"');
+  return new Response(stateHtml, {
     headers: {
       "Content-Type": "text/html;charset=utf-8",
       "Cache-Control": "no-cache",
@@ -10,8 +18,11 @@ export function handlePWA() {
   });
 }
 
-export function handlePWA_SW() {
-  return new Response(SERVICE_WORKER, {
+export function handlePWA_SW(stateCode = 'tx') {
+  const base = '/' + stateCode + '/app';
+  // Rewrite /app/api/ to state-prefixed path in service worker
+  const sw = SERVICE_WORKER.replaceAll('/app/api/', base + '/api/');
+  return new Response(sw, {
     headers: {
       "Content-Type": "application/javascript",
       "Cache-Control": "no-cache",
@@ -74,8 +85,11 @@ export function handlePWA_Clear(redirectUrl = '/', title = 'Texas Votes', descri
   });
 }
 
-export function handlePWA_Manifest() {
-  return new Response(MANIFEST, {
+export function handlePWA_Manifest(stateCode = 'tx') {
+  const base = '/' + stateCode + '/app';
+  // Rewrite start_url to state-prefixed path
+  const manifest = MANIFEST.replace('"/app"', '"' + base + '"');
+  return new Response(manifest, {
     headers: {
       "Content-Type": "application/manifest+json",
       "Cache-Control": "public, max-age=3600",

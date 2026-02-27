@@ -417,7 +417,7 @@ describe("Override Spanish translations — source verification", () => {
 // ===========================================================================
 // 9. Override feedback API endpoint
 // ===========================================================================
-describe("POST /app/api/override-feedback", () => {
+describe("POST /tx/app/api/override-feedback", () => {
   let env;
   // Use unique IPs per test to avoid rate limiter contamination
   let testIPCounter = 0;
@@ -431,7 +431,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("returns 204 on valid feedback submission", async () => {
-    const res = await post("/app/api/override-feedback", {
+    const res = await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       from: "Jane Smith",
@@ -443,7 +443,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("stores feedback in KV under correct key", async () => {
-    await post("/app/api/override-feedback", {
+    await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       from: "Jane Smith",
@@ -480,7 +480,7 @@ describe("POST /app/api/override-feedback", () => {
       "feedback:overrides:republican:Governor": existingData,
     });
 
-    await post("/app/api/override-feedback", {
+    await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       from: "Jane Smith",
@@ -501,7 +501,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("returns 400 when party is missing", async () => {
-    const res = await post("/app/api/override-feedback", {
+    const res = await post("/tx/app/api/override-feedback", {
       race: "Governor",
       from: "Jane Smith",
       to: "John Doe",
@@ -510,7 +510,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("returns 400 when race is missing", async () => {
-    const res = await post("/app/api/override-feedback", {
+    const res = await post("/tx/app/api/override-feedback", {
       party: "republican",
       from: "Jane Smith",
       to: "John Doe",
@@ -519,7 +519,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("returns 400 when from is missing", async () => {
-    const res = await post("/app/api/override-feedback", {
+    const res = await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       to: "John Doe",
@@ -528,7 +528,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("returns 400 when to is missing", async () => {
-    const res = await post("/app/api/override-feedback", {
+    const res = await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       from: "Jane Smith",
@@ -538,7 +538,7 @@ describe("POST /app/api/override-feedback", () => {
 
   it("truncates reason to 500 characters", async () => {
     const longReason = "x".repeat(600);
-    await post("/app/api/override-feedback", {
+    await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       from: "Jane Smith",
@@ -556,7 +556,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("handles missing reason gracefully (stores empty string)", async () => {
-    await post("/app/api/override-feedback", {
+    await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       from: "Jane Smith",
@@ -573,7 +573,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("defaults lang to 'en' when not provided", async () => {
-    await post("/app/api/override-feedback", {
+    await post("/tx/app/api/override-feedback", {
       party: "republican",
       race: "Governor",
       from: "Jane Smith",
@@ -589,7 +589,7 @@ describe("POST /app/api/override-feedback", () => {
   });
 
   it("returns 400 for invalid JSON body", async () => {
-    const url = "https://txvotes.app/app/api/override-feedback";
+    const url = "https://txvotes.app/tx/app/api/override-feedback";
     const request = new Request(url, {
       method: "POST",
       body: "not json",
@@ -615,7 +615,7 @@ describe("Override feedback rate limiting", () => {
     const results = [];
     for (let i = 0; i < 105; i++) {
       results.push(
-        post("/app/api/override-feedback", {
+        post("/tx/app/api/override-feedback", {
           party: "republican",
           race: "Governor",
           from: "Jane Smith",
@@ -654,7 +654,7 @@ describe("Override analytics events — index.js", () => {
 
   it("override_set event is accepted by analytics endpoint", async () => {
     const env = createMockEnv();
-    const res = await post("/app/api/ev", {
+    const res = await post("/tx/app/api/ev", {
       event: "override_set",
       props: { d1: "Governor", d2: "John Doe", lang: "en" },
     }, env, { "CF-Connecting-IP": "10.0.0.100" });
@@ -663,7 +663,7 @@ describe("Override analytics events — index.js", () => {
 
   it("override_undo event is accepted by analytics endpoint", async () => {
     const env = createMockEnv();
-    const res = await post("/app/api/ev", {
+    const res = await post("/tx/app/api/ev", {
       event: "override_undo",
       props: { d1: "Governor", lang: "en" },
     }, env, { "CF-Connecting-IP": "10.0.0.101" });
@@ -672,7 +672,7 @@ describe("Override analytics events — index.js", () => {
 
   it("override_feedback event is accepted by analytics endpoint", async () => {
     const env = createMockEnv();
-    const res = await post("/app/api/ev", {
+    const res = await post("/tx/app/api/ev", {
       event: "override_feedback",
       props: { d1: "Governor", lang: "en" },
     }, env, { "CF-Connecting-IP": "10.0.0.102" });
@@ -693,9 +693,9 @@ describe("handleOverrideFeedback — index.js source verification", () => {
     expect(indexSrc).toContain("async function handleOverrideFeedback");
   });
 
-  it("route for /app/api/override-feedback exists", () => {
+  it("route for /tx/app/api/override-feedback exists", () => {
     expect(indexSrc).toContain(
-      'url.pathname === "/app/api/override-feedback"'
+      'url.pathname === "/tx/app/api/override-feedback"'
     );
   });
 

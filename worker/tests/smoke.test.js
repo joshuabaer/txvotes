@@ -54,7 +54,7 @@ async function get(path) {
 // ---------------------------------------------------------------------------
 const htmlRoutes = [
   { path: "/", name: "Landing page", expectTitle: "Texas Votes" },
-  { path: "/app", name: "PWA app shell", expectTitle: "Texas Votes" },
+  { path: "/tx/app", name: "PWA app shell", expectTitle: "Texas Votes" },
   { path: "/privacy", name: "Privacy policy", expectContain: "privacy" },
   { path: "/nonpartisan", name: "Nonpartisan pledge", expectContain: "nonpartisan" },
   { path: "/how-it-works", name: "How It Works", expectContain: "How" },
@@ -104,8 +104,8 @@ describe("Smoke tests: HTML pages return 200", () => {
 // PWA assets
 // ---------------------------------------------------------------------------
 describe("Smoke tests: PWA assets", () => {
-  it("GET /app/sw.js -> 200 with JavaScript content type", async () => {
-    const res = await get("/app/sw.js");
+  it("GET /tx/app/sw.js -> 200 with JavaScript content type", async () => {
+    const res = await get("/tx/app/sw.js");
     expect(res.status).toBe(200);
     const ct = res.headers.get("Content-Type");
     expect(ct).toContain("javascript");
@@ -113,8 +113,8 @@ describe("Smoke tests: PWA assets", () => {
     expect(body.length).toBeGreaterThan(100);
   });
 
-  it("GET /app/manifest.json -> 200 with JSON content type", async () => {
-    const res = await get("/app/manifest.json");
+  it("GET /tx/app/manifest.json -> 200 with JSON content type", async () => {
+    const res = await get("/tx/app/manifest.json");
     expect(res.status).toBe(200);
     const ct = res.headers.get("Content-Type");
     expect(ct).toContain("json");
@@ -123,8 +123,8 @@ describe("Smoke tests: PWA assets", () => {
     expect(body).toHaveProperty("start_url");
   });
 
-  it("GET /app/clear -> 200 with HTML", async () => {
-    const res = await get("/app/clear");
+  it("GET /tx/app/clear -> 200 with HTML", async () => {
+    const res = await get("/tx/app/clear");
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("<!DOCTYPE html");
@@ -173,15 +173,15 @@ describe("Smoke tests: API endpoints return valid JSON", () => {
     expect(ct).toContain("json");
   });
 
-  it("GET /app/api/ballot?party=democrat -> 200 with JSON", async () => {
-    const res = await get("/app/api/ballot?party=democrat");
+  it("GET /tx/app/api/ballot?party=democrat -> 200 with JSON", async () => {
+    const res = await get("/tx/app/api/ballot?party=democrat");
     expect(res.status).toBe(200);
     const ct = res.headers.get("Content-Type");
     expect(ct).toContain("json");
   });
 
-  it("GET /app/api/manifest -> 200 with JSON", async () => {
-    const res = await get("/app/api/manifest");
+  it("GET /tx/app/api/manifest -> 200 with JSON", async () => {
+    const res = await get("/tx/app/api/manifest");
     expect(res.status).toBe(200);
     const ct = res.headers.get("Content-Type");
     expect(ct).toContain("json");
@@ -285,10 +285,10 @@ describe("Smoke tests: /.well-known/security.txt", () => {
 // ---------------------------------------------------------------------------
 describe("Smoke tests: No unhandled exceptions", () => {
   const allGetRoutes = [
-    "/", "/app", "/privacy", "/nonpartisan", "/how-it-works",
+    "/", "/tx/app", "/privacy", "/nonpartisan", "/how-it-works",
     "/data-quality", "/audit", "/candidates", "/open-source",
-    "/sample", "/support", "/stats", "/app/clear", "/app/sw.js",
-    "/app/manifest.json", "/cowboy", "/chef",
+    "/sample", "/support", "/stats", "/tx/app/clear", "/tx/app/sw.js",
+    "/tx/app/manifest.json", "/cowboy", "/chef",
     "/api/audit/export", "/api/balance-check",
     "/.well-known/security.txt",
   ];
@@ -605,5 +605,148 @@ describe("Smoke tests: GET /admin hub", () => {
     expect(html).toContain('/api/audit/run');
     expect(html).toContain('/api/election/trigger');
     expect(html).toContain('/api/admin/cleanup');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Backward-compat redirects: /app* -> /tx/app*
+// ---------------------------------------------------------------------------
+describe("Smoke tests: backward-compat redirects", () => {
+  it("GET /app -> 301 redirect to /tx/app", async () => {
+    const res = await get("/app");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe("/tx/app");
+  });
+
+  it("GET /app/sw.js -> 301 redirect to /tx/app/sw.js", async () => {
+    const res = await get("/app/sw.js");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe("/tx/app/sw.js");
+  });
+
+  it("GET /app/manifest.json -> 301 redirect to /tx/app/manifest.json", async () => {
+    const res = await get("/app/manifest.json");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe("/tx/app/manifest.json");
+  });
+
+  it("GET /app/clear -> 301 redirect to /tx/app/clear", async () => {
+    const res = await get("/app/clear");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe("/tx/app/clear");
+  });
+
+  it("GET /app/api/ballot?party=democrat -> 301 redirect preserves query", async () => {
+    const res = await get("/app/api/ballot?party=democrat");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe("/tx/app/api/ballot?party=democrat");
+  });
+
+  it("GET /clear -> 301 redirect to /tx/app/clear", async () => {
+    const res = await get("/clear");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe("/tx/app/clear");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DC coming soon stub
+// ---------------------------------------------------------------------------
+describe("Smoke tests: DC coming soon", () => {
+  it("GET /dc/app -> 200 with coming soon page", async () => {
+    const res = await get("/dc/app");
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("DC Votes");
+    expect(body).toContain("Coming Soon");
+  });
+
+  it("GET /dc/app/api/ballot -> 200 with coming soon page", async () => {
+    const res = await get("/dc/app/api/ballot");
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("DC Votes");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// STATE_CONFIG validation
+// ---------------------------------------------------------------------------
+describe("Smoke tests: STATE_CONFIG", () => {
+  it("exports STATE_CONFIG with tx and dc entries", async () => {
+    const { STATE_CONFIG } = await import("../src/state-config.js");
+    expect(STATE_CONFIG).toBeDefined();
+    expect(STATE_CONFIG.tx).toBeDefined();
+    expect(STATE_CONFIG.dc).toBeDefined();
+  });
+
+  it("TX config has correct values", async () => {
+    const { STATE_CONFIG } = await import("../src/state-config.js");
+    expect(STATE_CONFIG.tx.name).toBe("Texas");
+    expect(STATE_CONFIG.tx.abbr).toBe("TX");
+    expect(STATE_CONFIG.tx.fips).toBe("48");
+    expect(STATE_CONFIG.tx.kvPrefix).toBe("");
+    expect(STATE_CONFIG.tx.parties).toContain("republican");
+    expect(STATE_CONFIG.tx.parties).toContain("democrat");
+  });
+
+  it("DC config has correct values", async () => {
+    const { STATE_CONFIG } = await import("../src/state-config.js");
+    expect(STATE_CONFIG.dc.name).toBe("Washington DC");
+    expect(STATE_CONFIG.dc.abbr).toBe("DC");
+    expect(STATE_CONFIG.dc.fips).toBe("11");
+    expect(STATE_CONFIG.dc.kvPrefix).toBe("dc:");
+    expect(STATE_CONFIG.dc.parties).toContain("democrat");
+    expect(STATE_CONFIG.dc.parties).toContain("statehood_green");
+  });
+
+  it("VALID_STATES contains tx and dc", async () => {
+    const { VALID_STATES } = await import("../src/state-config.js");
+    expect(VALID_STATES).toContain("tx");
+    expect(VALID_STATES).toContain("dc");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PWA state awareness — verify path rewriting
+// ---------------------------------------------------------------------------
+describe("Smoke tests: PWA state awareness", () => {
+  it("TX PWA HTML contains state-prefixed API paths", async () => {
+    const res = await get("/tx/app");
+    const body = await res.text();
+    // Should have /tx/app/api/ paths, not raw /app/api/
+    expect(body).toContain("/tx/app/api/");
+    expect(body).not.toContain("'/app/api/");
+  });
+
+  it("TX PWA HTML contains _STATE variable", async () => {
+    const res = await get("/tx/app");
+    const body = await res.text();
+    expect(body).toContain('var _STATE="tx"');
+    expect(body).toContain('var _APP_BASE="/tx/app"');
+  });
+
+  it("TX PWA HTML has state-prefixed service worker registration", async () => {
+    const res = await get("/tx/app");
+    const body = await res.text();
+    expect(body).toContain("/tx/app/sw.js");
+  });
+
+  it("TX PWA HTML has state-prefixed manifest link", async () => {
+    const res = await get("/tx/app");
+    const body = await res.text();
+    expect(body).toContain('href="/tx/app/manifest.json"');
+  });
+
+  it("TX service worker has state-prefixed API path check", async () => {
+    const res = await get("/tx/app/sw.js");
+    const body = await res.text();
+    expect(body).toContain("/tx/app/api/");
+  });
+
+  it("TX manifest has state-prefixed start_url", async () => {
+    const res = await get("/tx/app/manifest.json");
+    const body = await res.json();
+    expect(body.start_url).toBe("/tx/app");
   });
 });

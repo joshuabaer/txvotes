@@ -472,8 +472,8 @@ describe("Route patterns — additional coverage", () => {
     expect(indexSrc).toContain("async scheduled");
   });
 
-  it("/app/api/polymarket returns empty odds", () => {
-    expect(indexSrc).toContain("/app/api/polymarket");
+  it("/tx/app/api/polymarket returns empty odds", () => {
+    expect(indexSrc).toContain("/tx/app/api/polymarket");
     expect(indexSrc).toContain("odds: {}");
   });
 

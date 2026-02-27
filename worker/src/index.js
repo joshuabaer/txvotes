@@ -7,6 +7,7 @@ import { checkBallotBalance, formatBalanceSummary } from "./balance-check.js";
 import { getUsageLog, estimateCost } from "./usage-logger.js";
 import { checkRateLimit, rateLimitResponse } from "./rate-limit.js";
 import { runSingleExperiment, runFullExperiment, getExperimentStatus, getExperimentResults, EXPERIMENT_PROFILES, VALID_LLMS as EXPERIMENT_LLMS } from "./llm-experiment.js";
+import { STATE_CONFIG, VALID_STATES, DEFAULT_STATE } from "./state-config.js";
 
 // Shared CSS for static pages — matches app design tokens from pwa.js
 const PAGE_CSS = `<meta name="theme-color" content="rgb(33,89,143)" media="(prefers-color-scheme:light)"><meta name="theme-color" content="rgb(28,28,31)" media="(prefers-color-scheme:dark)">
@@ -536,6 +537,32 @@ function jsonResponse(data, status = 200) {
   });
 }
 
+function handleDCComingSoon() {
+  const dcConfig = STATE_CONFIG.dc;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${pageHead({
+    title: "DC Votes — Coming Soon",
+    description: "Your personalized voting guide for Washington DC elections. Coming soon for the " + dcConfig.electionName + ".",
+  })}
+</head>
+<body style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center">
+  <div class="card">
+    <div class="icon">🏛️</div>
+    <h1>DC Votes</h1>
+    <p class="subtitle">Your personalized voting guide for Washington DC elections.</p>
+    <div class="badge">${dcConfig.electionName} — June 16, 2026</div>
+    <p style="margin-top:1rem;color:var(--text2)">We're working on bringing the same personalized voting guide experience to DC. Check back soon!</p>
+    <a class="back" href="/">&larr; Back to Texas Votes</a>
+  </div>
+</body>
+</html>`;
+  return new Response(html, {
+    headers: { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 function handleLandingPage() {
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -563,7 +590,7 @@ function handleLandingPage() {
     <p class="subtitle" data-t="Your personalized voting guide for Texas elections.">Your personalized voting guide for Texas elections.</p>
     <div class="badge" data-t="Texas Primary — March 3, 2026">Texas Primary — March 3, 2026</div>
     <br>
-    <a class="cta" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a>
+    <a class="cta" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a>
     <div style="margin-top:12px" data-t="See a Sample Ballot"><a href="/sample" style="font-size:0.95rem;color:var(--text2)">See a Sample Ballot</a></div>
     <div class="features">
       <div data-t="5-minute interview learns your values"><span>✅</span> 5-minute interview learns your values</div>
@@ -866,7 +893,7 @@ function handleSampleBallot() {
       </div>
     </div>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <!-- ==================== REPUBLICAN BALLOT ==================== -->
     <div data-party="republican">
@@ -1341,7 +1368,7 @@ function handleSampleBallot() {
       <div style="font-size:32px;margin-bottom:8px">&#x1F4E3;</div>
       <div class="share-cta-title" data-t="Build Your Own Guide">Build Your Own Guide</div>
       <div class="share-cta-body" data-t="This sample shows what a personalized ballot looks like. Answer a few questions about your values and priorities, and Texas Votes will match you with candidates in your actual races.">This sample shows what a personalized ballot looks like. Answer a few questions about your values and priorities, and Texas Votes will match you with candidates in your actual races.</div>
-      <a class="btn btn-primary btn-inline" href="/app?start=1" data-t="Get Your Personalized Ballot">Get Your Personalized Ballot</a>
+      <a class="btn btn-primary btn-inline" href="/tx/app?start=1" data-t="Get Your Personalized Ballot">Get Your Personalized Ballot</a>
     </div>
 
     <!-- Footer -->
@@ -1515,7 +1542,7 @@ function handleHowItWorks() {
     <h1 data-t="How It Works">How It Works</h1>
     <p class="subtitle" data-t="Texas Votes is a free tool that helps you figure out which candidates on your ballot match your values. Here's how it works, in plain language.">Texas Votes is a free tool that helps you figure out which candidates on your ballot match your values. Here's how it works, in plain language.</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <h2 data-t="What Does This App Do?">What Does This App Do?</h2>
     <p data-t="Texas Votes asks you a few questions about what matters to you — things like education, public safety, the economy, or healthcare. Then it looks at the candidates running in your area and suggests which ones are the best fit based on your answers.">Texas Votes asks you a few questions about what matters to you — things like education, public safety, the economy, or healthcare. Then it looks at the candidates running in your area and suggests which ones are the best fit based on your answers.</p>
@@ -1650,7 +1677,7 @@ function handleNonpartisan() {
     <h1 data-t="Nonpartisan by Design">Nonpartisan by Design</h1>
     <p class="subtitle" data-t="Texas Votes matches candidates to your values, not your party. Every design decision is made to keep the experience fair for all voters.">Texas Votes matches candidates to your values, not your party. Every design decision is made to keep the experience fair for all voters — regardless of where you fall on the political spectrum.</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <h2 data-t="Randomized Candidate Order">Randomized Candidate Order</h2>
     <p data-t="Candidates and answer options are shuffled every time so position on screen never creates bias.">Candidates and answer options are shuffled every time so position on screen never creates bias.</p>
@@ -1920,7 +1947,7 @@ async function handleAuditPage(env) {
     <h1 style="margin-top:1rem" data-t="AI Audit">AI Audit</h1>
     <p class="subtitle" data-t="Texas Votes uses AI to generate personalized voting guides. To prove our process is fair and nonpartisan, we publish our complete methodology.">Texas Votes uses AI to generate personalized voting guides. To prove our process is fair and nonpartisan, we publish our complete methodology and have submitted it to four independent AI systems for bias review.</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <h2 style="margin-top:1.5rem" data-t="Independent AI Audit Scores">Independent AI Audit Scores</h2>
     <p data-t="We submitted our complete methodology to four independent AI systems. Each scored our process across five dimensions: partisan bias, factual accuracy, fairness of framing, balance of pros/cons, and transparency.">We submitted our complete methodology to four independent AI systems. Each scored our process across five dimensions: partisan bias, factual accuracy, fairness of framing, balance of pros/cons, and transparency.</p>
@@ -3212,7 +3239,7 @@ function handleSupport() {
     <h1 data-t="Support">Support</h1>
     <p class="subtitle" data-t="We're here to help.">We're here to help.</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <a class="email-btn" href="mailto:howdy@txvotes.app" data-t="Email Us">Email Us</a>
 
@@ -3327,7 +3354,7 @@ function handlePrivacyPolicy() {
     <h1 data-t="Privacy Policy">Privacy Policy</h1>
     <p class="updated" data-t="Last updated: February 22, 2026">Last updated: February 22, 2026</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <p data-t="Texas Votes is a free voting guide website for Texas elections. Your privacy matters — here's exactly what happens with your data.">Texas Votes (<a href="https://txvotes.app">txvotes.app</a>) is a free voting guide website for Texas elections. Your privacy matters — here's exactly what happens with your data.</p>
 
@@ -3487,7 +3514,7 @@ async function handleOpenSource(env) {
     <h1 data-t="Texas Votes is Open Source">Texas Votes is Open Source</h1>
     <p class="subtitle" data-t="This app is built transparently. Every line of code, every AI prompt, every design decision is public.">This app is built transparently. Every line of code, every AI prompt, every design decision is public. We believe voting tools should be accountable to the voters who use them.</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <h2 data-t="Why Open Source?">Why Open Source?</h2>
     <ul>
@@ -4178,7 +4205,7 @@ async function handleCandidateProfile(slug, env) {
       </div>
     </div>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     ${sections.join("\n    ")}
     ${dataUpdatedAt ? `<p style="margin-top:2rem;font-size:0.85rem;color:var(--text2)" data-t="Data last verified">Data last verified: ${new Date(dataUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${c.sources && c.sources.length ? ` &middot; ${c.sources.length} source${c.sources.length === 1 ? "" : "s"} cited` : ""}</p>` : ""}
@@ -4344,7 +4371,7 @@ async function handleCandidatesIndex(env) {
     <h1 style="margin-top:1rem" data-t="All Candidates">All Candidates</h1>
     <p class="subtitle" data-t="2026 Texas Primary Election — March 3, 2026">2026 Texas Primary Election — March 3, 2026</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     ${countyFilter}
 
@@ -4845,7 +4872,7 @@ async function handleStats(env) {
     <h1 data-t="Stats">Stats</h1>
     <p class="subtitle" data-t="Public usage statistics and transparency metrics.">Public usage statistics and transparency metrics.</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     ${heroCards}
     ${activityChart}
@@ -5286,7 +5313,7 @@ async function handleDataQuality(env) {
     <h1 data-t="Data Quality Dashboard">Data Quality Dashboard</h1>
     <p class="subtitle" data-t="Live transparency report on the completeness and freshness of our election data.">Live transparency report on the completeness and freshness of our election data. Updated daily via automated research pipeline.</p>
 
-    <div class="cta-banner"><a class="cta-btn" href="/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
+    <div class="cta-banner"><a class="cta-btn" href="/tx/app?start=1" data-t="Build My Voting Guide">Build My Voting Guide</a><p class="cta-sub" data-t="5-minute personalized ballot">5-minute personalized ballot</p></div>
 
     <div class="dq-checker-hero">
       <div class="dq-checker-title" data-t="Check Your County">Check Your County</div>
@@ -5600,7 +5627,7 @@ function handleAdmin() {
       <a href="/admin/coverage" class="stat-card"><h3>Coverage</h3><p>Candidate completeness, tone variants, county data</p></a>
       <a href="/admin/analytics" class="stat-card"><h3>Analytics</h3><p>Usage events, interview funnel, guide timing</p></a>
       <a href="/admin/errors" class="stat-card"><h3>AI Errors</h3><p>Error log, failure categories, daily breakdown</p></a>
-      <a href="/app#/llm-experiment" class="stat-card"><h3>LLM Compare</h3><p>Compare guide output across LLM providers side-by-side</p></a>
+      <a href="/tx/app#/llm-experiment" class="stat-card"><h3>LLM Compare</h3><p>Compare guide output across LLM providers side-by-side</p></a>
       <a href="/admin/llm-benchmark" class="stat-card"><h3>LLM Benchmark</h3><p>Automated 8-model experiment: scoring, consensus, speed, cost rankings</p></a>
     </div>
 
@@ -7333,42 +7360,54 @@ export default {
       }
       // Vanity tone entry points — clear data and start fresh with tone preset
       if (url.pathname === "/cowboy") {
-        return handlePWA_Clear("/app?tone=7", "Texas Votes \u2014 Yeehaw Edition", "Get your personalized Texas voting guide, cowboy style.", "https://txvotes.app/og-image-cowboy.png");
+        return handlePWA_Clear("/tx/app?tone=7", "Texas Votes \u2014 Yeehaw Edition", "Get your personalized Texas voting guide, cowboy style.", "https://txvotes.app/og-image-cowboy.png");
       }
       // Vanity LLM entry points
       if (url.pathname === "/gemini") {
-        return handlePWA_Clear("/app?gemini", "Texas Votes (Powered by Gemini)");
+        return handlePWA_Clear("/tx/app?gemini", "Texas Votes (Powered by Gemini)");
       }
       if (url.pathname === "/grok") {
-        return handlePWA_Clear("/app?grok", "Texas Votes (Powered by Grok)");
+        return handlePWA_Clear("/tx/app?grok", "Texas Votes (Powered by Grok)");
       }
       if (url.pathname === "/chatgpt") {
-        return handlePWA_Clear("/app?chatgpt", "Texas Votes (Powered by ChatGPT)");
+        return handlePWA_Clear("/tx/app?chatgpt", "Texas Votes (Powered by ChatGPT)");
       }
-      // PWA routes (no auth)
-      if (url.pathname === "/app/clear" || url.pathname === "/clear") {
+      // Backward compat: /app* -> /tx/app* (301 permanent redirect)
+      if (url.pathname === "/app" || url.pathname.startsWith("/app/") || url.pathname === "/clear") {
+        const newPath = url.pathname === "/clear" ? "/tx/app/clear" : "/tx" + url.pathname;
+        const redirectUrl = new URL(newPath, url.origin);
+        redirectUrl.search = url.search;
+        redirectUrl.hash = url.hash;
+        return new Response(null, { status: 301, headers: { Location: redirectUrl.pathname + redirectUrl.search + redirectUrl.hash } });
+      }
+      // State-prefixed PWA routes: /tx/app*, /dc/app*
+      if (url.pathname === "/tx/app/clear") {
         return handlePWA_Clear("/", "Clear Data \u2014 Texas Votes", "Reset your Texas Votes data and start fresh.", "https://txvotes.app/og-image-clear.png");
       }
-      if (url.pathname === "/app") {
-        return handlePWA();
+      if (url.pathname === "/tx/app") {
+        return handlePWA("tx");
       }
-      if (url.pathname === "/app/sw.js") {
-        return handlePWA_SW();
+      if (url.pathname === "/tx/app/sw.js") {
+        return handlePWA_SW("tx");
       }
-      if (url.pathname === "/app/manifest.json") {
-        return handlePWA_Manifest();
+      if (url.pathname === "/tx/app/manifest.json") {
+        return handlePWA_Manifest("tx");
       }
-      if (url.pathname === "/app/api/manifest") {
+      if (url.pathname === "/tx/app/api/manifest") {
         return handleManifest(env);
       }
-      if (url.pathname === "/app/api/ballot") {
+      if (url.pathname === "/tx/app/api/ballot") {
         return handleBallotFetch(request, env);
       }
-      if (url.pathname === "/app/api/county-info") {
+      if (url.pathname === "/tx/app/api/county-info") {
         return handleCountyInfo(request, env);
       }
-      if (url.pathname === "/app/api/polymarket") {
+      if (url.pathname === "/tx/app/api/polymarket") {
         return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
+      }
+      // DC stub — coming soon
+      if (url.pathname === "/dc/app" || url.pathname.startsWith("/dc/app/")) {
+        return handleDCComingSoon();
       }
       // Health check endpoint (public, no auth)
       if (url.pathname === "/health") {
@@ -7378,7 +7417,7 @@ export default {
       if (url.pathname === "/llm-experiment") {
         const deny = checkAdminAuth(request, env);
         if (deny) return deny;
-        return new Response(null, { status: 302, headers: { Location: "/app#/llm-experiment" } });
+        return new Response(null, { status: 302, headers: { Location: "/tx/app#/llm-experiment" } });
       }
       // Admin hub (GET with Basic/Bearer auth)
       if (url.pathname === "/admin") {
@@ -7467,8 +7506,16 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    // CORS preflight for PWA API routes
-    if (request.method === "OPTIONS" && url.pathname.startsWith("/app/api/")) {
+    // Backward compat: POST/OPTIONS to /app/api/* -> 301 redirect to /tx/app/api/*
+    if ((request.method === "OPTIONS" || request.method === "POST") && url.pathname.startsWith("/app/api/")) {
+      const newPath = "/tx" + url.pathname;
+      const redirectUrl = new URL(newPath, url.origin);
+      redirectUrl.search = url.search;
+      return new Response(null, { status: 301, headers: { Location: redirectUrl.pathname + redirectUrl.search } });
+    }
+
+    // CORS preflight for PWA API routes (state-prefixed)
+    if (request.method === "OPTIONS" && (url.pathname.startsWith("/tx/app/api/") || url.pathname.startsWith("/dc/app/api/"))) {
       return new Response(null, {
         status: 204,
         headers: {
@@ -7485,36 +7532,36 @@ export default {
     }
 
     // Analytics event endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/app/api/ev") {
+    if (url.pathname === "/tx/app/api/ev") {
       return handleAnalyticsEvent(request, env);
     }
 
     // Override feedback endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/app/api/override-feedback") {
+    if (url.pathname === "/tx/app/api/override-feedback") {
       return handleOverrideFeedback(request, env);
     }
 
     // PWA POST routes (no auth — server-side guide gen protects secrets)
     // Rate-limit guide and summary endpoints to prevent API proxy abuse
-    if (url.pathname === "/app/api/guide") {
+    if (url.pathname === "/tx/app/api/guide") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_Guide(request, env);
     }
-    if (url.pathname === "/app/api/guide-stream") {
+    if (url.pathname === "/tx/app/api/guide-stream") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_GuideStream(request, env);
     }
-    if (url.pathname === "/app/api/summary") {
+    if (url.pathname === "/tx/app/api/summary") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "summary", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_Summary(request, env);
     }
-    if (url.pathname === "/app/api/districts") {
+    if (url.pathname === "/tx/app/api/districts") {
       return handleDistricts(request, env);
     }
 

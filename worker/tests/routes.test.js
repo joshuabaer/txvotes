@@ -269,7 +269,7 @@ describe("Static pages in index.js source", () => {
   it("landing page contains essential elements", () => {
     expect(indexSrc).toContain("Texas Votes");
     expect(indexSrc).toContain("Build My Voting Guide");
-    expect(indexSrc).toContain("/app?start=1");
+    expect(indexSrc).toContain("/tx/app?start=1");
   });
 
   it("nonpartisan page contains key sections", () => {
@@ -347,7 +347,7 @@ describe("Static pages in index.js source", () => {
   });
 
   it("handleDistricts route exists", () => {
-    expect(indexSrc).toContain("/app/api/districts");
+    expect(indexSrc).toContain("/tx/app/api/districts");
     expect(indexSrc).toContain("handleDistricts");
   });
 
@@ -1022,7 +1022,7 @@ describe("Admin hub LLM Experiment link", () => {
       indexSrc.indexOf("function handleAdmin()") + 3000
     );
     expect(adminBlock).toContain("LLM Compare");
-    expect(adminBlock).toContain('/app#/llm-experiment"');
+    expect(adminBlock).toContain('/tx/app#/llm-experiment"');
   });
 
   it("LLM Experiment card has descriptive text", () => {
@@ -1050,14 +1050,80 @@ describe("Admin hub LLM Experiment link", () => {
     expect(adminBlock).toContain('/admin/llm-benchmark"');
   });
 
-  it("/llm-experiment route redirects to /app#/llm-experiment", () => {
+  it("/llm-experiment route redirects to /tx/app#/llm-experiment", () => {
     expect(indexSrc).toContain('url.pathname === "/llm-experiment"');
-    expect(indexSrc).toContain('Location: "/app#/llm-experiment"');
+    expect(indexSrc).toContain('Location: "/tx/app#/llm-experiment"');
   });
 
   it("/llm-experiment route requires admin auth", () => {
     const routeIdx = indexSrc.indexOf('url.pathname === "/llm-experiment"');
     const nextLines = indexSrc.slice(routeIdx, routeIdx + 200);
     expect(nextLines).toContain("checkAdminAuth");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-state routing infrastructure (Phase 1)
+// ---------------------------------------------------------------------------
+describe("Multi-state routing infrastructure", () => {
+  it("imports STATE_CONFIG from state-config.js", () => {
+    expect(indexSrc).toContain('from "./state-config.js"');
+    expect(indexSrc).toContain("STATE_CONFIG");
+  });
+
+  it("has backward-compat redirect for /app -> /tx/app", () => {
+    // The routing block should handle /app and /app/* redirects
+    expect(indexSrc).toContain('url.pathname === "/app"');
+    expect(indexSrc).toContain('url.pathname.startsWith("/app/")');
+    expect(indexSrc).toContain("status: 301");
+  });
+
+  it("has /tx/app route for Texas PWA", () => {
+    expect(indexSrc).toContain('url.pathname === "/tx/app"');
+    expect(indexSrc).toContain('handlePWA("tx")');
+  });
+
+  it("has /tx/app/sw.js route for Texas service worker", () => {
+    expect(indexSrc).toContain('url.pathname === "/tx/app/sw.js"');
+    expect(indexSrc).toContain('handlePWA_SW("tx")');
+  });
+
+  it("has /tx/app/manifest.json route for Texas manifest", () => {
+    expect(indexSrc).toContain('url.pathname === "/tx/app/manifest.json"');
+    expect(indexSrc).toContain('handlePWA_Manifest("tx")');
+  });
+
+  it("has /tx/app/api/* routes for Texas API", () => {
+    expect(indexSrc).toContain('url.pathname === "/tx/app/api/ballot"');
+    expect(indexSrc).toContain('url.pathname === "/tx/app/api/guide"');
+    expect(indexSrc).toContain('url.pathname === "/tx/app/api/guide-stream"');
+    expect(indexSrc).toContain('url.pathname === "/tx/app/api/summary"');
+    expect(indexSrc).toContain('url.pathname === "/tx/app/api/districts"');
+    expect(indexSrc).toContain('url.pathname === "/tx/app/api/ev"');
+  });
+
+  it("has /dc/app route for DC stub", () => {
+    expect(indexSrc).toContain('url.pathname === "/dc/app"');
+    expect(indexSrc).toContain("handleDCComingSoon");
+  });
+
+  it("vanity routes redirect to /tx/app", () => {
+    expect(indexSrc).toContain('"/tx/app?tone=7"');
+    expect(indexSrc).toContain('"/tx/app?gemini"');
+    expect(indexSrc).toContain('"/tx/app?grok"');
+    expect(indexSrc).toContain('"/tx/app?chatgpt"');
+  });
+
+  it("CTA links point to /tx/app", () => {
+    expect(indexSrc).toContain('href="/tx/app?start=1"');
+    expect(indexSrc).not.toContain('href="/app?start=1"');
+  });
+
+  it("CORS preflight handles /tx/app/api/ paths", () => {
+    expect(indexSrc).toContain('url.pathname.startsWith("/tx/app/api/")');
+  });
+
+  it("backward-compat redirect for /clear -> /tx/app/clear", () => {
+    expect(indexSrc).toContain('url.pathname === "/clear"');
   });
 });
