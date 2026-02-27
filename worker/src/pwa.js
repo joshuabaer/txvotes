@@ -444,7 +444,7 @@ var CSS = [
   ".report-card textarea:focus{outline:none;border-color:var(--blue)}",
   ".report-card .report-actions{display:flex;gap:10px;margin-top:16px}",
   ".report-card .report-actions button{flex:1;padding:10px;border-radius:var(--rs);font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:inherit}",
-  ".report-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer;border:none;background:none;padding:4px 0;margin-top:6px;font-family:inherit;transition:color .2s}",
+  ".report-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer;border:none;background:none;padding:4px 0;font-family:inherit;transition:color .2s}",
   ".report-link:hover{color:var(--blue)}",
 
   // Toast notification
@@ -1369,7 +1369,7 @@ var APP_JS = [
     "'AI recommended':'La IA recomend\\u00F3'," +
     "'but you chose':'pero elegiste'," +
     "'Restore AI pick':'Restaurar elecci\\u00F3n de IA'," +
-    "'Choose this candidate':'Elegir este candidato'," +
+    "'Choose this candidate instead':'Elegir este candidato en su lugar'," +
     "'Why did you change this?':'\\u00BFPor qu\\u00E9 cambiaste esto?'," +
     "'What made you choose differently? (optional, anonymous)':'\\u00BFQu\\u00E9 te hizo elegir diferente? (opcional, an\\u00F3nimo)'," +
     "'Submit feedback':'Enviar comentario'," +
@@ -2662,13 +2662,15 @@ var APP_JS = [
         "h+='</div>';" +
         "h+='</div>';" +
       "}" +
+      "h+='<div style=\"display:flex;justify-content:space-between;align-items:center\">';" +
       "h+='<button class=\"expand-toggle\" data-action=\"toggle-expand\" data-id=\"'+eid+'\" aria-expanded=\"'+!!isOpen+'\">'+(isOpen?t('Show Less'):t('Show Details'))+'</button>';" +
       "h+='<button class=\"report-link\" data-action=\"report-issue\" data-candidate=\"'+esc(c.name)+'\" data-race=\"'+esc(race.office+(race.district?' \\u2014 '+race.district:''))+'\">" +
         "&#9873; '+t('Flag this info')+'" +
       "</button>';" +
-      // "Choose this candidate" button (only if multiple candidates and not already their pick)
-      "if(candidates.length>1&&!_isUserPick){" +
-        "h+='<button class=\"btn btn-secondary\" style=\"width:100%;margin-top:8px;font-size:13px;padding:8px 14px\" data-action=\"override-candidate\" data-race-idx=\"'+idx+'\" data-candidate=\"'+esc(c.name)+'\" data-t=\"Choose this candidate\">'+t('Choose this candidate')+'</button>'" +
+      "h+='</div>';" +
+      // "Choose this candidate instead" button (only if multiple candidates and not already their pick)
+      "if(candidates.length>1&&!_isUserPick&&!c.isRecommended){" +
+        "h+='<button class=\"btn btn-secondary\" style=\"width:100%;margin-top:8px;font-size:13px;padding:8px 14px\" data-action=\"override-candidate\" data-race-idx=\"'+idx+'\" data-candidate=\"'+esc(c.name)+'\" data-t=\"Choose this candidate instead\">'+t('Choose this candidate instead')+'</button>'" +
       "}" +
       "h+='</div>'" +
     "}" +

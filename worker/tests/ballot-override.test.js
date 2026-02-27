@@ -249,14 +249,14 @@ describe("Race detail override UI — source verification", () => {
     expect(APP_JS).toContain('data-t="Restore AI pick"');
   });
 
-  it("shows 'Choose this candidate' button on non-selected candidates", () => {
+  it("shows 'Choose this candidate instead' button on non-selected candidates", () => {
     expect(APP_JS).toContain('data-action="override-candidate"');
-    expect(APP_JS).toContain("Choose this candidate");
-    expect(APP_JS).toContain('data-t="Choose this candidate"');
+    expect(APP_JS).toContain("Choose this candidate instead");
+    expect(APP_JS).toContain('data-t="Choose this candidate instead"');
   });
 
-  it("does not show 'Choose this candidate' on user's current pick", () => {
-    expect(APP_JS).toContain("if(candidates.length>1&&!_isUserPick)");
+  it("does not show 'Choose this candidate instead' on user's current pick or AI-recommended candidate", () => {
+    expect(APP_JS).toContain("if(candidates.length>1&&!_isUserPick&&!c.isRecommended)");
   });
 
   it("shows 'Your Pick' badge on the user's chosen candidate", () => {
@@ -398,7 +398,7 @@ describe("Override Spanish translations — source verification", () => {
     ["AI recommended", "La IA recomend"],
     ["but you chose", "pero elegiste"],
     ["Restore AI pick", "Restaurar elecci"],
-    ["Choose this candidate", "Elegir este candidato"],
+    ["Choose this candidate instead", "Elegir este candidato en su lugar"],
     ["Why did you change this?", "Por qu"],
     ["Submit feedback", "Enviar comentario"],
     ["Skip", "Omitir"],
