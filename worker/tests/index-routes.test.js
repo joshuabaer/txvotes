@@ -436,42 +436,50 @@ describe("GET /health", () => {
 });
 
 // ===========================================================================
-// 10. DC Coming Soon page
+// 10. DC PWA routes
 // ===========================================================================
-describe("DC Coming Soon page", () => {
-  it("GET /dc/app returns 200", async () => {
+describe("DC PWA routes", () => {
+  it("GET /dc/app returns 200 with DC Votes PWA", async () => {
     const res = await get("/dc/app");
-    expect(res.status).toBe(200);
-  });
-
-  it("contains DC Votes heading", async () => {
-    const res = await get("/dc/app");
-    const body = await res.text();
-    expect(body).toContain("DC Votes");
-  });
-
-  it("contains DC election name", async () => {
-    const res = await get("/dc/app");
-    const body = await res.text();
-    expect(body).toContain("DC Primary Election");
-  });
-
-  it("contains June 16 date", async () => {
-    const res = await get("/dc/app");
-    const body = await res.text();
-    expect(body).toContain("June 16, 2026");
-  });
-
-  it("GET /dc/app/api/anything also shows coming soon", async () => {
-    const res = await get("/dc/app/api/ballot?party=democrat");
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("DC Votes");
+    expect(body).toContain('_STATE="dc"');
+    expect(body).toContain('_APP_BASE="/dc/app"');
   });
 
-  it("has public cache control", async () => {
+  it("contains DC branding in title and meta tags", async () => {
     const res = await get("/dc/app");
-    expect(res.headers.get("Cache-Control")).toContain("public");
+    const body = await res.text();
+    expect(body).toContain("<title>DC Votes</title>");
+    expect(body).toContain("Washington DC elections");
+  });
+
+  it("rewrites API paths to /dc/app/api/", async () => {
+    const res = await get("/dc/app");
+    const body = await res.text();
+    expect(body).toContain("/dc/app/api/");
+    expect(body).not.toContain('"/app/api/');
+  });
+
+  it("GET /dc/app/sw.js returns service worker", async () => {
+    const res = await get("/dc/app/sw.js");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("javascript");
+  });
+
+  it("GET /dc/app/manifest.json returns manifest with DC branding", async () => {
+    const res = await get("/dc/app/manifest.json");
+    expect(res.status).toBe(200);
+    const manifest = await res.json();
+    expect(manifest.name).toBe("DC Votes");
+    expect(manifest.short_name).toBe("DC Votes");
+    expect(manifest.start_url).toBe("/dc/app");
+  });
+
+  it("has no-cache control for PWA", async () => {
+    const res = await get("/dc/app");
+    expect(res.headers.get("Cache-Control")).toBe("no-cache");
   });
 });
 

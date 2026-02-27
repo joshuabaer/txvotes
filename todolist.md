@@ -1,4 +1,13 @@
-# Texas Votes TODO List
+# US Votes TODO List
+
+## Display Rules
+
+When asked to show the todolist:
+1. **Verify each item is up to date** before displaying — check live site, code, or recent work to confirm status
+2. **Show only open items** (skip completed/checked items)
+3. **Group items logically** by category (Data, Features, DC Expansion, Security, Infrastructure, etc.)
+4. **Number each item** using the line number from this file (e.g., L42) so the user can say "do item L42"
+5. **Keep descriptions concise** — one line per item when displaying
 
 ---
 
@@ -32,7 +41,7 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 - [ ] Seed precinct maps for remaining top 30 counties — 10/30 done; ran script for remaining 20 but all returned empty (ZIP-to-commissioner-precinct data not available via web search for smaller counties). May need manual research or GIS data sources.
 
 #### County Info
-- [ ] Enrich county_info for remaining ~104 counties — elections websites, phone numbers, vote center status for smallest/rural counties. 150/254 now have real data, ~104 still have template info
+- [ ] Enrich county_info for remaining ~11 counties — elections websites, phone numbers, vote center status. 243/254 now have voting info, ~11 still missing
   - Get list of under-enriched counties from coverage page, then bulk seed:
     ```
     curl -s -u "admin:$ADMIN_SECRET" "https://txvotes.app/admin/coverage" \
@@ -64,7 +73,7 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 - [x] Add Related Links sections to transparency pages — add "Nonpartisan by Design" link to bottom of Data Quality page, and replicate the Data Quality page's Related Links section on AI Audit, Nonpartisan, and Open Source pages (cross-linking between all transparency pages)
 - [x] Create new txvotes repo in GitHub — fresh copy of the code without all the dev history
 - [ ] **Plan Colorado expansion** — Enter planning mode and figure out how to expand the platform to Colorado. Research CO election structure, counties, ballot format, data sources, and what needs to change in the codebase (multi-state routing, KV key namespacing, branding, etc.). Write the plan to `docs/plans/plan_colorado_expansion.md`.
-- [ ] **Plan Washington DC primaries** — Enter planning mode and figure out how to support DC primaries. Research DC election structure, wards, ANCs, ballot format, data sources, and codebase changes needed (DC has no counties, unique local government structure). Write the plan to `docs/plans/plan_dc_primaries.md`.
+- [x] **Plan Washington DC primaries** — Plan written at `docs/plans/plan_dc_primaries.md`. Phase 1 (multi-state infrastructure) implemented: STATE_CONFIG, `/tx/app` and `/dc/app` routing, backward-compat redirects from `/app`, DC "Coming Soon" stub page. See DC Expansion section below for remaining phases.
 - [x] Show website traffic stats publicly — `/stats` page with usage metrics, data quality scores, AI fairness audit results, activity charts. Deployed.
 - [x] Design a public stats page — `/stats` shows guides generated, tone/language breakdowns, sharing stats, audit scores, candidate coverage. 15-min KV cache. Spanish translations. Deployed.
 - [x] Fix happy-dom test errors — `interview-flow.test.js` and `interview-edge-cases.test.js` fail with "Cannot find package 'happy-dom'" when running via `npx vitest`. Need to install happy-dom as a dev dependency or fix vitest config.
@@ -277,10 +286,53 @@ _From memory management review (Feb 22). 13 issues found across localStorage, se
 - [x] Cap update and audit log retention — both updater.js and audit-runner.js now delete logs older than 14 days after writing new ones
 - [x] Expand manifest with election-cycle metadata — added electionCycle, electionDate, schemaVersion fields (backward compatible)
 
+### DC Expansion
+_Phase 1 (multi-state infrastructure) complete. Plan at `docs/plans/plan_dc_primaries.md`. Target: mid-May 2026 (4 weeks before June 16 DC primary)._
+
+#### Phase 2: DC Address Resolution
+- [x] **Integrate DC MAR API for address-to-district mapping** — Implemented in dc-mar.js: `resolveDCAddress()` with KV caching (7-day TTL), Census geocoder fallback, `handleDCDistricts()` endpoint at `/dc/app/api/districts`. 51 tests in dc-mar.test.js.
+- [ ] **Register for MAR 2 API key** — Go to `https://developers.data.dc.gov/Identity/Account/Register`, create account, copy API key, then run `cd worker && npx wrangler secret put DC_MAR_API_KEY -c wrangler.txvotes.toml`. Key is free. Needed as backup when legacy MAR eventually shuts down.
+- [x] **Decide on DC MAR API key management** — Legacy MAR API (citizenatlas.dc.gov) needs no key. MAR 2 API (developers.data.dc.gov) requires free registration — register at `https://developers.data.dc.gov/Identity/Account/Register`, store key as Wrangler secret `DC_MAR_API_KEY`. Use legacy MAR for now, MAR 2 as backup (legacy was announced for shutdown June 2025 but still working as of Feb 2026). ArcGIS REST (maps2.dcgis.dc.gov) also available as no-auth fallback but requires 4 separate spatial queries.
+
+#### Phase 3: DC Ballot Data Pipeline
+- [ ] **Seed DC citywide ballot data** — Create `dc:ballot:citywide:{party}_primary_2026` KV entries for Mayor, AG, Council Chair, Council At-Large, US House Delegate, Shadow Senator, Shadow Representative.
+- [ ] **Seed DC ward-specific ballot data** — Create `dc:ballot:ward:{ward}:{party}_primary_2026` KV entries for Council Ward seats and State Board of Education (wards 1, 3, 5, 7 in 2026).
+- [ ] **Decide whether to include ANC commissioner races** — ~296 SMDs, all seats up. Very hyper-local, many uncontested. May be too granular for Phase 1 launch.
+- [x] **Research DC candidate data sources** — No single source has everything; must aggregate. **Tier 1 (structured):** DCBOE candidate list PDFs (official, after March 18 filing deadline), OCF eFiling CSV/XML downloads (fundraising, active candidates), OpenFEC API (U.S. Delegate race, free key), OpenANC CSV (ANC commissioners), Open Data DC ArcGIS (ward/precinct boundaries). **Tier 2 (positions):** GGWash questionnaire responses, LWV-DC/VOTE411, RepresentDC tracker, Politics1.com (best free candidate list, HTML). **Tier 3 (AI-enrichable):** campaign websites, local media (DCist, WaPo, 51st.news). **Note:** Semi-open primaries not funded — primaries remain closed. RCV (rank up to 5) is happening. Ballotpedia API exists but likely requires paid access. Google Civic Info API may populate closer to election.
+
+#### Phase 4: Interview Flow & PWA
+- [ ] **Add state selector to interview flow** — First-visit screen to choose Texas or DC before starting the interview. Persist selection in localStorage. _Note: state selector + DC branding agent completed this work but worktree was lost. DC PWA routes partially recovered (index.js). PWA state-aware variables and 51 state-selector tests need to be re-implemented._
+- [ ] **Add DC-specific interview issues** — DC Statehood, Metro/WMATA, Government Accountability, Home Rule, Housing (DC-specific), Public Safety, Education (DCPS).
+- [ ] **Support 4-party selection for DC** — Democrat, Republican, Statehood Green, Libertarian + Independent option. DC is ~76% Democrat, ~16% Independent.
+- [ ] **Default address form to DC/Washington when state=dc** — Pre-fill state and city fields for DC users. _Note: partial work recovered from stash — DC PWA routes added to index.js, but pwa.js state-aware variables need re-implementation._
+
+#### Phase 5: Guide Generation for DC
+- [ ] **Design RCV recommendation schema** — DC uses ranked-choice voting (Initiative 83). Guide responses need ranked recommendations (rank up to 5) instead of single picks. New JSON schema for RCV races.
+- [ ] **Decide on RCV ranking depth** — Full 5 rankings or top 2-3? Deeper rankings need more research per candidate but provide more value.
+- [ ] **Build RCV-aware prompt templates** — Modify guide generation prompts to explain RCV strategy (e.g., "rank your top 3 in order of preference").
+- [ ] **Add RCV UI to ballot and cheat sheet** — Show ranked picks (#1, #2, #3) instead of single recommendation. Cheat sheet needs RCV-friendly layout.
+
+#### Phase 6: Routing, Branding & Polish
+- [ ] **Replace DC "Coming Soon" page with live PWA** — DC PWA routes added to index.js (partial recovery from stash). Still needs ballot data, guide generation, and pwa.js state-aware variables before it's fully functional.
+- [ ] **Create DC-specific OG images and branding** — DC flag colors, DC-specific social sharing images, meta tags.
+- [x] **Register dcvotes.app or usvotes.app** — Both registered. DC will launch as **dcvotes.app**. usvotes.app reserved for future national umbrella.
+- [ ] **Add DC to landing page** — State selector or automatic detection on the main txvotes.app landing page.
+- [ ] **Update README and CLAUDE.md for multi-state architecture** — Document new state-config.js, /tx/ and /dc/ routing, KV namespacing.
+
+#### Phase 7: Testing & Launch
+- [ ] **Full QA pass on DC flow** — End-to-end testing of DC interview, address resolution, guide generation, ballot display, cheat sheet, RCV UI.
+- [ ] **Soft launch DC** — Enable /dc/app with real data, invite DC voters for feedback before public announcement.
+- [ ] **Migrate TX KV keys to `tx:` prefix** — Currently TX keys are unprefixed for backward compat. Plan and execute migration to `tx:` prefix for consistency.
+
+### Diagnostics & Data Quality
+- [ ] **Fix all outstanding diagnostic issues** — Review /data-quality, /admin/coverage, /api/balance-check, and /health endpoints on the live site. Identify and fix any warnings, errors, stale data, or failing checks. Ensure all diagnostic pages render correctly and report healthy status.
+
 ### Infrastructure
 
 - [ ] Replace atxvotes-api worker with Cloudflare redirect rule — atxvotes.app only does 301 redirects to txvotes.app now (cron moved to usvotes-api). Replace the worker with a Cloudflare Bulk Redirect rule to eliminate the redundant worker entirely.
 - [ ] Rename txvotes-api worker to usvotes-api in Cloudflare dashboard — config already uses `usvotes-api` but deploying requires the old name since `txvotes-api` owns the routes. Unassign routes from `txvotes-api` in the dashboard, then deploy with `usvotes-api` name. Temporarily reverted in wrangler.txvotes.toml to keep deploys working.
+- [ ] **Set up tx.usvotes.app and dc.usvotes.app subdomains** — Configure Cloudflare DNS for usvotes.app with `tx` and `dc` subdomains pointing to the usvotes-api worker. Add route patterns in wrangler.txvotes.toml for `tx.usvotes.app/*` and `dc.usvotes.app/*`. Should work identically to txvotes.app and dcvotes.app respectively.
+- [ ] **Fix happy-dom missing in worktrees** — Worktrees created by agents lack node_modules, causing happy-dom test failures (interview-flow and interview-edge-cases tests). Either install deps in worktree setup, or add happy-dom as a dev dependency at root level.
 
 ### Collaboration Readiness
 

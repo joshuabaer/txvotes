@@ -3,13 +3,18 @@
 
 export function handlePWA(stateCode = 'tx') {
   const base = '/' + stateCode + '/app';
+  const stateTitle = stateCode === 'dc' ? 'DC Votes' : 'Texas Votes';
+  const stateDesc = stateCode === 'dc' ? 'Washington DC' : 'Texas';
   // Inject state config and rewrite /app paths to state-prefixed paths
   const stateHtml = APP_HTML
     .replace('<script>', '<script>var _STATE="' + stateCode + '";var _APP_BASE="' + base + '";')
     .replaceAll('/app/api/', base + '/api/')
     .replaceAll('/app/sw.js', base + '/sw.js')
     .replaceAll('href="/app/manifest.json"', 'href="' + base + '/manifest.json"')
-    .replaceAll('content="https://txvotes.app/app"', 'content="https://txvotes.app' + base + '"');
+    .replaceAll('content="https://txvotes.app/app"', 'content="https://txvotes.app' + base + '"')
+    .replaceAll('<title>Texas Votes</title>', '<title>' + stateTitle + '</title>')
+    .replaceAll('content="Texas Votes', 'content="' + stateTitle)
+    .replaceAll('Texas elections', stateDesc + ' elections');
   return new Response(stateHtml, {
     headers: {
       "Content-Type": "text/html;charset=utf-8",
@@ -87,8 +92,15 @@ export function handlePWA_Clear(redirectUrl = '/', title = 'Texas Votes', descri
 
 export function handlePWA_Manifest(stateCode = 'tx') {
   const base = '/' + stateCode + '/app';
-  // Rewrite start_url to state-prefixed path
-  const manifest = MANIFEST.replace('"/app"', '"' + base + '"');
+  const stateTitle = stateCode === 'dc' ? 'DC Votes' : 'Texas Votes';
+  const stateShort = stateCode === 'dc' ? 'DC Votes' : 'TX Votes';
+  const stateDesc = stateCode === 'dc' ? 'Washington DC' : 'Texas';
+  // Rewrite start_url and names to state-prefixed path
+  const manifest = MANIFEST
+    .replace('"/app"', '"' + base + '"')
+    .replace('"Texas Votes"', '"' + stateTitle + '"')
+    .replace('"TX Votes"', '"' + stateShort + '"')
+    .replace('Texas elections', stateDesc + ' elections');
   return new Response(manifest, {
     headers: {
       "Content-Type": "application/manifest+json",
@@ -1390,7 +1402,26 @@ var APP_JS = [
     "'Skip':'Omitir'," +
     "'This feedback is anonymous and helps improve recommendations for everyone.':'Este comentario es an\\u00F3nimo y ayuda a mejorar las recomendaciones para todos.'," +
     "'Feedback sent':'Comentario enviado'," +
-    "'your pick':'tu elecci\\u00F3n'" +
+    "'your pick':'tu elecci\\u00F3n'," +
+    // DC / multi-state translations
+    "'DC Primary \\u2014 June 16, 2026':'Primaria de DC \\u2014 16 de junio, 2026'," +
+    "'Tuesday, June 16, 2026':'Martes, 16 de junio, 2026'," +
+    "'June 16, 2026':'16 de junio, 2026'," +
+    "'Closed Primary:':'Primaria cerrada:'," +
+    "'DC has closed primaries \\u2014 you must be registered with a party to vote in its primary.':'DC tiene primarias cerradas \\u2014 debes estar registrado en un partido para votar en su primaria.'," +
+    "'DC does not require photo ID to vote. You may be asked to verify your name and address.':'DC no requiere identificaci\\u00F3n con foto para votar. Es posible que te pidan verificar tu nombre y direcci\\u00F3n.'," +
+    "'First-time voters who registered by mail may need to show ID. Accepted forms include a photo ID, utility bill, bank statement, or government document with your name and address.':'Los votantes primerizos que se registraron por correo podr\\u00EDan necesitar mostrar identificaci\\u00F3n. Se aceptan identificaci\\u00F3n con foto, factura de servicios, estado de cuenta bancaria o documento gubernamental con nombre y direcci\\u00F3n.'," +
+    "'Your personalized voting guide for Washington DC elections.':'Tu gu\\u00EDa personalizada de votaci\\u00F3n para las elecciones de Washington DC.'," +
+    "'Vote at any early voting location in DC.':'Vota en cualquier lugar de votaci\\u00F3n anticipada en DC.'," +
+    "'Early voting hours vary. Contact the DC Board of Elections for specific hours and locations.':'Los horarios de votaci\\u00F3n anticipada var\\u00EDan. Contacta la Junta de Elecciones de DC para horarios y ubicaciones espec\\u00EDficas.'," +
+    "'League of Women Voters DC':'Liga de Mujeres Votantes DC'," +
+    "'State info':'Info estatal'," +
+    "'The primary is over. Your ballot data is from the primary election.':'La primaria termin\\u00F3. Tu informaci\\u00F3n de boleta es de la elecci\\u00F3n primaria.'," +
+    "'Built with':'Hecho con'," +
+    "'so your friends and family can get a personalized voting guide too.':'para que tus amigos y familia tambi\\u00E9n obtengan una gu\\u00EDa personalizada.'," +
+    "'Now help 3 friends do the same.':'Ahora ayuda a 3 amigos a hacer lo mismo.'," +
+    "'with someone who needs help deciding.':'con alguien que necesite ayuda para decidir.'," +
+    "'My':'Mi'" +
   "};",
   "function t(s){return LANG==='es'&&TR[s]||s}",
 
@@ -1567,13 +1598,23 @@ var APP_JS = [
     "};",
 
   // ============ STATE ============
+  // State code from URL injection (set by handlePWA); persisted in localStorage
+  "var _stateCode=(typeof _STATE!=='undefined'?_STATE:'tx').toLowerCase();",
+  "try{localStorage.setItem('tx_votes_state',_stateCode)}catch(e){}",
+  "var _stateAbbr=_stateCode==='dc'?'DC':'TX';",
+  "var _stateName=_stateCode==='dc'?'DC':'Texas';",
+  "var _stateFullName=_stateCode==='dc'?'Washington DC':'Texas';",
+  "var _defaultCity=_stateCode==='dc'?'Washington':'';",
+  "var _defaultParty=_stateCode==='dc'?'democrat':'republican';",
+  "function _stateLabel(){return _stateCode==='dc'?'DC Votes':'Texas Votes'}",
   "var S={" +
     "phase:0,issues:[],_pickedIssues:0,spectrum:null,policyViews:{},qualities:[],_pickedQuals:0,freeform:''," +
-    "address:{street:'',city:'',state:'TX',zip:''}," +
+    "stateCode:_stateCode," +
+    "address:{street:'',city:_defaultCity,state:_stateAbbr,zip:''}," +
     "ddIndex:0,ddQuestions:[]," +
     "countyInfo:null," +
     "countyBallotAvailable:null," +
-    "repBallot:null,demBallot:null,selectedParty:'republican'," +
+    "repBallot:null,demBallot:null,selectedParty:_defaultParty," +
     "guideComplete:false,summary:null,districts:null," +
     "isLoading:false,error:null,geolocating:false," +
     "readingLevel:1," +
@@ -1780,7 +1821,7 @@ var APP_JS = [
     "localStorage.setItem('tx_votes_selected_party',S.selectedParty);" +
     "localStorage.setItem('tx_votes_has_voted',S.hasVoted?'1':'');" +
     "if(Object.keys(S.overrides).length){localStorage.setItem('tx_votes_overrides',JSON.stringify(S.overrides))}else{localStorage.removeItem('tx_votes_overrides')}" +
-    "if(!localStorage.getItem('tx_votes_election_date'))localStorage.setItem('tx_votes_election_date','2026-03-03');" +
+    "if(!localStorage.getItem('tx_votes_election_date'))localStorage.setItem('tx_votes_election_date',_stateCode==='dc'?'2026-06-16':'2026-03-03');" +
     "}catch(e){" +
       "if(e&&e.name==='QuotaExceededError'){" +
         "showToast(t('Storage full. Some data may not be saved. Visit Profile to clear old data.'))" +
@@ -1799,7 +1840,7 @@ var APP_JS = [
     "if(typeof p.pickedQuals==='number')S._pickedQuals=p.pickedQuals;" +
     "else if(S.qualities.length>0)S._pickedQuals=Math.min(3,S.qualities.length);" +
     "if(S.qualities.length>0&&S.qualities.length<QUALITIES.length){S.qualities=S.qualities.concat(QUALITIES.filter(function(v){return S.qualities.indexOf(v)===-1}))}" +
-    "S.address=p.address||{street:'',city:'',state:'TX',zip:''};" +
+    "S.address=p.address||{street:'',city:_defaultCity,state:_stateAbbr,zip:''};" +
     "S.summary=p.summaryText||null;S.districts=p.districts||null;" +
     "S.readingLevel=p.readingLevel||1}" +
     "var rb=localStorage.getItem('tx_votes_ballot_republican');" +
@@ -1820,7 +1861,7 @@ var APP_JS = [
     "if(S.repBallot||S.demBallot){S.guideComplete=true}" +
     // Check if election cycle has expired (>7 days past election date)
     "var _ed=localStorage.getItem('tx_votes_election_date');" +
-    "if(!_ed&&S.guideComplete){_ed='2026-03-03';localStorage.setItem('tx_votes_election_date',_ed)}" +
+    "if(!_ed&&S.guideComplete){_ed=_stateCode==='dc'?'2026-06-16':'2026-03-03';localStorage.setItem('tx_votes_election_date',_ed)}" +
     "if(_ed&&!localStorage.getItem('tx_votes_post_election_dismissed')){" +
       "var _edMs=new Date(_ed+'T00:00:00').getTime();" +
       "if(Date.now()-_edMs>7*24*60*60*1000){S.electionExpired=true}" +
@@ -1831,7 +1872,7 @@ var APP_JS = [
   // ============ RENDER ============
   "function topNav(active){" +
     "return '<div class=\"topnav-inner\">" +
-      "<a href=\"/\" class=\"topnav-brand\" style=\"text-decoration:none;color:var(--blue)\">'+ICON_STAR+'Texas Votes</a>" +
+      "<a href=\"/\" class=\"topnav-brand\" style=\"text-decoration:none;color:var(--blue)\">'+ICON_STAR+_stateLabel()+'</a>" +
       "<a class=\"topnav-link'+(active==='#/ballot'?' on':'')+'\" data-action=\"nav\" data-to=\"#/ballot\">'+ICON_BALLOT+t('My Ballot')+'</a>" +
       "<a class=\"topnav-link'+(active==='#/info'?' on':'')+'\" data-action=\"nav\" data-to=\"#/info\">'+ICON_INFO+t('Vote Info')+'</a>" +
       "<a class=\"topnav-link'+(active==='#/profile'?' on':'')+'\" data-action=\"nav\" data-to=\"#/profile\">'+ICON_PROFILE+t('Profile')+'</a>" +
@@ -1895,11 +1936,11 @@ var APP_JS = [
   "function renderWelcome(){" +
     "return '<div class=\"hero\">" +
       "<div class=\"hero-icon\"><svg width=\"64\" height=\"72\" viewBox=\"0 0 512 576\"><defs><clipPath id=\"hs\"><path d=\"M56 48h400c10 0 16 6 16 16v256c0 108-200 148-216 156C240 468 40 428 40 320V64c0-10 6-16 16-16Z\"/></clipPath></defs><g clip-path=\"url(#hs)\"><rect x=\"40\" y=\"48\" width=\"432\" height=\"440\" fill=\"var(--blue)\"/><rect x=\"210\" y=\"48\" width=\"270\" height=\"86\" fill=\"#FFF\"/><rect x=\"210\" y=\"134\" width=\"270\" height=\"86\" fill=\"var(--red)\"/><rect x=\"210\" y=\"220\" width=\"270\" height=\"86\" fill=\"#FFF\"/><rect x=\"210\" y=\"306\" width=\"270\" height=\"86\" fill=\"var(--red)\"/><rect x=\"210\" y=\"392\" width=\"270\" height=\"86\" fill=\"#FFF\"/></g><path d=\"M125 166 L140 209 L186 210 L150 238 L163 282 L125 256 L87 282 L100 238 L64 210 L110 209Z\" fill=\"#FFF\"/></svg></div>" +
-      "<h1>Texas Votes</h1>" +
-      "<p>'+t('Your personalized voting guide for Texas elections.')+'</p>" +
+      "<h1>'+_stateLabel()+'</h1>" +
+      "<p>'+t('Your personalized voting guide for '+_stateFullName+' elections.')+'</p>" +
     "</div>" +
     "<div class=\"card\"><div style=\"text-align:center;margin-bottom:16px\">" +
-      "<span class=\"badge badge-blue\">'+t('Texas Primary \\u2014 March 3, 2026')+'</span></div>" +
+      "<span class=\"badge badge-blue\">'+(_stateCode==='dc'?t('DC Primary \\u2014 June 16, 2026'):t('Texas Primary \\u2014 March 3, 2026'))+'</span></div>" +
       "<div class=\"features\">" +
         "<div><span>\u2705</span> '+t('5-minute interview learns your values')+'</div>" +
         "<div><span>\u{1F4CB}</span> '+t('Personalized ballot with recommendations')+'</div>" +
@@ -2098,10 +2139,10 @@ var APP_JS = [
     "h+='<form id=\"addr-form\">';" +
     "h+='<div class=\"form-group\"><label>'+t('Street Address')+'</label><input name=\"street\" placeholder=\"123 Congress Ave\" value=\"'+esc(S.address.street)+'\" autofocus></div>';" +
     "h+='<div class=\"form-row\">';" +
-    "h+='<div class=\"form-group\"><label>'+t('City')+'</label><input name=\"city\" value=\"'+esc(S.address.city)+'\"></div>';" +
-    "h+='<div class=\"form-group\" style=\"flex:.5\"><label>'+t('ZIP')+'</label><input name=\"zip\" placeholder=\"78701\" value=\"'+esc(S.address.zip)+'\" inputmode=\"numeric\" maxlength=\"5\"></div>';" +
+    "h+='<div class=\"form-group\"><label>'+t('City')+'</label><input name=\"city\" value=\"'+esc(S.address.city||_defaultCity)+'\"></div>';" +
+    "h+='<div class=\"form-group\" style=\"flex:.5\"><label>'+t('ZIP')+'</label><input name=\"zip\" placeholder=\"'+(_stateCode==='dc'?'20001':'78701')+'\" value=\"'+esc(S.address.zip)+'\" inputmode=\"numeric\" maxlength=\"5\"></div>';" +
     "h+='</div>';" +
-    "h+='<div class=\"form-group\"><label>'+t('State')+'</label><input value=\"TX\" disabled></div>';" +
+    "h+='<div class=\"form-group\"><label>'+t('State')+'</label><input value=\"'+_stateAbbr+'\" disabled></div>';" +
     "h+='<div style=\"display:flex;align-items:flex-start;gap:10px;padding:12px;background:rgba(51,166,82,.05);border-radius:var(--rs);margin-top:8px\">';" +
     "h+='<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" style=\"flex-shrink:0;margin-top:1px\"><path d=\"M12 1C8.7 1 6 3.7 6 7v3H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-3.3-2.7-6-6-6zm0 2c2.2 0 4 1.8 4 4v3H8V7c0-2.2 1.8-4 4-4zm0 11a2 2 0 1 1 0 4 2 2 0 0 1 0-4z\" fill=\"var(--ok)\"/></svg>';" +
     "h+='<span style=\"font-size:13px;color:var(--text2);line-height:1.4\">'+t('Your address stays on your device. It\\u2019s only used to look up your ballot districts \\u2014 we never store or share it.')+'</span>';" +
@@ -2180,8 +2221,8 @@ var APP_JS = [
     // Election info header
     "var partyLabel=S.selectedParty==='democrat'?t('Democratic'):t('Republican');" +
     "h+='<div class=\"card\" style=\"margin-bottom:16px;text-align:center\">';" +
-    "h+='<div style=\"font-size:18px;font-weight:800\"><span style=\"color:#fff\">&starf;</span> Texas '+esc(partyLabel)+' '+t('Primary')+'</div>';" +
-    "h+='<div style=\"font-size:14px;color:var(--text2);margin-top:2px\">'+t('Tuesday, March 3, 2026')+'</div>';" +
+    "h+='<div style=\"font-size:18px;font-weight:800\"><span style=\"color:#fff\">&starf;</span> '+_stateName+' '+esc(partyLabel)+' '+t('Primary')+'</div>';" +
+    "h+='<div style=\"font-size:14px;color:var(--text2);margin-top:2px\">'+(_stateCode==='dc'?t('Tuesday, June 16, 2026'):t('Tuesday, March 3, 2026'))+'</div>';" +
     "if(window._llmOverride){h+='<div style=\"margin-top:6px\"><span class=\"badge\" style=\"font-size:11px;background:var(--card);border:1px solid var(--border)\">Powered by '+esc(llmLabel())+'</span></div>'}" +
     "if(S.districts&&(S.districts.congressional||S.districts.stateSenate||S.districts.stateHouse)){" +
       "h+='<div style=\"display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px\">';" +
@@ -2228,7 +2269,7 @@ var APP_JS = [
       "h+='<div style=\"background:#fff3cd;border:1px solid #ffc107;border-radius:12px;padding:14px 16px;margin-bottom:12px;font-size:14px;color:#664d03\">';" +
       "h+='<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:10px\">';" +
       "h+='<span style=\"font-size:18px;flex-shrink:0\">\u{1F4C5}</span>';" +
-      "h+='<span>'+t('The March 3 primary is over. Your ballot data is from the primary election.')+'</span>';" +
+      "h+='<span>'+t('The primary is over. Your ballot data is from the primary election.')+'</span>';" +
       "h+='</div>';" +
       "h+='<div style=\"display:flex;gap:8px;flex-wrap:wrap\">';" +
       "h+='<button data-action=\"election-clear\" style=\"background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer\">'+t('Clear & Start Fresh')+'</button>';" +
@@ -2274,7 +2315,7 @@ var APP_JS = [
     // Actions
     "h+='<div class=\"actions\">';" +
     "h+='<button class=\"btn btn-secondary\" data-action=\"nav\" data-to=\"#/cheatsheet\">\u{1F4CB} '+t('Cheat Sheet')+'</button>';" +
-    "h+='<button class=\"btn btn-secondary\" data-action=\"share-app\">\u{1F4E4} '+t('Share Texas Votes')+'</button>';" +
+    "h+='<button class=\"btn btn-secondary\" data-action=\"share-app\">\u{1F4E4} '+t('Share')+' '+_stateLabel()+'</button>';" +
     "h+='</div>';" +
     // Key races
     "if(keyRaces.length){" +
@@ -2313,12 +2354,12 @@ var APP_JS = [
     "h+='<div class=\"share-cta\">';" +
     "h+='<div class=\"share-cta-icon\">\u{1F4E3}</div>';" +
     "h+='<div class=\"share-cta-title\">'+t('Spread the word')+'</div>';" +
-    "h+='<div class=\"share-cta-body\">'+t('Know someone who needs help deciding?')+' '+t('The Texas primary is March 3. Share Texas Votes so your friends and family can get a personalized voting guide too.')+'</div>';" +
-    "h+='<button class=\"btn btn-primary share-cta-btn\" data-action=\"share-app\">\u{1F4E4} '+t('Share Texas Votes')+'</button>';" +
+    "h+='<div class=\"share-cta-body\">'+t('Know someone who needs help deciding?')+' '+t('Share')+' '+_stateLabel()+' '+t('so your friends and family can get a personalized voting guide too.')+'</div>';" +
+    "h+='<button class=\"btn btn-primary share-cta-btn\" data-action=\"share-app\">\u{1F4E4} '+t('Share')+' '+_stateLabel()+'</button>';" +
     "h+='</div>';" +
     // IMPORTANT: Keep footer in sync with index.js generateFooter() — FOOTER_SYNC_PWA
     "h+='<div style=\"text-align:center;padding:24px 0 8px;font-size:13px;color:var(--text2)\">';" +
-    "h+='<a href=\"/\" style=\"color:var(--text2)\">'+t('Texas Votes')+'</a>';" +
+    "h+='<a href=\"/\" style=\"color:var(--text2)\">'+_stateLabel()+'</a>';" +
     "h+=' &middot; ';" +
     "h+='<a href=\"/how-it-works\" target=\"_blank\" style=\"color:var(--text2)\">'+t('How It Works')+'</a>';" +
     "h+=' &middot; ';" +
@@ -2346,7 +2387,7 @@ var APP_JS = [
     "h+='<h2><span style=\"color:#fff\">&starf;</span> '+t('Your Ballot Cheat Sheet')+'</h2>';" +
     "if(addr&&addr.street){h+='<div class=\"cs-meta\">'+esc(addr.street)+(addr.city?', '+esc(addr.city):'')+' '+esc(addr.zip||'')+'</div>'}" +
     "h+='<span class=\"cs-party '+partyCls+'\">'+esc(partyName)+' '+t('Primary')+'</span>';" +
-    "h+='<div class=\"cs-meta\">'+t('March 3, 2026')+'</div>';" +
+    "h+='<div class=\"cs-meta\">'+(_stateCode==='dc'?t('June 16, 2026'):t('March 3, 2026'))+'</div>';" +
     "h+='</div>';" +
     // Actions (hidden in print)
     "h+='<div class=\"cs-actions\">';" +
@@ -2399,7 +2440,7 @@ var APP_JS = [
     "}" +
     // Legend & footer
     "h+='<div class=\"cs-legend\"><span>\u2B50 '+t('= Key race')+'</span><span>\u26A0\uFE0F '+t('AI-generated \\u2014 do your own research')+'</span></div>';" +
-    "h+='<div class=\"cs-footer\"><span style=\"color:#fff\">&starf;</span> '+t('Built with Texas Votes')+' &middot; txvotes.app</div>';" +
+    "h+='<div class=\"cs-footer\"><span style=\"color:#fff\">&starf;</span> '+t('Built with')+' '+_stateLabel()+' &middot; txvotes.app</div>';" +
     // Party switcher + back link (hidden in print)
     "h+=renderPartySwitcher();" +
     "h+='<div style=\"text-align:center;margin-top:8px\" class=\"cs-actions\"><button class=\"btn btn-secondary\" data-action=\"nav\" data-to=\"#/ballot\">&larr; '+t('Back to My Ballot')+'</button></div>';" +
@@ -2787,7 +2828,7 @@ var APP_JS = [
     "h+='</div>';" +
     // IMPORTANT: Keep footer in sync with index.js generateFooter() — FOOTER_SYNC_PWA
     "h+='<div style=\"text-align:center;padding:24px 0 8px;font-size:13px;color:var(--text2)\">';" +
-    "h+='<a href=\"/\" style=\"color:var(--text2)\">'+t('Texas Votes')+'</a>';" +
+    "h+='<a href=\"/\" style=\"color:var(--text2)\">'+_stateLabel()+'</a>';" +
     "h+=' &middot; ';" +
     "h+='<a href=\"/how-it-works\" target=\"_blank\" style=\"color:var(--text2)\">'+t('How It Works')+'</a>';" +
     "h+=' &middot; ';" +
@@ -3333,7 +3374,7 @@ var APP_JS = [
   "}",
 
   "function renderVoteInfo(){" +
-    "var election=new Date(2026,2,3);" + // March 3, 2026
+    "var election=_stateCode==='dc'?new Date(2026,5,16):new Date(2026,2,3);" + // DC: June 16; TX: March 3, 2026
     "var now=new Date();" +
     "var diff=Math.ceil((election-now)/(1000*60*60*24));" +
     "var h='<h2 style=\"font-size:22px;font-weight:800;margin-bottom:16px\"><span style=\"color:#fff\">&starf;</span> '+t('Voting Info')+'</h2>';" +
@@ -3388,22 +3429,32 @@ var APP_JS = [
     "if(ci&&ci.electionsWebsite){" +
       "h+='<a href=\"'+esc(ci.electionsWebsite)+'\" target=\"_blank\" class=\"btn btn-primary\" style=\"flex:1;text-align:center;text-decoration:none\">'+t('Find Locations')+' &rarr;</a>'" +
     "}else{" +
-      "h+='<a href=\"https://votetexas.gov/voting/where.html\" target=\"_blank\" class=\"btn btn-primary\" style=\"flex:1;text-align:center;text-decoration:none\">'+t('Find Locations')+' &rarr;</a>'" +
+      "h+='<a href=\"'+(_stateCode==='dc'?'https://www.dcboe.org/voters/where-to-vote':'https://votetexas.gov/voting/where.html')+'\" target=\"_blank\" class=\"btn btn-primary\" style=\"flex:1;text-align:center;text-decoration:none\">'+t('Find Locations')+' &rarr;</a>'" +
     "}" +
     "h+='</div></div>';" +
 
-    // Key Dates accordion
+    // Key Dates accordion — state-aware
     "var kdBody='';" +
-    "var regPast=new Date(2026,1,2)<now;" + // Feb 2
-    "var mailDate=new Date(2026,1,20);" + // Feb 20
-    "var mailPast=mailDate<now;" +
-    "var evStart=new Date(2026,1,17);" + // Feb 17
-    "var evEnd=new Date(2026,1,27);" + // Feb 27
-    "var evActive=now>=evStart&&now<=evEnd;" +
-    "kdBody+='<div class=\"vi-row\"><span'+(regPast?' class=\"vi-strike\"':'')+'>'+t('Registration deadline')+'</span><span'+(regPast?' class=\"vi-strike\"':'')+'>Feb 2, 2026</span></div>';" +
-    "kdBody+='<div class=\"vi-row\"><span'+(mailPast?' class=\"vi-strike\"':'')+'>'+t('Mail ballot application deadline')+'</span><span'+(mailPast?' class=\"vi-strike\"':'')+'>Feb 20, 2026</span></div>';" +
-    "kdBody+='<div class=\"vi-row\"><span'+(evActive?' class=\"vi-highlight\"':'')+'>'+t('Early voting')+'</span><span'+(evActive?' class=\"vi-highlight\"':'')+'>Feb 17 \\u2013 27, 2026</span></div>';" +
-    "kdBody+='<div class=\"vi-row\"><span class=\"vi-highlight\">'+t('Election Day')+'</span><span class=\"vi-highlight\">'+t('March 3, 2026')+'</span></div>';" +
+    "if(_stateCode==='dc'){" +
+      "var regPast=new Date(2026,4,18)<now;" + // May 18 (21 days before June 16)
+      "var evStart=new Date(2026,5,5);" + // June 5
+      "var evEnd=new Date(2026,5,13);" + // June 13
+      "var evActive=now>=evStart&&now<=evEnd;" +
+      "kdBody+='<div class=\"vi-row\"><span'+(regPast?' class=\"vi-strike\"':'')+'>'+t('Registration deadline')+'</span><span'+(regPast?' class=\"vi-strike\"':'')+'>May 18, 2026</span></div>';" +
+      "kdBody+='<div class=\"vi-row\"><span'+(evActive?' class=\"vi-highlight\"':'')+'>'+t('Early voting')+'</span><span'+(evActive?' class=\"vi-highlight\"':'')+'>Jun 5 \\u2013 13, 2026</span></div>';" +
+      "kdBody+='<div class=\"vi-row\"><span class=\"vi-highlight\">'+t('Election Day')+'</span><span class=\"vi-highlight\">'+t('June 16, 2026')+'</span></div>'" +
+    "}else{" +
+      "var regPast=new Date(2026,1,2)<now;" + // Feb 2
+      "var mailDate=new Date(2026,1,20);" + // Feb 20
+      "var mailPast=mailDate<now;" +
+      "var evStart=new Date(2026,1,17);" + // Feb 17
+      "var evEnd=new Date(2026,1,27);" + // Feb 27
+      "var evActive=now>=evStart&&now<=evEnd;" +
+      "kdBody+='<div class=\"vi-row\"><span'+(regPast?' class=\"vi-strike\"':'')+'>'+t('Registration deadline')+'</span><span'+(regPast?' class=\"vi-strike\"':'')+'>Feb 2, 2026</span></div>';" +
+      "kdBody+='<div class=\"vi-row\"><span'+(mailPast?' class=\"vi-strike\"':'')+'>'+t('Mail ballot application deadline')+'</span><span'+(mailPast?' class=\"vi-strike\"':'')+'>Feb 20, 2026</span></div>';" +
+      "kdBody+='<div class=\"vi-row\"><span'+(evActive?' class=\"vi-highlight\"':'')+'>'+t('Early voting')+'</span><span'+(evActive?' class=\"vi-highlight\"':'')+'>Feb 17 \\u2013 27, 2026</span></div>';" +
+      "kdBody+='<div class=\"vi-row\"><span class=\"vi-highlight\">'+t('Election Day')+'</span><span class=\"vi-highlight\">'+t('March 3, 2026')+'</span></div>'" +
+    "}" +
     "h+=accSection('vi-dates','\u{1F4C5}',t('Key Dates'),kdBody);" +
 
     // Early Voting accordion — dynamic from county info
@@ -3415,10 +3466,10 @@ var APP_JS = [
         "evBody+='<div class=\"vi-row\"><span'+(isLast?' style=\"font-weight:600\"':'')+'>'+esc(evp.dates)+'</span><span'+(isLast?' style=\"font-weight:600\"':'')+'>'+esc(evp.hours)+'</span></div>'" +
       "}" +
     "}else{" +
-      "evBody+='<div class=\"vi-row\" style=\"flex-direction:column;gap:4px\"><span>Feb 17 \\u2013 27, 2026</span></div>';" +
-      "evBody+='<p style=\"font-size:13px;color:var(--text2);margin-top:8px\">'+t('Early voting hours vary by county. Contact your county elections office for specific hours and locations.')+'</p>'" +
+      "evBody+='<div class=\"vi-row\" style=\"flex-direction:column;gap:4px\"><span>'+(_stateCode==='dc'?'Jun 5 \\u2013 13, 2026':'Feb 17 \\u2013 27, 2026')+'</span></div>';" +
+      "evBody+='<p style=\"font-size:13px;color:var(--text2);margin-top:8px\">'+t(_stateCode==='dc'?'Early voting hours vary. Contact the DC Board of Elections for specific hours and locations.':'Early voting hours vary by county. Contact your county elections office for specific hours and locations.')+'</p>'" +
     "}" +
-    "evBody+='<p style=\"font-size:13px;color:var(--text2);margin-top:8px\">'+t('Vote at any early voting location in your county.')+'</p>';" +
+    "evBody+='<p style=\"font-size:13px;color:var(--text2);margin-top:8px\">'+t(_stateCode==='dc'?'Vote at any early voting location in DC.':'Vote at any early voting location in your county.')+'</p>';" +
     "h+=accSection('vi-early','\u{1F552}',t('Early Voting'),evBody);" +
 
     // Election Day accordion — dynamic from county info
@@ -3428,20 +3479,30 @@ var APP_JS = [
     "if(ci&&ci.voteCenters){" +
       "edBody+='<p style=\"margin-top:8px\">'+t('Vote at any Vote Center in your county.')+'</p>'" +
     "}" +
-    "edBody+='<p style=\"margin-top:8px;padding:10px;background:rgba(33,89,143,.06);border-radius:var(--rs);font-size:13px\">" +
-      "<b>'+t('Open Primary:')+'</b> '+t('Texas has open primaries \\u2014 tell the poll worker which party\\u2019s primary you want. You can only vote in one.')+'</p>';" +
+    "if(_stateCode==='dc'){" +
+      "edBody+='<p style=\"margin-top:8px;padding:10px;background:rgba(33,89,143,.06);border-radius:var(--rs);font-size:13px\">" +
+        "<b>'+t('Closed Primary:')+'</b> '+t('DC has closed primaries \\u2014 you must be registered with a party to vote in its primary.')+'</p>'" +
+    "}else{" +
+      "edBody+='<p style=\"margin-top:8px;padding:10px;background:rgba(33,89,143,.06);border-radius:var(--rs);font-size:13px\">" +
+        "<b>'+t('Open Primary:')+'</b> '+t('Texas has open primaries \\u2014 tell the poll worker which party\\u2019s primary you want. You can only vote in one.')+'</p>'" +
+    "}" +
     "if(ci&&ci.electionDay&&ci.electionDay.locationUrl){" +
       "edBody+='<div style=\"margin-top:10px\"><a href=\"'+esc(ci.electionDay.locationUrl)+'\" target=\"_blank\" style=\"font-size:14px;font-weight:600;color:var(--blue)\">'+t('Find Election Day locations')+' &rarr;</a></div>'" +
     "}else{" +
-      "edBody+='<div style=\"margin-top:10px\"><a href=\"https://votetexas.gov/voting/where.html\" target=\"_blank\" style=\"font-size:14px;font-weight:600;color:var(--blue)\">'+t('Find Election Day locations')+' &rarr;</a></div>'" +
+      "edBody+='<div style=\"margin-top:10px\"><a href=\"'+(_stateCode==='dc'?'https://www.dcboe.org/voters/where-to-vote':'https://votetexas.gov/voting/where.html')+'\" target=\"_blank\" style=\"font-size:14px;font-weight:600;color:var(--blue)\">'+t('Find Election Day locations')+' &rarr;</a></div>'" +
     "}" +
     "h+=accSection('vi-eday','\u{1F3DB}\u{FE0F}',t('Election Day'),edBody);" +
 
-    // Voter ID accordion
+    // Voter ID accordion — state-aware
     "var idBody='';" +
-    "var ids=['Texas driver\\u2019s license or DPS ID','Texas Election ID Certificate (EIC)','Texas concealed handgun license','U.S. military ID with photo','U.S. citizenship certificate with photo','U.S. passport (book or card)'];" +
-    "for(var i=0;i<ids.length;i++){idBody+='<div class=\"vi-check\"><span class=\"vi-check-icon\">\\u2705</span>'+t(ids[i])+'</div>'}" +
-    "idBody+='<p style=\"font-size:13px;color:var(--text2);margin-top:8px\">'+t('Expired IDs accepted if expired less than 4 years. No expiration limit for voters 70+.')+'</p>';" +
+    "if(_stateCode==='dc'){" +
+      "idBody+='<p style=\"font-size:14px;margin-bottom:8px\">'+t('DC does not require photo ID to vote. You may be asked to verify your name and address.')+'</p>';" +
+      "idBody+='<p style=\"font-size:13px;color:var(--text2)\">'+t('First-time voters who registered by mail may need to show ID. Accepted forms include a photo ID, utility bill, bank statement, or government document with your name and address.')+'</p>'" +
+    "}else{" +
+      "var ids=['Texas driver\\u2019s license or DPS ID','Texas Election ID Certificate (EIC)','Texas concealed handgun license','U.S. military ID with photo','U.S. citizenship certificate with photo','U.S. passport (book or card)'];" +
+      "for(var i=0;i<ids.length;i++){idBody+='<div class=\"vi-check\"><span class=\"vi-check-icon\">\\u2705</span>'+t(ids[i])+'</div>'}" +
+      "idBody+='<p style=\"font-size:13px;color:var(--text2);margin-top:8px\">'+t('Expired IDs accepted if expired less than 4 years. No expiration limit for voters 70+.')+'</p>'" +
+    "}" +
     "h+=accSection('vi-id','\u{1F4CB}',t('Voter ID'),idBody);" +
 
     // What to Bring accordion
@@ -3468,22 +3529,29 @@ var APP_JS = [
       "}" +
     "}" +
     "resBody+='<div class=\"vi-link\"><a href=\"https://vote411.org\" target=\"_blank\">VOTE411 \\u2014 Personalized ballot &rarr;</a></div>';" +
-    "resBody+='<div class=\"vi-link\"><a href=\"https://votetexas.gov\" target=\"_blank\">VoteTexas.gov \\u2014 State info &rarr;</a></div>';" +
+    "resBody+='<div class=\"vi-link\"><a href=\"'+(_stateCode==='dc'?'https://www.dcboe.org':'https://votetexas.gov')+'\" target=\"_blank\">'+(_stateCode==='dc'?'DC Board of Elections':'VoteTexas.gov')+' \\u2014 '+t('State info')+' &rarr;</a></div>';" +
     "h+=accSection('vi-res','\u{1F517}',t('Resources'),resBody);" +
 
     // Volunteer Opportunities accordion — location-specific + statewide
     "var volBody='';" +
+    "var _ewUrl=_stateCode==='dc'?'https://www.dcboe.org/Community/Become-a-Pollworker':'https://www.votetexas.gov/be-an-election-worker/';" +
     "if(ci&&ci.countyName){" +
-      "volBody+='<div class=\"vi-link\"><a href=\"https://www.votetexas.gov/be-an-election-worker/\" target=\"_blank\">'+t('Be an Election Worker')+' \\u2014 '+esc(ci.countyName)+' County &rarr;</a></div>'" +
+      "volBody+='<div class=\"vi-link\"><a href=\"'+_ewUrl+'\" target=\"_blank\">'+t('Be an Election Worker')+' \\u2014 '+esc(ci.countyName)+(_stateCode==='dc'?'':' County')+' &rarr;</a></div>'" +
     "}else{" +
-      "volBody+='<div class=\"vi-link\"><a href=\"https://www.votetexas.gov/be-an-election-worker/\" target=\"_blank\">'+t('Be an Election Worker')+' &rarr;</a></div>'" +
+      "volBody+='<div class=\"vi-link\"><a href=\"'+_ewUrl+'\" target=\"_blank\">'+t('Be an Election Worker')+' &rarr;</a></div>'" +
     "}" +
     "if(ci&&ci.electionsWebsite){" +
       "volBody+='<div class=\"vi-link\"><a href=\"'+esc(ci.electionsWebsite)+'\" target=\"_blank\">'+esc(ci.countyName)+' '+t('County Elections Office')+' &rarr;</a></div>'" +
     "}" +
-    "volBody+='<div class=\"vi-link\"><a href=\"https://lwvtexas.org/volunteer\" target=\"_blank\">'+t('League of Women Voters TX')+' &rarr;</a></div>';" +
+    "if(_stateCode==='dc'){" +
+      "volBody+='<div class=\"vi-link\"><a href=\"https://www.lwvdc.org/\" target=\"_blank\">'+t('League of Women Voters DC')+' &rarr;</a></div>'" +
+    "}else{" +
+      "volBody+='<div class=\"vi-link\"><a href=\"https://lwvtexas.org/volunteer\" target=\"_blank\">'+t('League of Women Voters TX')+' &rarr;</a></div>'" +
+    "}" +
     "volBody+='<div class=\"vi-link\"><a href=\"https://www.rockthevote.org/get-involved/\" target=\"_blank\">'+t('Rock the Vote')+' &rarr;</a></div>';" +
-    "volBody+='<div class=\"vi-link\"><a href=\"https://texascivilrightsproject.org/\" target=\"_blank\">'+t('Texas Civil Rights Project')+' &rarr;</a></div>';" +
+    "if(_stateCode!=='dc'){" +
+      "volBody+='<div class=\"vi-link\"><a href=\"https://texascivilrightsproject.org/\" target=\"_blank\">'+t('Texas Civil Rights Project')+' &rarr;</a></div>'" +
+    "}" +
     "volBody+='<p style=\"font-size:13px;color:var(--text2);margin-top:8px\">'+t('Help your neighbors vote! Poll workers, voter registration drives, and ride-to-polls programs need volunteers.')+'</p>';" +
     "h+=accSection('vi-vol','\u{1F91D}',t('Volunteer Opportunities'),volBody);" +
 
@@ -3501,13 +3569,13 @@ var APP_JS = [
       "var domain=ci.electionsWebsite.replace(/^https?:\\/\\//,'').replace(/\\/$/,'');" +
       "h+='<div style=\"padding:6px 0\"><a href=\"'+esc(ci.electionsWebsite)+'\" target=\"_blank\" style=\"font-size:15px;color:var(--blue);font-weight:600\">\u{1F310} '+esc(domain)+'</a></div>'" +
     "}else{" +
-      "h+='<div style=\"padding:6px 0\"><a href=\"https://votetexas.gov\" target=\"_blank\" style=\"font-size:15px;color:var(--blue);font-weight:600\">\u{1F310} votetexas.gov</a></div>'" +
+      "h+='<div style=\"padding:6px 0\"><a href=\"'+(_stateCode==='dc'?'https://www.dcboe.org':'https://votetexas.gov')+'\" target=\"_blank\" style=\"font-size:15px;color:var(--blue);font-weight:600\">\u{1F310} '+(_stateCode==='dc'?'dcboe.org':'votetexas.gov')+'</a></div>'" +
     "}" +
     "h+='</div>';" +
 
     // IMPORTANT: Keep footer in sync with index.js generateFooter() — FOOTER_SYNC_PWA
     "h+='<div style=\"text-align:center;padding:24px 0 8px;font-size:13px;color:var(--text2)\">';" +
-    "h+='<a href=\"/\" style=\"color:var(--text2)\">'+t('Texas Votes')+'</a>';" +
+    "h+='<a href=\"/\" style=\"color:var(--text2)\">'+_stateLabel()+'</a>';" +
     "h+=' &middot; ';" +
     "h+='<a href=\"/how-it-works\" target=\"_blank\" style=\"color:var(--text2)\">'+t('How It Works')+'</a>';" +
     "h+=' &middot; ';" +
@@ -3572,7 +3640,7 @@ var APP_JS = [
       "if(S.ddIndex<S.ddQuestions.length-1){S.ddIndex++;render()}" +
       "else{S.phase=5;render()}" +
     "}" +
-    "else if(action==='skip-address'){S.address={street:'',city:'',state:'TX',zip:''};buildGuide()}" +
+    "else if(action==='skip-address'){S.address={street:'',city:_defaultCity,state:_stateAbbr,zip:''};buildGuide()}" +
     "else if(action==='geolocate'){geolocate()}" +
     "else if(action==='retry'){buildGuide()}" +
     "else if(action==='set-party'){S.selectedParty=el.dataset.value;trk('party_switch',{d1:el.dataset.value});save();render()}" +
@@ -3583,8 +3651,8 @@ var APP_JS = [
     "else if(action==='reset'){" +
       "if(confirm(t('Start over? This will erase your profile and recommendations.'))){" +
         "S.phase=0;S.issues=[];S._pickedIssues=0;S.spectrum=null;S.policyViews={};S.qualities=[];S._pickedQuals=0;S.freeform='';S.readingLevel=1;" +
-        "S.address={street:'',city:'',state:'TX',zip:''};S.ddIndex=0;S.ddQuestions=[];S.countyInfo=null;S.countyBallotAvailable=null;" +
-        "S.repBallot=null;S.demBallot=null;S.selectedParty='republican';" +
+        "S.address={street:'',city:_defaultCity,state:_stateAbbr,zip:''};S.ddIndex=0;S.ddQuestions=[];S.countyInfo=null;S.countyBallotAvailable=null;" +
+        "S.repBallot=null;S.demBallot=null;S.selectedParty=_defaultParty;" +
         "S.guideComplete=false;S.summary=null;S.districts=null;S.expanded={};S.addressError=null;S.verifyingAddress=false;S.electionExpired=false;S.overrides={};" +
         "shuffledSpectrum=null;shuffledDD={};" +
         "try{localStorage.removeItem('tx_votes_profile');localStorage.removeItem('tx_votes_ballot_republican');" +
@@ -3605,8 +3673,8 @@ var APP_JS = [
     "else if(action==='refresh-ballots'){S.staleBallot=false;refreshBallots();render()}" +
     "else if(action==='election-clear'){" +
       "S.phase=0;S.issues=[];S._pickedIssues=0;S.spectrum=null;S.policyViews={};S.qualities=[];S._pickedQuals=0;S.freeform='';S.readingLevel=1;" +
-      "S.address={street:'',city:'',state:'TX',zip:''};S.ddIndex=0;S.ddQuestions=[];S.countyInfo=null;S.countyBallotAvailable=null;" +
-      "S.repBallot=null;S.demBallot=null;S.selectedParty='republican';" +
+      "S.address={street:'',city:_defaultCity,state:_stateAbbr,zip:''};S.ddIndex=0;S.ddQuestions=[];S.countyInfo=null;S.countyBallotAvailable=null;" +
+      "S.repBallot=null;S.demBallot=null;S.selectedParty=_defaultParty;" +
       "S.guideComplete=false;S.summary=null;S.districts=null;S.expanded={};S.addressError=null;S.verifyingAddress=false;S.electionExpired=false;S.overrides={};" +
       "shuffledSpectrum=null;shuffledDD={};" +
       "try{localStorage.removeItem('tx_votes_profile');localStorage.removeItem('tx_votes_ballot_republican');" +
@@ -3762,11 +3830,11 @@ var APP_JS = [
     // Client-side validation
     "if(!st){S.addressError=t('Please enter your street address.');render();return}" +
     "if(!/^\\d{5}$/.test(zip)){S.addressError=t('Please enter a valid 5-digit ZIP code.');render();return}" +
-    "S.address={street:st,city:form.city.value||'',state:'TX',zip:zip};" +
+    "S.address={street:st,city:form.city.value||_defaultCity,state:_stateAbbr,zip:zip};" +
     "S.addressError=null;S.verifyingAddress=true;render();" +
     // Verify address via districts API
     "fetch('/app/api/districts',{method:'POST',headers:{'Content-Type':'application/json'}," +
-      "body:JSON.stringify({street:st,city:form.city.value||'',state:'TX',zip:zip})})" +
+      "body:JSON.stringify({street:st,city:form.city.value||_defaultCity,state:_stateAbbr,zip:zip})})" +
     ".then(function(r){" +
       "if(r.ok)return r.json();" +
       "if(r.status===404)throw new Error('not_found');" +
@@ -4001,7 +4069,7 @@ var APP_JS = [
     "if(!S.summary)return;" +
     "var text=S.summary+'\\n\\nBuild your own voting guide at txvotes.app';" +
     "if(navigator.share){" +
-      "navigator.share({title:t('My Texas Votes Profile'),text:text,url:'https://txvotes.app'}).catch(function(){})" +
+      "navigator.share({title:t('My')+' '+_stateLabel()+' '+t('Profile'),text:text,url:'https://txvotes.app'}).catch(function(){})" +
     "}else{" +
       "navigator.clipboard.writeText(text).then(function(){alert(t('Copied to clipboard!'))}).catch(function(){alert(text)})" +
     "}" +
@@ -4026,7 +4094,7 @@ var APP_JS = [
   // ============ SHARE ============
   "function shareGuide(){" +
     "var b=getBallot();if(!b)return;" +
-    "var lines=['Texas Votes \\u2014 My Voting Guide','Build yours at txvotes.app',''];" +
+    "var lines=[_stateLabel()+' \\u2014 My Voting Guide','Build yours at txvotes.app',''];" +
     "var races=b.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)}).filter(function(r){return r.isContested&&r.recommendation});" +
     "for(var i=0;i<races.length;i++){" +
       "var r=races[i];" +
@@ -4041,7 +4109,7 @@ var APP_JS = [
     "" +
     "var text=lines.join('\\n');" +
     "if(navigator.share){" +
-      "navigator.share({title:'Texas Votes',text:text}).catch(function(){})" +
+      "navigator.share({title:_stateLabel(),text:text}).catch(function(){})" +
     "}else{" +
       "navigator.clipboard.writeText(text).then(function(){alert('Copied to clipboard!')}).catch(function(){alert(text)})" +
     "}" +
@@ -4049,9 +4117,9 @@ var APP_JS = [
 
   // ============ SHARE APP ============
   "function shareApp(){" +
-    "var text='The Texas primary is March 3. Get your free personalized voting guide at txvotes.app';" +
+    "var text='Get your free personalized voting guide at txvotes.app';" +
     "if(navigator.share){" +
-      "navigator.share({title:'Texas Votes',text:text,url:'https://txvotes.app'}).catch(function(){})" +
+      "navigator.share({title:_stateLabel(),text:text,url:'https://txvotes.app'}).catch(function(){})" +
     "}else{" +
       "navigator.clipboard.writeText(text).then(function(){alert('Copied to clipboard!')}).catch(function(){alert(text)})" +
     "}" +
@@ -4070,7 +4138,7 @@ var APP_JS = [
     "lines.push('');lines.push('Build your own voting guide at txvotes.app');" +
     "var text=lines.join('\\n');" +
     "if(navigator.share){" +
-      "navigator.share({title:'Texas Votes \\u2014 '+race.office,text:text}).catch(function(){})" +
+      "navigator.share({title:_stateLabel()+' \\u2014 '+race.office,text:text}).catch(function(){})" +
     "}else{" +
       "navigator.clipboard.writeText(text).then(function(){alert('Copied to clipboard!')}).catch(function(){alert(text)})" +
     "}" +
@@ -4112,7 +4180,7 @@ var APP_JS = [
           "'Race: '+raceName+'\\n'+" +
           "'Issue Type: '+typeLabels[checked.value]+'\\n'+" +
           "'Details: '+(details||'(none)')+'\\n\\n'+" +
-          "'Reported from Texas Votes app'" +
+          "'Reported from '+_stateLabel()+' app'" +
         ");" +
         "window.open('mailto:flagged@txvotes.app?subject='+subject+'&body='+body,'_self');" +
         "trk('report_submitted',{d1:checked.value,d2:candidateName});" +
@@ -4365,16 +4433,16 @@ var APP_JS = [
     "d.className='share-prompt-overlay';" +
     "d.innerHTML='<div class=\"share-prompt-card\">" +
       "<h3>\\u{1F389} '+t('You did it!')+'</h3>" +
-      "<p>'+t('Now help 3 friends do the same. Share Texas Votes with someone who needs help deciding.')+'</p>" +
-      "<button class=\"btn btn-primary\" data-action=\"share-app-prompt\" style=\"width:100%\">\\u{1F4E4} '+t('Share Texas Votes')+'</button>" +
+      "<p>'+t('Now help 3 friends do the same.')+' '+t('Share')+' '+_stateLabel()+' '+t('with someone who needs help deciding.')+'</p>" +
+      "<button class=\"btn btn-primary\" data-action=\"share-app-prompt\" style=\"width:100%\">\\u{1F4E4} '+t('Share')+' '+_stateLabel()+'</button>" +
       "<button class=\"share-prompt-dismiss\" data-action=\"dismiss-share-prompt\">'+t('Maybe later')+'</button>" +
     "</div>';" +
     "document.body.appendChild(d);" +
     "d.addEventListener('click',function(e){" +
       "var btn=e.target.closest('[data-action]');" +
       "if(btn&&btn.dataset.action==='share-app-prompt'){" +
-        "var shareText='I just voted in the Texas Primary! Build your own personalized voting guide at https://txvotes.app';" +
-        "if(navigator.share){navigator.share({title:'Texas Votes',text:shareText}).catch(function(){})}" +
+        "var shareText='I just voted! Build your own personalized voting guide at https://txvotes.app';" +
+        "if(navigator.share){navigator.share({title:_stateLabel(),text:shareText}).catch(function(){})}" +
         "else{navigator.clipboard.writeText(shareText).then(function(){alert('Copied to clipboard!')}).catch(function(){alert(shareText)})}" +
         "d.remove()" +
       "}else if((btn&&btn.dataset.action==='dismiss-share-prompt')||e.target===d){" +

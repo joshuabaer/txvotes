@@ -650,22 +650,22 @@ describe("Smoke tests: backward-compat redirects", () => {
 });
 
 // ---------------------------------------------------------------------------
-// DC coming soon stub
+// DC PWA routes
 // ---------------------------------------------------------------------------
-describe("Smoke tests: DC coming soon", () => {
-  it("GET /dc/app -> 200 with coming soon page", async () => {
+describe("Smoke tests: DC PWA", () => {
+  it("GET /dc/app -> 200 with DC Votes PWA", async () => {
     const res = await get("/dc/app");
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("DC Votes");
-    expect(body).toContain("Coming Soon");
+    expect(body).toContain('_STATE="dc"');
   });
 
-  it("GET /dc/app/api/ballot -> 200 with coming soon page", async () => {
-    const res = await get("/dc/app/api/ballot");
+  it("GET /dc/app/manifest.json -> 200 with DC branding", async () => {
+    const res = await get("/dc/app/manifest.json");
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("DC Votes");
+    const manifest = await res.json();
+    expect(manifest.name).toBe("DC Votes");
   });
 });
 

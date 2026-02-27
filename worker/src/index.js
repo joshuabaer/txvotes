@@ -7489,9 +7489,30 @@ export default {
       if (url.pathname === "/tx/app/api/polymarket") {
         return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
       }
-      // DC stub — coming soon
-      if (url.pathname === "/dc/app" || url.pathname.startsWith("/dc/app/")) {
-        return handleDCComingSoon();
+      // DC PWA routes
+      if (url.pathname === "/dc/app/clear") {
+        return handlePWA_Clear("/", "Clear Data \u2014 DC Votes", "Reset your DC Votes data and start fresh.", "https://txvotes.app/og-image-clear.png");
+      }
+      if (url.pathname === "/dc/app") {
+        return handlePWA("dc");
+      }
+      if (url.pathname === "/dc/app/sw.js") {
+        return handlePWA_SW("dc");
+      }
+      if (url.pathname === "/dc/app/manifest.json") {
+        return handlePWA_Manifest("dc");
+      }
+      if (url.pathname === "/dc/app/api/manifest") {
+        return handleManifest(env);
+      }
+      if (url.pathname === "/dc/app/api/ballot") {
+        return handleBallotFetch(request, env);
+      }
+      if (url.pathname === "/dc/app/api/county-info") {
+        return handleCountyInfo(request, env);
+      }
+      if (url.pathname === "/dc/app/api/polymarket") {
+        return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
       }
       // Health check endpoint (public, no auth)
       if (url.pathname === "/health") {
@@ -7616,30 +7637,30 @@ export default {
     }
 
     // Analytics event endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/tx/app/api/ev") {
+    if (url.pathname === "/tx/app/api/ev" || url.pathname === "/dc/app/api/ev") {
       return handleAnalyticsEvent(request, env);
     }
 
     // Override feedback endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/tx/app/api/override-feedback") {
+    if (url.pathname === "/tx/app/api/override-feedback" || url.pathname === "/dc/app/api/override-feedback") {
       return handleOverrideFeedback(request, env);
     }
 
     // PWA POST routes (no auth — server-side guide gen protects secrets)
     // Rate-limit guide and summary endpoints to prevent API proxy abuse
-    if (url.pathname === "/tx/app/api/guide") {
+    if (url.pathname === "/tx/app/api/guide" || url.pathname === "/dc/app/api/guide") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_Guide(request, env);
     }
-    if (url.pathname === "/tx/app/api/guide-stream") {
+    if (url.pathname === "/tx/app/api/guide-stream" || url.pathname === "/dc/app/api/guide-stream") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_GuideStream(request, env);
     }
-    if (url.pathname === "/tx/app/api/summary") {
+    if (url.pathname === "/tx/app/api/summary" || url.pathname === "/dc/app/api/summary") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "summary", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
