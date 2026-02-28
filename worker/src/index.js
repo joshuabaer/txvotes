@@ -3608,8 +3608,7 @@ async function handleOpenSource(env) {
     </ul>
 
     <h2 data-t="The Code">The Code</h2>
-    <!-- TODO: Update URL when GitHub repo is created (see todolist) -->
-    <p data-t="The full source code is available on GitHub.">The full source code is available on GitHub: <a href="https://github.com/txvotes/txvotes">github.com/txvotes/txvotes</a> <span style="font-size:0.85rem;color:var(--text2)" data-t="(repo pending — coming soon)">(repo pending — coming soon)</span></p>
+    <p data-t="The full source code is available on GitHub.">The full source code is available on GitHub: <a href="https://github.com/txvotes/txvotes">github.com/txvotes/txvotes</a></p>
 
     <p data-t="Texas Votes is a single-file progressive web app served directly from a Cloudflare Worker.">Texas Votes is a single-file progressive web app served directly from a Cloudflare Worker. There's no build step, no framework, no bundler. The entire app — HTML, CSS, and JavaScript — is generated server-side and delivered as one response.</p>
 
@@ -3698,7 +3697,6 @@ async function handleOpenSource(env) {
     'Claude API \u2014 guide generation': '<strong>Claude API</strong> \u2014 generaci\u00F3n de gu\u00EDas',
     'Census Geocoder \u2014 district lookup': '<strong>Census Geocoder</strong> \u2014 b\u00FAsqueda de distritos',
     'PWA \u2014 works offline, installable': '<strong>PWA</strong> \u2014 funciona sin conexi\u00F3n, instalable',
-    '(repo pending \u2014 coming soon)': '(repositorio pendiente \u2014 pr\u00F3ximamente)',
   })}
 </body>
 </html>`;
@@ -3720,8 +3718,12 @@ async function handleBalanceCheck(env) {
       results[party] = { error: "No ballot data" };
       continue;
     }
-    const ballot = JSON.parse(raw);
-    results[party] = checkBallotBalance(ballot);
+    try {
+      const ballot = JSON.parse(raw);
+      results[party] = checkBallotBalance(ballot);
+    } catch (parseErr) {
+      results[party] = { error: "Invalid ballot JSON: " + (parseErr.message || String(parseErr)) };
+    }
   }
 
   // Combined score: average of both party scores
@@ -5648,11 +5650,14 @@ async function handleHealthCheck(env) {
       const ageMs = lastRun ? Date.now() - new Date(lastRun).getTime() : Infinity;
       const fresh = ageMs < 48 * 60 * 60 * 1000;
       checks.auditFreshness = { ok: fresh, lastRun, ageHours: Math.round(ageMs / 3600000) };
+      if (!fresh) overall = overall === "down" ? "down" : "degraded";
     } else {
       checks.auditFreshness = { ok: false, detail: "no audit summary found" };
+      overall = overall === "down" ? "down" : "degraded";
     }
   } catch (err) {
     checks.auditFreshness = { ok: false, detail: "audit check failed: " + (err.message || String(err)) };
+    overall = overall === "down" ? "down" : "degraded";
   }
 
   // 5. API key present
@@ -6020,7 +6025,11 @@ async function handleAdminCoverage(env) {
   // Load statewide ballots
   for (const party of parties) {
     const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
-    ballots[party] = raw ? JSON.parse(raw) : null;
+    if (raw) {
+      try { ballots[party] = JSON.parse(raw); } catch { ballots[party] = null; }
+    } else {
+      ballots[party] = null;
+    }
   }
 
   // --- Section 1: Statewide Ballot Summary ---
@@ -6095,7 +6104,7 @@ async function handleAdminCoverage(env) {
           cells += `<td class="cov-no">Missing</td>`;
         } else if (typeof val === "object" && !Array.isArray(val)) {
           const keys = Object.keys(val).sort();
-          const hasFull = keys.length === 7;
+          const hasFull = keys.length >= 4;
           cells += `<td class="${hasFull ? "cov-yes" : "cov-partial"}">Tones ${keys.join(",")}</td>`;
         } else {
           cells += `<td class="cov-partial">Plain</td>`;
@@ -6145,7 +6154,8 @@ async function handleAdminCoverage(env) {
     const hasInfo = countyInfoResults[fips];
     const hasRep = countyBallotResults[fips]?.republican || false;
     const hasDem = countyBallotResults[fips]?.democrat || false;
-    countyDetailRows += `<tr><td>${fips}</td><td class="${hasInfo ? "cov-yes" : "cov-no"}">${hasInfo ? "Y" : "-"}</td><td class="${hasRep ? "cov-yes" : "cov-no"}">${hasRep ? "Y" : "-"}</td><td class="${hasDem ? "cov-yes" : "cov-no"}">${hasDem ? "Y" : "-"}</td></tr>`;
+    const countyName = TX_COUNTY_NAMES[fips] || fips;
+    countyDetailRows += `<tr><td>${fips}</td><td>${countyName}</td><td class="${hasInfo ? "cov-yes" : "cov-no"}">${hasInfo ? "Y" : "-"}</td><td class="${hasRep ? "cov-yes" : "cov-no"}">${hasRep ? "Y" : "-"}</td><td class="${hasDem ? "cov-yes" : "cov-no"}">${hasDem ? "Y" : "-"}</td></tr>`;
   }
 
   const html = `<!DOCTYPE html>
@@ -6218,7 +6228,7 @@ async function handleAdminCoverage(env) {
     <h2>County Detail (All 254 Counties)</h2>
     <div class="scroll-table">
     <table>
-      <tr><th>FIPS</th><th>County Info</th><th>GOP Ballot</th><th>Dem Ballot</th></tr>
+      <tr><th>FIPS</th><th>County</th><th>County Info</th><th>GOP Ballot</th><th>Dem Ballot</th></tr>
       ${countyDetailRows}
     </table>
     </div>
@@ -7735,7 +7745,7 @@ export default {
       return jsonResponse(result);
     }
 
-    // POST: /api/election/generate-tones — pre-generate proposition text at all 7 tone levels
+    // POST: /api/election/generate-tones — pre-generate proposition text at all tone levels
     if (url.pathname === "/api/election/generate-tones") {
       const auth = request.headers.get("Authorization");
       if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
