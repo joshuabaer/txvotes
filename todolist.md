@@ -149,7 +149,7 @@ _From automated code review of "Add automated AI audit runner" (interview-flow-t
 - [x] Ballot page footer showed "Nonpartisan by Design · Privacy Policy · v25" — changed to "Texas Votes · How It Works · Privacy"
 
 - [x] **Bug: Sharing a race shares AI recommendation instead of user's override pick** — Fixed `shareRace()` and `shareGuide()` in pwa.js to use `getEffectiveChoice()` instead of raw `race.recommendation.candidateName`. Cheat sheet was already correct.
-- [ ] **Include `https://` in sharing links** — Shared URLs (race share, guide share) need the `https://` protocol prefix so that messaging apps (iMessage, WhatsApp, SMS, etc.) render a link preview/unfurl. Without the protocol, many apps treat the text as plain text with no preview.
+- [x] **Include `https://` in sharing links** — Shared URLs (race share, guide share) need the `https://` protocol prefix so that messaging apps (iMessage, WhatsApp, SMS, etc.) render a link preview/unfurl. Without the protocol, many apps treat the text as plain text with no preview.
 
 ### Daily Updater & Freshness
 - [ ] Add county ballots and voting info to daily updater refresh — currently only statewide races are auto-updated; county ballots, county_info, and precinct maps are seeded once and never refreshed
@@ -322,7 +322,7 @@ _Phase 1 (multi-state infrastructure) complete. Plan at `docs/plans/plan_dc_prim
 
 ### Code Quality
 
-- [ ] **Fix inconsistent error handling across similar endpoints** — Audit all KV-reading endpoints (handleDataQuality, handleAdminCoverage, handleBalanceCheck, handleHealthCheck, etc.) for inconsistent error handling patterns. Some have top-level try/catch, some have per-operation try/catch, some have none. Standardize on a consistent pattern (e.g., per-operation try/catch with graceful fallback) across all handlers that read and parse KV data.
+- [x] **Fix inconsistent error handling across similar endpoints** — Audit all KV-reading endpoints (handleDataQuality, handleAdminCoverage, handleBalanceCheck, handleHealthCheck, etc.) for inconsistent error handling patterns. Some have top-level try/catch, some have per-operation try/catch, some have none. Standardize on a consistent pattern (e.g., per-operation try/catch with graceful fallback) across all handlers that read and parse KV data.
 
 ### Infrastructure
 
