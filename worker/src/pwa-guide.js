@@ -645,82 +645,87 @@ export async function handleSeedTranslations(env, party, countyFips) {
     return { error: "No candidates with translatable text" };
   }
 
-  // Build the translation prompt
-  var candidateList = candidates.map(function(c) {
-    var lines = [];
-    lines.push("Candidate: " + c.name + " (" + c.office + ")");
-    if (c.summary) lines.push("  summary: " + JSON.stringify(c.summary));
-    if (c.keyPositions.length) lines.push("  keyPositions: " + JSON.stringify(c.keyPositions));
-    if (c.pros.length) lines.push("  pros: " + JSON.stringify(c.pros));
-    if (c.cons.length) lines.push("  cons: " + JSON.stringify(c.cons));
-    return lines.join("\n");
-  }).join("\n\n");
-
-  var prompt = "Translate ALL of the following Texas election candidate text fields into neutral Latin American Spanish (español neutro). " +
-    "Keep candidate names in English. Use neutral, non-partisan language accessible to all Spanish speakers. " +
-    "Avoid region-specific slang or colloquialisms. Prefer universally understood vocabulary over country-specific terms. " +
-    "Maintain the same meaning and roughly the same length as the originals.\n\n" +
-    candidateList + "\n\n" +
-    "Return a JSON array of objects, one per candidate:\n" +
-    "[\n" +
-    "  {\n" +
-    '    "name": "exact candidate name (do not translate)",\n' +
-    '    "summary": "Spanish translation",\n' +
-    '    "keyPositions": ["Spanish translations"],\n' +
-    '    "pros": ["Spanish translations"],\n' +
-    '    "cons": ["Spanish translations"]\n' +
-    "  }\n" +
-    "]\n\n" +
-    "Return ONLY valid JSON — no markdown, no explanation.";
-
   var system = "You are a professional translator specializing in Texas political content. " +
     "Translate from English to neutral Latin American Spanish (español neutro) with non-partisan language accessible to all Spanish speakers. " +
     "Avoid region-specific slang or colloquialisms. Use \"usted\" forms where appropriate. Prefer universally understood vocabulary over country-specific terms. " +
     "Keep candidate names, office titles, and district names in English. " +
     "Return ONLY valid JSON.";
 
-  // Call Claude for translation
-  var res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8192,
-      system: system,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  // Call Claude for translation in batches to avoid Worker timeout
+  var BATCH_SIZE = 6;
+  var translations = [];
+  for (var batchStart = 0; batchStart < candidates.length; batchStart += BATCH_SIZE) {
+    var batch = candidates.slice(batchStart, batchStart + BATCH_SIZE);
+    var batchList = batch.map(function(c) {
+      var lines = [];
+      lines.push("Candidate: " + c.name + " (" + c.office + ")");
+      if (c.summary) lines.push("  summary: " + JSON.stringify(c.summary));
+      if (c.keyPositions.length) lines.push("  keyPositions: " + JSON.stringify(c.keyPositions));
+      if (c.pros.length) lines.push("  pros: " + JSON.stringify(c.pros));
+      if (c.cons.length) lines.push("  cons: " + JSON.stringify(c.cons));
+      return lines.join("\n");
+    }).join("\n\n");
 
-  if (!res.ok) {
-    var errBody = await res.text();
-    return { error: "Claude API error " + res.status + ": " + errBody.slice(0, 200) };
-  }
+    var batchPrompt = "Translate ALL of the following Texas election candidate text fields into neutral Latin American Spanish (español neutro). " +
+      "Keep candidate names in English. Use neutral, non-partisan language accessible to all Spanish speakers. " +
+      "Avoid region-specific slang or colloquialisms. Prefer universally understood vocabulary over country-specific terms. " +
+      "Maintain the same meaning and roughly the same length as the originals.\n\n" +
+      batchList + "\n\n" +
+      "Return a JSON array of objects, one per candidate:\n" +
+      "[\n" +
+      "  {\n" +
+      '    "name": "exact candidate name (do not translate)",\n' +
+      '    "summary": "Spanish translation",\n' +
+      '    "keyPositions": ["Spanish translations"],\n' +
+      '    "pros": ["Spanish translations"],\n' +
+      '    "cons": ["Spanish translations"]\n' +
+      "  }\n" +
+      "]\n\n" +
+      "Return ONLY valid JSON — no markdown, no explanation.";
 
-  var data = await res.json();
-  var responseText = data.content && data.content[0] && data.content[0].text;
-  if (!responseText) {
-    return { error: "No text in Claude response" };
-  }
+    var res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        system: system,
+        messages: [{ role: "user", content: batchPrompt }],
+      }),
+    });
 
-  // Parse the translations
-  var translations;
-  try {
-    var cleaned = responseText.trim();
-    if (cleaned.indexOf("```json") === 0) cleaned = cleaned.slice(7);
-    else if (cleaned.indexOf("```") === 0) cleaned = cleaned.slice(3);
-    if (cleaned.slice(-3) === "```") cleaned = cleaned.slice(0, -3);
-    cleaned = cleaned.trim();
-    translations = JSON.parse(cleaned);
-  } catch (e) {
-    return { error: "Failed to parse translation response", raw: responseText.slice(0, 300) };
-  }
+    if (!res.ok) {
+      var errBody = await res.text();
+      return { error: "Claude API error " + res.status + " on batch " + (Math.floor(batchStart / BATCH_SIZE) + 1) + ": " + errBody.slice(0, 200) };
+    }
 
-  if (!Array.isArray(translations)) {
-    return { error: "Expected array of translations" };
+    var data = await res.json();
+    var responseText = data.content && data.content[0] && data.content[0].text;
+    if (!responseText) {
+      return { error: "No text in Claude response for batch " + (Math.floor(batchStart / BATCH_SIZE) + 1) };
+    }
+
+    var batchTranslations;
+    try {
+      var cleaned = responseText.trim();
+      if (cleaned.indexOf("```json") === 0) cleaned = cleaned.slice(7);
+      else if (cleaned.indexOf("```") === 0) cleaned = cleaned.slice(3);
+      if (cleaned.slice(-3) === "```") cleaned = cleaned.slice(0, -3);
+      cleaned = cleaned.trim();
+      batchTranslations = JSON.parse(cleaned);
+    } catch (e) {
+      return { error: "Failed to parse translation batch " + (Math.floor(batchStart / BATCH_SIZE) + 1), raw: responseText.slice(0, 300) };
+    }
+
+    if (!Array.isArray(batchTranslations)) {
+      return { error: "Expected array of translations in batch " + (Math.floor(batchStart / BATCH_SIZE) + 1) };
+    }
+
+    translations = translations.concat(batchTranslations);
   }
 
   // Store in KV

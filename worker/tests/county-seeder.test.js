@@ -8,6 +8,7 @@ import {
   classifyError,
   errorCategoryLabel,
   resetProgress,
+  extractJSON,
 } from "../src/county-seeder.js";
 
 // ---------------------------------------------------------------------------
@@ -1254,7 +1255,8 @@ describe("Claude response parsing", () => {
     };
   });
 
-  it("throws on invalid JSON response", async () => {
+  it("throws on invalid JSON response when repair also fails", async () => {
+    // Both the initial call and the repair call return non-JSON
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
@@ -1351,5 +1353,185 @@ describe("Claude response parsing", () => {
     const userPrompt = capturedBody.messages[0].content;
     expect(userPrompt).toContain("Harris County, Texas");
     expect(userPrompt).toContain("March 3, 2026");
+  });
+
+  it("system prompt includes CRITICAL OUTPUT FORMAT instruction", async () => {
+    let capturedBody;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, opts) => {
+        capturedBody = JSON.parse(opts.body);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              content: [
+                { type: "text", text: '{"countyFips":"48453"}' },
+              ],
+            }),
+        });
+      })
+    );
+
+    await seedCountyInfo("48453", "Travis", mockEnv);
+    expect(capturedBody.system).toContain("CRITICAL OUTPUT FORMAT");
+    expect(capturedBody.system).toContain("MUST be ONLY valid JSON");
+  });
+
+  it("attempts repair call when JSON extraction fails but repair succeeds", async () => {
+    let callCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        callCount++;
+        if (callCount === 1) {
+          // First call: prose response (no valid JSON extractable)
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                content: [
+                  {
+                    type: "text",
+                    text: "I'll help you research the Republican primary races for Austin County. Let me search for that information now. Unfortunately I could not find structured data.",
+                  },
+                ],
+              }),
+          });
+        }
+        // Second call: repair succeeds
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              content: [
+                {
+                  type: "text",
+                  text: '{"countyFips":"48015","countyName":"Austin","voteCenters":false}',
+                },
+              ],
+            }),
+        });
+      })
+    );
+
+    const result = await seedCountyInfo("48015", "Austin", mockEnv);
+    expect(result.success).toBe(true);
+    expect(callCount).toBe(2); // initial call + repair call
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractJSON
+// ---------------------------------------------------------------------------
+describe("extractJSON", () => {
+  it("parses clean JSON string", () => {
+    const result = extractJSON('{"races":[],"propositions":[]}');
+    expect(result).toEqual({ races: [], propositions: [] });
+  });
+
+  it("returns null for null/undefined/empty input", () => {
+    expect(extractJSON(null)).toBeNull();
+    expect(extractJSON(undefined)).toBeNull();
+    expect(extractJSON("")).toBeNull();
+    expect(extractJSON("   ")).toBeNull();
+  });
+
+  it("returns null for non-string input", () => {
+    expect(extractJSON(42)).toBeNull();
+    expect(extractJSON({})).toBeNull();
+  });
+
+  it("extracts JSON from ```json fenced code block", () => {
+    const text = '```json\n{"name":"Travis","fips":"48453"}\n```';
+    const result = extractJSON(text);
+    expect(result).toEqual({ name: "Travis", fips: "48453" });
+  });
+
+  it("extracts JSON from ``` fenced code block without json label", () => {
+    const text = '```\n{"name":"Travis"}\n```';
+    const result = extractJSON(text);
+    expect(result).toEqual({ name: "Travis" });
+  });
+
+  it("extracts JSON surrounded by prose (Austin County scenario)", () => {
+    const text = "I'll help you research the Republican primary races for Austin County, Texas. Let me search for the relevant information.\n\n" +
+      '{"id":"48015_republican_primary_2026","party":"republican","races":[{"id":"r1","office":"County Judge"}],"propositions":[]}\n\n' +
+      "That's the data I found.";
+    const result = extractJSON(text);
+    expect(result).toBeDefined();
+    expect(result.id).toBe("48015_republican_primary_2026");
+    expect(result.races).toHaveLength(1);
+  });
+
+  it("handles prose with curly braces before the actual JSON", () => {
+    const text = "Here is some text with {informal braces} that are not JSON.\n\n" +
+      '{"countyFips":"48009","countyName":"Archer"}';
+    const result = extractJSON(text);
+    expect(result).toBeDefined();
+    expect(result.countyFips).toBe("48009");
+  });
+
+  it("handles nested JSON objects with brace-depth matching", () => {
+    const text = "Some prose before the data:\n" +
+      '{"races":[{"id":"r1","office":"County Judge","candidates":[{"id":"c1","name":"John"}]}],"propositions":[]}' +
+      "\nAnd some prose after.";
+    const result = extractJSON(text);
+    expect(result).toBeDefined();
+    expect(result.races[0].candidates[0].name).toBe("John");
+  });
+
+  it("handles JSON with escaped quotes in strings", () => {
+    const text = 'Some text\n{"name":"John \\"Big J\\" Smith","office":"Judge"}';
+    const result = extractJSON(text);
+    expect(result).toBeDefined();
+    expect(result.name).toBe('John "Big J" Smith');
+  });
+
+  it("handles purely conversational response with no JSON", () => {
+    const text = "I'll help you research the Republican primary races for Austin County, Texas in the March 3, 2026 Texas Primary Election. Let me search for the relevant information about contested local races.";
+    const result = extractJSON(text);
+    expect(result).toBeNull();
+  });
+
+  it("handles JSON with trailing comma scenario gracefully (returns null)", () => {
+    // Trailing commas are invalid JSON — should return null
+    const text = '{"races":[{"id":"r1",}]}';
+    const result = extractJSON(text);
+    expect(result).toBeNull();
+  });
+
+  it("handles multiline JSON with indentation", () => {
+    const text = "Here's the data:\n{\n  \"countyFips\": \"48453\",\n  \"countyName\": \"Travis\",\n  \"voteCenters\": true\n}";
+    const result = extractJSON(text);
+    expect(result).toBeDefined();
+    expect(result.countyFips).toBe("48453");
+    expect(result.voteCenters).toBe(true);
+  });
+
+  it("prefers fenced JSON over inline JSON", () => {
+    const text = '{"wrong":"inline"}\n\n```json\n{"correct":"fenced"}\n```';
+    const result = extractJSON(text);
+    // The whole string won't parse (two objects), so fence match wins
+    expect(result).toBeDefined();
+    expect(result.correct).toBe("fenced");
+  });
+
+  it("handles the exact Austin County failure pattern (long prose, no JSON)", () => {
+    const text = "I'll help you research the Republican primary races for Austin County, Texas in the March 3, 2026 Texas Primary Election. Let me search for the relevant information about contested local races.\n\nBased on my research, Austin County is a small rural county in Texas. The county has a population of approximately 30,000. For the 2026 Republican primary, the following races may be contested: County Judge, County Commissioner Precincts 2 and 4.\n\nHowever, I was unable to find specific candidate filing information from the Texas Secretary of State for Austin County.";
+    const result = extractJSON(text);
+    expect(result).toBeNull();
+  });
+
+  it("extracts JSON even when first brace is in prose", () => {
+    // First brace pair is not valid JSON, but there's valid JSON later
+    const text = "The format should be {races: [...]} as shown below:\n" +
+      '{"races":[{"id":"r1","office":"County Judge","candidates":[]}],"propositions":[]}';
+    const result = extractJSON(text);
+    expect(result).toBeDefined();
+    expect(result.races).toBeDefined();
   });
 });
