@@ -5876,6 +5876,16 @@ function handleAdmin() {
       <tr><td>GET</td><td><code>/api/admin/llm-experiment/results</code></td><td>Experiment results &amp; analysis</td></tr>
     </table>
 
+    <h2>Test Phase Preview</h2>
+    <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">Preview how the site looks in each election phase using <code>?test_phase=</code></p>
+    <table>
+      <tr><th>Phase</th><th>Landing</th><th>TX App</th><th>How It Works</th></tr>
+      <tr><td>Pre-election</td><td><a href="/?test_phase=pre-election">Landing</a></td><td><a href="/tx/app?test_phase=pre-election">App</a></td><td><a href="/how-it-works?test_phase=pre-election">How</a></td></tr>
+      <tr><td>Election Night</td><td><a href="/?test_phase=election-night">Landing</a></td><td><a href="/tx/app?test_phase=election-night">App</a></td><td><a href="/how-it-works?test_phase=election-night">How</a></td></tr>
+      <tr><td>Post-election</td><td><a href="/?test_phase=post-election">Landing</a></td><td><a href="/tx/app?test_phase=post-election">App</a></td><td><a href="/how-it-works?test_phase=post-election">How</a></td></tr>
+      <tr><td>Runoff</td><td><a href="/?test_phase=runoff">Landing</a></td><td><a href="/tx/app?test_phase=runoff">App</a></td><td><a href="/how-it-works?test_phase=runoff">How</a></td></tr>
+    </table>
+
     ${generateAdminFooter()}
   </div>
 </body>
