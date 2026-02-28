@@ -14,3 +14,7 @@ node_modules/
 # Swap files
 *.swp
 *~
+
+# Claude Code session files
+.claude-session/
+.claude-ticket

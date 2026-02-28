@@ -138,3 +138,26 @@ When making code changes, ALWAYS use the feature branch workflow:
 - **Always update README.md** when making changes that affect architecture, file structure, test counts, features, or deployment
 - Keep test count (`1629+ tests across 19 test files`) current after adding/removing tests
 - Keep file structure tree current after adding/removing source files
+
+## Workflow Profile
+
+```yaml
+workflow:
+  base_branch: main
+  direct_to_main: false
+  investigation: light
+  plan_approval: required
+  user_testing: optional
+  quality_gates:
+    - cd worker && npx vitest run
+  review:
+    triage: true
+    max_level: LIGHT
+    agents:
+      - code-reviewer
+  ship:
+    method: pr
+    target: main
+    linear_status: "In Progress"
+    deploy_hint: "Auto-deploys on merge to main via GitHub Actions"
+```
