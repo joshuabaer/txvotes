@@ -2478,3 +2478,173 @@ describe("hashGuideKey — LLM parameter affects cache key", () => {
     expect(hash1).not.toBe(hash2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Haiku fallback — 429/529 falls back through MODELS to Haiku
+// ---------------------------------------------------------------------------
+describe("Haiku fallback on 429/529", () => {
+  let originalFetch;
+  let originalSetTimeout;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    // Replace setTimeout with immediate execution to avoid test timeouts
+    originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = (fn) => { fn(); return 0; };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  });
+
+  it("MODELS array includes Haiku as third entry", async () => {
+    const modelsUsed = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      modelsUsed.push(body.model);
+      if (body.model.includes("sonnet")) {
+        return {
+          status: 429,
+          headers: { get: () => "0" },
+          text: async () => "rate limited",
+        };
+      }
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"test": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    const result = await callLLM(env, "system", "user msg", "en", "claude");
+    expect(result).toBe('{"test": true}');
+    expect(modelsUsed).toContain("claude-haiku-4-5-20251001");
+  });
+
+  it("falls back to Haiku on 529 overloaded from both Sonnet models", async () => {
+    const modelsUsed = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      modelsUsed.push(body.model);
+      if (body.model.includes("sonnet")) {
+        return {
+          status: 529,
+          headers: { get: () => null },
+          text: async () => "overloaded",
+        };
+      }
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"fallback": "haiku"}' }],
+          usage: { input_tokens: 80, output_tokens: 40 },
+          stop_reason: "end_turn",
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    const result = await callLLM(env, "system", "user msg", "en", "claude");
+    expect(result).toBe('{"fallback": "haiku"}');
+    expect(modelsUsed[modelsUsed.length - 1]).toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("does not fall back to Haiku when specificModel is set (e.g. claude-opus)", async () => {
+    const modelsUsed = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      modelsUsed.push(body.model);
+      return {
+        status: 429,
+        headers: { get: () => "0" },
+        text: async () => "rate limited",
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    await expect(callLLM(env, "system", "user msg", "en", "claude-opus"))
+      .rejects.toThrow("Rate limited");
+    expect(modelsUsed.every(m => m === "claude-opus-4-6")).toBe(true);
+    expect(modelsUsed).not.toContain("claude-haiku-4-5-20251001");
+  });
+
+  it("Haiku fallback logs a message when falling back", async () => {
+    const logs = [];
+    const origLog = console.log;
+    console.log = (...args) => logs.push(args.join(" "));
+
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (body.model.includes("sonnet")) {
+        return {
+          status: 429,
+          headers: { get: () => "0" },
+          text: async () => "rate limited",
+        };
+      }
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"test": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    await callLLM(env, "system", "user msg", "en", "claude");
+
+    console.log = origLog;
+    const fallbackLogs = logs.filter(l => l.includes("[MODEL FALLBACK]"));
+    expect(fallbackLogs.length).toBeGreaterThanOrEqual(1);
+    expect(fallbackLogs.some(l => l.includes("claude-haiku-4-5-20251001"))).toBe(true);
+  });
+
+  it("throws when all three models (both Sonnets + Haiku) are rate limited", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      status: 429,
+      headers: { get: () => "0" },
+      text: async () => "rate limited",
+    }));
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    await expect(callLLM(env, "system", "user msg", "en", "claude"))
+      .rejects.toThrow("Rate limited");
+  });
+
+  it("throws when all three models are overloaded (529)", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      status: 529,
+      headers: { get: () => null },
+      text: async () => "overloaded",
+    }));
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    await expect(callLLM(env, "system", "user msg", "en", "claude"))
+      .rejects.toThrow("All models overloaded");
+  });
+
+  it("succeeds on first Sonnet without touching Haiku", async () => {
+    const modelsUsed = [];
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      modelsUsed.push(body.model);
+      return {
+        status: 200,
+        json: async () => ({
+          content: [{ text: '{"fast": true}' }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+          stop_reason: "end_turn",
+        }),
+        headers: { get: () => null },
+      };
+    });
+    const env = { ANTHROPIC_API_KEY: "test-key" };
+    await callLLM(env, "system", "user msg", "en", "claude");
+    expect(modelsUsed).toEqual(["claude-sonnet-4-6"]);
+    expect(modelsUsed).not.toContain("claude-haiku-4-5-20251001");
+  });
+});
