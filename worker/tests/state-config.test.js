@@ -3,8 +3,10 @@ import {
   STATE_CONFIG,
   VALID_STATES,
   DEFAULT_STATE,
+  ELECTION_PHASES,
   parseStateFromPath,
   stripStatePrefix,
+  getElectionPhase,
 } from "../src/state-config.js";
 
 // ---------------------------------------------------------------------------
@@ -242,5 +244,138 @@ describe("stripStatePrefix", () => {
 
   it("is case-sensitive — does not strip /TX/app", () => {
     expect(stripStatePrefix("/TX/app")).toBe("/TX/app");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New config fields (resultsUrl, pollsCloseTime, runoffDate)
+// ---------------------------------------------------------------------------
+describe("STATE_CONFIG new fields", () => {
+  it("TX has resultsUrl", () => {
+    expect(STATE_CONFIG.tx.resultsUrl).toBe("https://results.texas-election.com/races");
+  });
+
+  it("TX has pollsCloseTime", () => {
+    expect(STATE_CONFIG.tx.pollsCloseTime).toBe("19:00:00-06:00");
+  });
+
+  it("DC has pollsCloseTime", () => {
+    expect(STATE_CONFIG.dc.pollsCloseTime).toBeDefined();
+  });
+
+  it("each state has runoffDate field (may be null)", () => {
+    for (const [, config] of Object.entries(STATE_CONFIG)) {
+      expect("runoffDate" in config).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ELECTION_PHASES
+// ---------------------------------------------------------------------------
+describe("ELECTION_PHASES", () => {
+  it("contains all four phases", () => {
+    expect(ELECTION_PHASES).toEqual(["pre-election", "election-night", "post-election", "runoff"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getElectionPhase
+// ---------------------------------------------------------------------------
+describe("getElectionPhase", () => {
+  // TX election: March 3, 2026. Polls close 7 PM CT (UTC-6).
+  // pollsClose = 2026-03-03T19:00:00-06:00 = 2026-03-04T01:00:00Z
+  // postElectionStart = pollsClose + 5h = 2026-03-04T06:00:00Z (midnight CT)
+
+  it("returns pre-election before polls close", () => {
+    const before = new Date("2026-03-03T12:00:00-06:00"); // noon CT on election day
+    expect(getElectionPhase("tx", { now: before })).toBe("pre-election");
+  });
+
+  it("returns pre-election well before election day", () => {
+    const early = new Date("2026-02-28T12:00:00Z");
+    expect(getElectionPhase("tx", { now: early })).toBe("pre-election");
+  });
+
+  it("returns election-night right after polls close", () => {
+    const afterClose = new Date("2026-03-03T19:01:00-06:00"); // 7:01 PM CT
+    expect(getElectionPhase("tx", { now: afterClose })).toBe("election-night");
+  });
+
+  it("returns election-night at 11 PM CT on election night", () => {
+    const lateNight = new Date("2026-03-03T23:00:00-06:00");
+    expect(getElectionPhase("tx", { now: lateNight })).toBe("election-night");
+  });
+
+  it("returns post-election the next morning", () => {
+    const nextMorning = new Date("2026-03-04T08:00:00-06:00"); // 8 AM CT March 4
+    expect(getElectionPhase("tx", { now: nextMorning })).toBe("post-election");
+  });
+
+  it("returns post-election weeks after election", () => {
+    const weeksLater = new Date("2026-03-20T12:00:00Z");
+    expect(getElectionPhase("tx", { now: weeksLater })).toBe("post-election");
+  });
+
+  // KV override tests
+  it("returns KV override when set to post-election", () => {
+    const before = new Date("2026-02-28T12:00:00Z"); // pre-election by time
+    expect(getElectionPhase("tx", { kvPhase: "post-election", now: before })).toBe("post-election");
+  });
+
+  it("returns KV override when set to runoff", () => {
+    expect(getElectionPhase("tx", { kvPhase: "runoff" })).toBe("runoff");
+  });
+
+  it("returns KV override when set to election-night", () => {
+    expect(getElectionPhase("tx", { kvPhase: "election-night" })).toBe("election-night");
+  });
+
+  it("returns KV override when set to pre-election (override back)", () => {
+    const after = new Date("2026-03-10T12:00:00Z"); // post-election by time
+    expect(getElectionPhase("tx", { kvPhase: "pre-election", now: after })).toBe("pre-election");
+  });
+
+  it("ignores invalid KV override and falls through to time-based", () => {
+    const before = new Date("2026-02-28T12:00:00Z");
+    expect(getElectionPhase("tx", { kvPhase: "invalid-phase", now: before })).toBe("pre-election");
+  });
+
+  it("ignores empty string KV override", () => {
+    const before = new Date("2026-02-28T12:00:00Z");
+    expect(getElectionPhase("tx", { kvPhase: "", now: before })).toBe("pre-election");
+  });
+
+  it("ignores null KV override", () => {
+    const before = new Date("2026-02-28T12:00:00Z");
+    expect(getElectionPhase("tx", { kvPhase: null, now: before })).toBe("pre-election");
+  });
+
+  // DC election: June 16, 2026
+  it("returns pre-election for DC before its election", () => {
+    const before = new Date("2026-06-15T12:00:00Z");
+    expect(getElectionPhase("dc", { now: before })).toBe("pre-election");
+  });
+
+  it("returns post-election for DC after its election", () => {
+    const after = new Date("2026-06-18T12:00:00Z");
+    expect(getElectionPhase("dc", { now: after })).toBe("post-election");
+  });
+
+  // Edge cases
+  it("returns pre-election for unknown state code", () => {
+    expect(getElectionPhase("ca")).toBe("pre-election");
+  });
+
+  it("boundary: exactly at polls close time returns election-night", () => {
+    // Polls close at 7 PM CT = 2026-03-04T01:00:00Z
+    const exact = new Date("2026-03-04T01:00:00Z");
+    // At exact boundary, now >= pollsClose so it's election-night
+    expect(getElectionPhase("tx", { now: exact })).toBe("election-night");
+  });
+
+  it("boundary: 1ms before polls close is pre-election", () => {
+    const justBefore = new Date(new Date("2026-03-04T01:00:00Z").getTime() - 1);
+    expect(getElectionPhase("tx", { now: justBefore })).toBe("pre-election");
   });
 });

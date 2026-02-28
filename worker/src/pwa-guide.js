@@ -2,6 +2,7 @@
 // Ported from ClaudeService.swift
 
 import { logTokenUsage } from "./usage-logger.js";
+import { getElectionPhase, ELECTION_PHASES } from "./state-config.js";
 
 const SYSTEM_PROMPT =
   "You are a non-partisan voting guide assistant for Texas elections. " +
@@ -80,8 +81,17 @@ async function hashGuideKey(profile, ballot, party, lang, readingLevel, llm) {
 
 export async function handlePWA_Guide(request, env) {
   try {
-    // Check for cache bypass via query param or request body
+    // Check election phase — block guide generation after polls close
     var requestUrl = new URL(request.url);
+    var stateCode = requestUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
+    var testPhase = requestUrl.searchParams.get("test_phase");
+    var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
+    var phase = getElectionPhase(stateCode, { kvPhase });
+    if (phase === "post-election" || phase === "election-night") {
+      return json({ error: "Guide generation is closed. The primary election has ended.", phase }, 410);
+    }
+
+    // Check for cache bypass via query param or request body
     var nocache = requestUrl.searchParams.get("nocache") === "1";
 
     const { party, profile, districts, lang, countyFips, readingLevel, llm } = await request.json();
@@ -257,6 +267,16 @@ const SUMMARY_SYSTEM =
 
 export async function handlePWA_Summary(request, env) {
   try {
+    // Check election phase — block summary generation after polls close
+    var summaryUrl = new URL(request.url);
+    var summaryState = summaryUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
+    var summaryTestPhase = summaryUrl.searchParams.get("test_phase");
+    var summaryKvPhase = (summaryTestPhase && ELECTION_PHASES.includes(summaryTestPhase)) ? summaryTestPhase : await env.ELECTION_DATA.get("site_phase:" + summaryState);
+    var summaryPhase = getElectionPhase(summaryState, { kvPhase: summaryKvPhase });
+    if (summaryPhase === "post-election" || summaryPhase === "election-night") {
+      return json({ error: "Guide generation is closed. The primary election has ended.", phase: summaryPhase }, 410);
+    }
+
     const { profile, lang, readingLevel, llm } = await request.json();
     if (!profile) {
       return json({ error: "profile required" }, 400);
@@ -1744,6 +1764,19 @@ function sseEvent(type, data) {
  */
 export async function handlePWA_GuideStream(request, env) {
   var requestUrl = new URL(request.url);
+
+  // Check election phase — block guide generation after polls close
+  var stateCode = requestUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
+  var testPhase = requestUrl.searchParams.get("test_phase");
+  var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
+  var phase = getElectionPhase(stateCode, { kvPhase });
+  if (phase === "post-election" || phase === "election-night") {
+    return new Response("event: error\ndata: " + JSON.stringify({ error: "Guide generation is closed. The primary election has ended.", phase }) + "\n\n", {
+      status: 410,
+      headers: { "Content-Type": "text/event-stream", "Access-Control-Allow-Origin": "*" },
+    });
+  }
+
   var nocache = requestUrl.searchParams.get("nocache") === "1";
 
   var body;

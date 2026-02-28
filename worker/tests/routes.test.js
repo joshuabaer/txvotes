@@ -411,7 +411,7 @@ describe("Worker routing patterns", () => {
 
   it("falls through to landing page for unknown GET paths", () => {
     // At end of GET routes, handleLandingPage() is the fallback
-    expect(indexSrc).toContain("return handleLandingPage()");
+    expect(indexSrc).toContain("return handleLandingPage(phase)");
   });
 
   it("redirects /candidate (no slug) to /candidates index", () => {
@@ -431,7 +431,7 @@ describe("Worker routing patterns", () => {
 // ---------------------------------------------------------------------------
 describe("/how-it-works page content", () => {
   it("has handleHowItWorks function", () => {
-    expect(indexSrc).toContain("function handleHowItWorks()");
+    expect(indexSrc).toContain("function handleHowItWorks(phase");
   });
 
   it("has the correct page title", () => {

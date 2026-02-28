@@ -693,21 +693,23 @@ describe("/run-audit-now route and rate limiting", () => {
 // ===========================================================================
 describe("Dynamic open source page", () => {
   it("handleOpenSource function exists", () => {
-    expect(indexSrc).toContain("async function handleOpenSource(env)");
+    expect(indexSrc).toContain("async function handleOpenSource(env");
   });
 
   it("reads audit:summary from KV", () => {
+    const osStart = indexSrc.indexOf("async function handleOpenSource(env");
     const osBlock = indexSrc.slice(
-      indexSrc.indexOf("async function handleOpenSource(env)"),
-      indexSrc.indexOf("const html = `<!DOCTYPE html", indexSrc.indexOf("async function handleOpenSource(env)"))
+      osStart,
+      indexSrc.indexOf("const html = `<!DOCTYPE html", osStart)
     );
     expect(osBlock).toContain("audit:summary");
   });
 
   it("has default review scores for all 4 providers", () => {
+    const osStart = indexSrc.indexOf("async function handleOpenSource(env");
     const osBlock = indexSrc.slice(
-      indexSrc.indexOf("async function handleOpenSource(env)"),
-      indexSrc.indexOf("const html = `<!DOCTYPE html", indexSrc.indexOf("async function handleOpenSource(env)"))
+      osStart,
+      indexSrc.indexOf("const html = `<!DOCTYPE html", osStart)
     );
     expect(osBlock).toContain("chatgpt");
     expect(osBlock).toContain("gemini");
@@ -717,9 +719,10 @@ describe("Dynamic open source page", () => {
   });
 
   it("overrides default scores with live audit results when available", () => {
+    const osStart = indexSrc.indexOf("async function handleOpenSource(env");
     const osBlock = indexSrc.slice(
-      indexSrc.indexOf("async function handleOpenSource(env)"),
-      indexSrc.indexOf("const html = `<!DOCTYPE html", indexSrc.indexOf("async function handleOpenSource(env)") + 1)
+      osStart,
+      indexSrc.indexOf("const html = `<!DOCTYPE html", osStart + 1)
     );
     expect(osBlock).toContain("summary.providers");
     expect(osBlock).toContain("provider.overallScore");
@@ -727,9 +730,10 @@ describe("Dynamic open source page", () => {
   });
 
   it("extracts audit timestamp from summary", () => {
+    const osStart = indexSrc.indexOf("async function handleOpenSource(env");
     const osBlock = indexSrc.slice(
-      indexSrc.indexOf("async function handleOpenSource(env)"),
-      indexSrc.indexOf("const html = `<!DOCTYPE html", indexSrc.indexOf("async function handleOpenSource(env)") + 1)
+      osStart,
+      indexSrc.indexOf("const html = `<!DOCTYPE html", osStart + 1)
     );
     expect(osBlock).toContain("auditTimestamp");
     expect(osBlock).toContain("completedAt");
@@ -737,9 +741,10 @@ describe("Dynamic open source page", () => {
   });
 
   it("falls back to defaults on JSON parse errors", () => {
+    const osStart = indexSrc.indexOf("async function handleOpenSource(env");
     const osBlock = indexSrc.slice(
-      indexSrc.indexOf("async function handleOpenSource(env)"),
-      indexSrc.indexOf("const html = `<!DOCTYPE html", indexSrc.indexOf("async function handleOpenSource(env)") + 1)
+      osStart,
+      indexSrc.indexOf("const html = `<!DOCTYPE html", osStart + 1)
     );
     expect(osBlock).toContain("catch");
     expect(osBlock).toContain("fall back to defaults");

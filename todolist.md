@@ -21,7 +21,7 @@ _From data audit (Feb 23). All 254 counties now have ballot keys. Some have empt
 - [x] Seed 23 missing counties — all FIPS 48445-48507 now have ballot data in KV
 - [x] Retry failed county ballots — Galveston (48167) and Jefferson (48245) both seeded successfully
 - [x] Seed missing party ballots — Kaufman (48257), Nueces (48303), McLennan (48309), Gregg (48183) all now have both party ballots
-- [ ] Re-seed empty county ballots — Code fixes deployed via PR #7 (reject empty results, better prompts) and PR #8 (robust JSON extraction). Seeded results:
+- [ ] **LOW PRIORITY** Re-seed empty county ballots — Code fixes deployed via PR #7 (reject empty results, better prompts) and PR #8 (robust JSON extraction). Seeded results:
   - Randall (48381): 1 Republican race (seeded in previous session)
   - Smith (48423): 5 Republican + 2 Democrat races (seeded in previous session)
   - Archer (48009): 3 Republican races found. No Democrat primary (expected — small rural red county).
@@ -326,6 +326,7 @@ _Phase 1 (multi-state infrastructure) complete. Plan at `docs/plans/plan_dc_prim
 
 ### Infrastructure
 
+- [ ] **Email daily stats summaries to admin@usvotes.app** — Send stats summary email at 7am daily. During the last 48 hours before the election (March 1-3, 2026), switch to hourly emails. Include key metrics: guide generations, unique visitors, cache hit rates, error rates, balance scores.
 - [ ] Replace atxvotes-api worker with Cloudflare redirect rule — atxvotes.app only does 301 redirects to txvotes.app now (cron moved to usvotes-api). Replace the worker with a Cloudflare Bulk Redirect rule to eliminate the redundant worker entirely.
 - [ ] Rename txvotes-api worker to usvotes-api in Cloudflare dashboard — config already uses `usvotes-api` but deploying requires the old name since `txvotes-api` owns the routes. Unassign routes from `txvotes-api` in the dashboard, then deploy with `usvotes-api` name. Temporarily reverted in wrangler.txvotes.toml to keep deploys working.
 - [ ] **Set up tx.usvotes.app and dc.usvotes.app subdomains** — Configure Cloudflare DNS for usvotes.app with `tx` and `dc` subdomains pointing to the usvotes-api worker. Add route patterns in wrangler.txvotes.toml for `tx.usvotes.app/*` and `dc.usvotes.app/*`. Should work identically to txvotes.app and dcvotes.app respectively.

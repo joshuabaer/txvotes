@@ -1421,7 +1421,15 @@ var APP_JS = [
     "'so your friends and family can get a personalized voting guide too.':'para que tus amigos y familia tambi\\u00E9n obtengan una gu\\u00EDa personalizada.'," +
     "'Now help 3 friends do the same.':'Ahora ayuda a 3 amigos a hacer lo mismo.'," +
     "'with someone who needs help deciding.':'con alguien que necesite ayuda para decidir.'," +
-    "'My':'Mi'" +
+    "'My':'Mi'," +
+    "'The March 3 primary has ended.':'La primaria del 3 de marzo ha terminado.'," +
+    "'The March 3 primary has ended. Your ballot is saved for reference.':'La primaria del 3 de marzo ha terminado. Tu boleta est\\u00E1 guardada como referencia.'," +
+    "'View Your Ballot':'Ver tu boleta'," +
+    "'View Primary Results':'Ver resultados de la primaria'," +
+    "'View Results':'Ver resultados'," +
+    "'Guide generation is closed. The primary election has ended.':'La generaci\\u00F3n de gu\\u00EDas est\\u00E1 cerrada. La elecci\\u00F3n primaria ha terminado.'," +
+    "'March 3 Primary \\u2014 Complete':'Primaria del 3 de marzo \\u2014 Completada'," +
+    "'Polls Are Closed \\u2014 March 3, 2026':'Las urnas est\\u00E1n cerradas \\u2014 3 de marzo, 2026'" +
   "};",
   "function t(s){return LANG==='es'&&TR[s]||s}",
 
@@ -1621,6 +1629,8 @@ var APP_JS = [
     "expanded:{'vi-dates':true,'vi-bring':true},disclaimerDismissed:false,hasVoted:false," +
     "staleBallot:false," +
     "electionExpired:false," +
+    "electionPhase:'pre-election'," +
+    "resultsUrl:null," +
     "overrides:{}" +
     "};",
 
@@ -1869,6 +1879,18 @@ var APP_JS = [
     "}catch(e){}" +
   "}",
 
+  // Fetch election phase from server (async, updates state and re-renders if changed)
+  "(function(){" +
+    "fetch('/'+_stateCode+'/app/api/phase').then(function(r){return r.json()}).then(function(d){" +
+      "if(d.phase&&d.phase!==S.electionPhase){" +
+        "S.electionPhase=d.phase;" +
+        "if(d.resultsUrl)S.resultsUrl=d.resultsUrl;" +
+        "if(d.phase==='post-election'||d.phase==='election-night'){S.electionExpired=true}" +
+        "render();" +
+      "}" +
+    "}).catch(function(){});" +
+  "})();",
+
   // ============ RENDER ============
   "function topNav(active){" +
     "return '<div class=\"topnav-inner\">" +
@@ -1940,7 +1962,11 @@ var APP_JS = [
       "<p>'+t('Your personalized voting guide for '+_stateFullName+' elections.')+'</p>" +
     "</div>" +
     "<div class=\"card\"><div style=\"text-align:center;margin-bottom:16px\">" +
-      "<span class=\"badge badge-blue\">'+(_stateCode==='dc'?t('DC Primary \\u2014 June 16, 2026'):t('Texas Primary \\u2014 March 3, 2026'))+'</span></div>" +
+      "<span class=\"badge badge-blue\">'+" +
+        "(S.electionPhase==='post-election'?t('March 3 Primary \\u2014 Complete'):" +
+        "S.electionPhase==='election-night'?t('Polls Are Closed \\u2014 March 3, 2026'):" +
+        "(_stateCode==='dc'?t('DC Primary \\u2014 June 16, 2026'):t('Texas Primary \\u2014 March 3, 2026')))" +
+      "+'</span></div>" +
       "<div class=\"features\">" +
         "<div><span>\u2705</span> '+t('5-minute interview learns your values')+'</div>" +
         "<div><span>\u{1F4CB}</span> '+t('Personalized ballot with recommendations')+'</div>" +
@@ -1948,7 +1974,15 @@ var APP_JS = [
         "<div><span>\u{1F4CD}</span> '+t('Find your polling location')+'</div>" +
         "<div><span>\u2696\u{FE0F}</span> '+t('Nonpartisan by design')+'</div>" +
       "</div>" +
-      "<button class=\"btn btn-primary mt-md\" data-action=\"start\">'+t('Build My Guide')+'</button>" +
+      "'+((S.electionPhase==='post-election'||S.electionPhase==='election-night')?" +
+        "'<div style=\"background:#fff3cd;border:1px solid #ffc107;border-radius:12px;padding:14px 16px;margin-top:12px;font-size:14px;color:#664d03;text-align:center\">" +
+          "<p style=\"margin:0 0 10px;font-weight:600\">'+t('The March 3 primary has ended.')+'</p>" +
+          "'+(S.guideComplete?'<a href=\"#/ballot\" class=\"btn btn-primary\" style=\"text-decoration:none\">'+t('View Your Ballot')+'</a>':'')+" +
+          "(S.resultsUrl?'<a href=\"'+S.resultsUrl+'\" class=\"btn\" style=\"margin-top:8px;display:inline-block;text-decoration:none;background:transparent;color:#664d03;border:1px solid #b8960c;padding:8px 16px;border-radius:8px;font-weight:600\">'+t('View Primary Results')+'</a>':'')+" +
+        "'</div>'" +
+      ":" +
+        "'<button class=\"btn btn-primary mt-md\" data-action=\"start\">'+t('Build My Guide')+'</button>'" +
+      ")+'" +
     "</div>" +
     "<div style=\"text-align:center;margin-top:16px\">" +
       "<button data-action=\"set-lang\" data-value=\"'+(LANG==='es'?'en':'es')+'\" style=\"font-size:14px;color:var(--text2);background:none;border:none;cursor:pointer;font-family:inherit\">'+(LANG==='es'?'Switch to English':'Cambiar a Espa\\u00F1ol')+'</button>" +
@@ -2264,15 +2298,17 @@ var APP_JS = [
       "h+='<span>'+t('Your ballot data may be outdated. Tap to refresh.')+'</span>';" +
       "h+='</div>'" +
     "}" +
-    // Election cycle expired banner (shown >7 days after election date)
+    // Election cycle expired banner (shown after election ends)
     "if(S.electionExpired){" +
       "h+='<div style=\"background:#fff3cd;border:1px solid #ffc107;border-radius:12px;padding:14px 16px;margin-bottom:12px;font-size:14px;color:#664d03\">';" +
       "h+='<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:10px\">';" +
       "h+='<span style=\"font-size:18px;flex-shrink:0\">\u{1F4C5}</span>';" +
-      "h+='<span>'+t('The primary is over. Your ballot data is from the primary election.')+'</span>';" +
+      "h+='<span>'+t('The March 3 primary has ended. Your ballot is saved for reference.')+'</span>';" +
       "h+='</div>';" +
       "h+='<div style=\"display:flex;gap:8px;flex-wrap:wrap\">';" +
-      "h+='<button data-action=\"election-clear\" style=\"background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer\">'+t('Clear & Start Fresh')+'</button>';" +
+      "if(S.resultsUrl){" +
+        "h+='<a href=\"'+S.resultsUrl+'\" style=\"background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block\">'+t('View Results')+'</a>'" +
+      "}" +
       "h+='<button data-action=\"election-keep\" style=\"background:transparent;color:#664d03;border:1px solid #b8960c;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer\">'+t('Keep for Reference')+'</button>';" +
       "h+='</div></div>'" +
     "}" +
@@ -3589,7 +3625,7 @@ var APP_JS = [
   "document.getElementById('app').addEventListener('click',function(e){" +
     "var el=e.target.closest('[data-action]');if(!el)return;e.preventDefault();" +
     "var action=el.dataset.action;" +
-    "if(action==='start'){S.phase=1;S._iStart=Date.now();trk('interview_start');save();render()}" +
+    "if(action==='start'){if(S.electionPhase==='post-election'||S.electionPhase==='election-night'){return}S.phase=1;S._iStart=Date.now();trk('interview_start');save();render()}" +
     "else if(action==='back'){" +
       "if(S.phase===4&&S.ddIndex>0){S.ddIndex--;render()}" +
       "else if(S.phase===5&&S.ddQuestions.length>0){S.phase=4;S.ddIndex=S.ddQuestions.length-1;render()}" +
@@ -3963,6 +3999,9 @@ var APP_JS = [
   "}",
 
   "function buildGuide(){" +
+    "if(S.electionPhase==='post-election'||S.electionPhase==='election-night'){" +
+      "S.error=t('Guide generation is closed. The primary election has ended.');render();return" +
+    "}" +
     "trk('interview_complete',{d1:''+S.readingLevel,d2:S.spectrum,ms:Date.now()-(S._iStart||Date.now())});" +
     "trk('guide_start');" +
     "S.phase=8;S.error=null;S.isLoading=true;S._streaming=false;render();" +
@@ -4118,7 +4157,9 @@ var APP_JS = [
 
   // ============ SHARE APP ============
   "function shareApp(){" +
-    "var text='Get your free personalized voting guide at https://txvotes.app';" +
+    "var text=(S.electionPhase==='post-election'||S.electionPhase==='election-night')?" +
+      "'Check your Texas primary results at https://txvotes.app':" +
+      "'Get your free personalized voting guide at https://txvotes.app';" +
     "if(navigator.share){" +
       "navigator.share({title:_stateLabel(),text:text,url:'https://txvotes.app'}).catch(function(){})" +
     "}else{" +
@@ -4428,6 +4469,7 @@ var APP_JS = [
 
   // ============ SHARE PROMPT (post-vote) ============
   "function showSharePrompt(){" +
+    "if(S.electionPhase==='post-election'||S.electionPhase==='election-night')return;" +
     "if(localStorage.getItem('tx_votes_sharePromptSeen'))return;" +
     "localStorage.setItem('tx_votes_sharePromptSeen','1');" +
     "var d=document.createElement('div');" +
