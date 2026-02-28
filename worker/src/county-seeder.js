@@ -494,11 +494,99 @@ IMPORTANT:
   return { success: true, countyFips, countyName, zipCount: Object.keys(cleaned).length, invalidCount };
 }
 
+// ─── JSON Extraction ────────────────────────────────────────────────────────
+
+/**
+ * Extract JSON from a Claude response that may contain surrounding prose.
+ *
+ * Strategy (in order):
+ * 1. Try parsing the entire text as JSON (ideal case)
+ * 2. Extract from ```json ... ``` fenced code blocks
+ * 3. Brace-depth matching: find the outermost balanced { ... } object
+ * 4. First-brace/last-brace fallback (less reliable but catches more cases)
+ *
+ * Returns the parsed object, or null if no valid JSON found.
+ */
+export function extractJSON(text) {
+  if (!text || typeof text !== "string") return null;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  // 1. Try the whole string as JSON
+  try {
+    return JSON.parse(trimmed);
+  } catch { /* continue */ }
+
+  // 2. Try ```json fenced block
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try {
+      return JSON.parse(fenceMatch[1].trim());
+    } catch { /* continue to next strategy */ }
+  }
+
+  // 3. Brace-depth matching — find each balanced top-level { ... } and try to parse
+  let searchStart = trimmed.indexOf("{");
+  while (searchStart !== -1 && searchStart < trimmed.length) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let candidateStart = searchStart;
+    for (let i = candidateStart; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          const candidate = trimmed.slice(candidateStart, i + 1);
+          try {
+            return JSON.parse(candidate);
+          } catch {
+            // This balanced block wasn't valid JSON — skip past it and look for the next {
+            searchStart = trimmed.indexOf("{", i + 1);
+            break;
+          }
+        }
+      }
+    }
+    // If we scanned to the end without depth returning to 0, stop
+    if (depth !== 0) break;
+  }
+
+  // 4. First-brace/last-brace fallback
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const candidate = trimmed.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch { /* give up */ }
+  }
+
+  return null;
+}
+
+// ─── Claude API Call ────────────────────────────────────────────────────────
+
 /**
  * Calls Claude with web_search tool to research election data.
  * - Auth errors (401/403) throw immediately without retrying
  * - Rate limits (429) and overloaded (529) retry up to 3 times
  * - Server errors (5xx) throw with status detail
+ * - Non-JSON responses trigger a single repair retry
  */
 async function callClaudeWithSearch(env, userPrompt, options = {}) {
   const maxSearchUses = options.maxSearchUses || 10;
@@ -508,7 +596,11 @@ async function callClaudeWithSearch(env, userPrompt, options = {}) {
     system:
       "You are a nonpartisan election data researcher for Texas. " +
       "Use web_search to find verified, factual information about elections. " +
-      "Return ONLY valid JSON. Never fabricate information — if you cannot verify something, use null.\n\n" +
+      "Never fabricate information — if you cannot verify something, use null.\n\n" +
+      "CRITICAL OUTPUT FORMAT: Your response MUST be ONLY valid JSON. " +
+      "Do NOT include any explanatory text, commentary, or markdown outside of the JSON object. " +
+      "Do NOT start your response with phrases like \"I'll help you\" or \"Here is the data\". " +
+      "Your entire response must be a single JSON object starting with { and ending with }.\n\n" +
       "SOURCE PRIORITY: When evaluating web_search results, prefer sources in this order:\n" +
       "1. Texas Secretary of State filings (sos.state.tx.us)\n" +
       "2. County election offices ({county}.tx.us)\n" +
@@ -572,31 +664,98 @@ async function callClaudeWithSearch(env, userPrompt, options = {}) {
     if (textBlocks.length === 0) return null;
 
     const fullText = textBlocks.join("\n");
-    let cleaned = fullText.trim();
-    const fenceMatch = cleaned.match(/```json\s*([\s\S]*?)```/);
-    if (fenceMatch) {
-      cleaned = fenceMatch[1].trim();
-    } else {
-      const firstBrace = cleaned.indexOf("{");
-      const lastBrace = cleaned.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-      }
-    }
 
-    try {
-      const parsed = JSON.parse(cleaned);
+    // Use robust JSON extraction (handles prose, fenced blocks, nested braces)
+    const parsed = extractJSON(fullText);
+    if (parsed) {
       // Attach API-level sources for per-candidate scoping by the caller
       if (parsed.races && Array.isArray(parsed.races) && apiSources.length > 0) {
         parsed._apiSources = apiSources;
       }
       return parsed;
-    } catch {
-      throw new Error(`Failed to parse response as JSON (${cleaned.slice(0, 120)}...)`);
     }
+
+    // JSON extraction failed — attempt a repair call without web_search
+    console.warn(`[SEEDER] JSON extraction failed, attempting repair call. Raw text: ${fullText.slice(0, 200)}...`);
+    const repaired = await attemptJSONRepair(env, fullText);
+    if (repaired) {
+      if (repaired.races && Array.isArray(repaired.races) && apiSources.length > 0) {
+        repaired._apiSources = apiSources;
+      }
+      return repaired;
+    }
+
+    throw new Error(`Failed to parse response as JSON (${fullText.slice(0, 120)}...)`);
   }
 
   throw new Error("Claude API returned 429/529 after 3 retries");
+}
+
+/**
+ * Attempt to repair a non-JSON Claude response by asking Claude to extract/fix
+ * the JSON. This is a lightweight follow-up call (no web_search, low max_tokens).
+ * Returns parsed JSON object or null on failure.
+ */
+async function attemptJSONRepair(env, brokenText) {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 8192,
+        system:
+          "You are a JSON extraction assistant. The user will give you text that contains " +
+          "election data mixed with prose. Extract ONLY the JSON object from the text. " +
+          "If the text contains data described in prose but no JSON structure, convert the " +
+          "data into the JSON format requested in the original prompt. " +
+          "Your entire response must be ONLY a valid JSON object — no other text.",
+        messages: [
+          {
+            role: "user",
+            content:
+              "The following text was supposed to be a JSON response but contains prose. " +
+              "Extract or reconstruct the JSON object from it. Return ONLY the JSON:\n\n" +
+              brokenText.slice(0, 12000), // Cap to avoid token overflow
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`[SEEDER] Repair call failed with status ${response.status}`);
+      return null;
+    }
+
+    const result = await response.json();
+
+    // Log token usage for repair calls
+    if (result.usage) {
+      console.log("Token usage [seeder-repair] model=claude-sonnet-4-20250514 input=" + result.usage.input_tokens + " output=" + result.usage.output_tokens);
+      logTokenUsage(env, "seeder-repair", result.usage, "claude-sonnet-4-20250514").catch(function() {});
+    }
+
+    const textBlocks = (result.content || [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text);
+    if (textBlocks.length === 0) return null;
+
+    const repairText = textBlocks.join("\n");
+    const parsed = extractJSON(repairText);
+    if (parsed) {
+      console.log("[SEEDER] JSON repair succeeded");
+    } else {
+      console.warn("[SEEDER] JSON repair also returned non-JSON");
+    }
+    return parsed;
+  } catch (err) {
+    console.warn(`[SEEDER] JSON repair call error: ${err.message}`);
+    return null;
+  }
 }
 
 /**
