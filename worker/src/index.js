@@ -2783,11 +2783,11 @@ function buildAuditExportData() {
 
     countySeeder: {
       description: "County-level data is populated using Claude with web_search for each of Texas's top 30 counties by population (~75% of voters). Four data artifacts are generated per county: voting logistics, Republican ballot, Democratic ballot, and precinct map.",
-      model: "Claude Sonnet (claude-sonnet-4-20250514) with web_search tool (max 10 searches per call)",
+      model: "Claude Sonnet (claude-sonnet-4-20250514) with web_search tool (max 10 searches per call, 15 for precinct maps)",
       systemPrompt: "You are a nonpartisan election data researcher for Texas. Use web_search to find verified, factual information about elections. Return ONLY valid JSON. Never fabricate information — if you cannot verify something, use null.\n\nSOURCE PRIORITY: When evaluating web_search results, prefer sources in this order:\n1. Texas Secretary of State filings (sos.state.tx.us)\n2. County election offices ({county}.tx.us)\n3. Official campaign websites\n4. Nonpartisan references (ballotpedia.org, votesmart.org)\n5. Established Texas news outlets (texastribune.org, dallasnews.com)\n6. National wire services (apnews.com, reuters.com)\n7. AVOID: blogs, social media, opinion sites, unverified sources\n\nCONFLICT RESOLUTION: If sources disagree, trust official filings over campaign claims, and campaign claims over news reporting.",
       countyInfoPrompt: "Research the voting information for {countyName} County, Texas for the March 3, 2026 Texas Primary Election.\n\nFind:\n1. Does the county use Vote Centers (any location) or precinct-based voting?\n2. The county elections website URL\n3. The county elections office phone number\n4. Early voting dates and hours (early voting is Feb 17-27, 2026)\n5. Election Day hours (typically 7 AM - 7 PM)\n6. Election Day polling location finder URL\n7. Can voters use phones in the voting booth?\n8. Key local resources (election office website, local voter guide links)\n\nReturn ONLY this JSON:\n{\n  \"countyFips\": \"{fips}\",\n  \"countyName\": \"{countyName}\",\n  \"voteCenters\": true or false,\n  \"electionsWebsite\": \"URL\",\n  \"electionsPhone\": \"phone number\",\n  \"earlyVoting\": { \"periods\": [{ \"dates\": \"Feb 17-21\", \"hours\": \"7:00 AM - 7:00 PM\" }], \"note\": \"optional note\" },\n  \"electionDay\": { \"hours\": \"7:00 AM - 7:00 PM\", \"locationUrl\": \"URL to find locations\" },\n  \"phoneInBooth\": true or false or null if unknown,\n  \"resources\": [{ \"name\": \"Display Name\", \"url\": \"URL\" }]\n}",
       countyBallotPrompt: "Research ALL local {Party} primary races for {countyName} County, Texas in the March 3, 2026 Texas Primary Election.\n\nSearch the Texas Secretary of State candidate filings and local news sources.\n\nInclude ONLY county-level races such as:\n- County Judge\n- County Commissioner (by precinct)\n- County Clerk / District Clerk\n- County Treasurer / Sheriff / Attorney\n- Justice of the Peace / Constable (by precinct)\n- District Attorney / Tax Assessor-Collector\n- Any other county-level offices on the primary ballot\n\nFor each race, provide: Office name, district/precinct if applicable, whether contested, each candidate's name, background, key positions, endorsements, pros, cons.\n\nReturn ONLY valid JSON with the same candidate field structure as statewide races.",
-      precinctMapPrompt: "Research the County Commissioner precinct boundaries for {countyName} County, Texas.\n\nI need a mapping of ZIP codes to County Commissioner precinct numbers.\n\nSearch for {countyName} County Commissioner precinct maps, GIS data, or official boundary descriptions.\n\nReturn ONLY this JSON:\n{ \"ZIP_CODE\": \"PRECINCT_NUMBER\", ... }\n\nOnly include ZIP codes primarily within {countyName} County. If mapping cannot be reliably determined, return {}.",
+      precinctMapPrompt: "Research the County Commissioner precinct boundaries for {countyName} County, Texas. Uses multi-step research strategy: county GIS portals, PDF maps, voting precinct first-digit convention (first digit of voting precinct number = commissioner precinct in most TX counties), and county-specific search hints. Returns majority-precinct mapping for ZIP codes that span multiple precincts. Validates all values are 1-4. Uses 15 web searches. Full template text withheld for security.",
       dataSources: [
         "Texas Secretary of State candidate filings",
         "County clerk election offices",
@@ -2902,7 +2902,7 @@ function buildPublicAuditExportData() {
   pub.countySeeder.systemPrompt = "System prompt instructs Claude to act as a nonpartisan election data researcher for Texas counties, use web_search for verified information, follow the 7-tier source priority hierarchy, and never fabricate information. Full prompt text withheld for security.";
   pub.countySeeder.countyInfoPrompt = "Template asks Claude to research voting logistics (vote centers, elections website, early voting dates, phone-in-booth rules) for a specific Texas county. Returns structured JSON. Full template text withheld for security.";
   pub.countySeeder.countyBallotPrompt = "Template asks Claude to research all local primary races for a specific Texas county, including county judge, commissioners, clerks, sheriffs, and other county-level offices. Returns structured JSON with candidate details. Full template text withheld for security.";
-  pub.countySeeder.precinctMapPrompt = "Template asks Claude to research County Commissioner precinct boundaries and map ZIP codes to precinct numbers. Returns structured JSON. Full template text withheld for security.";
+  pub.countySeeder.precinctMapPrompt = "Template asks Claude to research County Commissioner precinct boundaries using multi-step strategy: county GIS portals, PDF maps, voting precinct first-digit convention, and county-specific hints. Maps ZIP codes to commissioner precinct numbers (1-4) using majority-precinct assignment. Uses 15 web searches. Returns validated structured JSON. Full template text withheld for security.";
 
   // --- toneVariants: redact model and rewrite prompt ---
   pub.toneVariants.model = "Claude Sonnet (Anthropic)";
@@ -4548,6 +4548,7 @@ const TX_FIPS = [];
 for (let i = 1; i <= 507; i += 2) TX_FIPS.push(`48${String(i).padStart(3, "0")}`);
 
 // Texas county FIPS to name mapping (all 254 counties)
+// Source: US Census / FCC FIPS codes — https://transition.fcc.gov/oet/info/maps/census/fips/fips.txt
 const TX_COUNTY_NAMES = {
   "48001":"Anderson","48003":"Andrews","48005":"Angelina","48007":"Aransas","48009":"Archer",
   "48011":"Armstrong","48013":"Atascosa","48015":"Austin","48017":"Bailey","48019":"Bandera",
@@ -4586,20 +4587,20 @@ const TX_COUNTY_NAMES = {
   "48341":"Moore","48343":"Morris","48345":"Motley","48347":"Nacogdoches","48349":"Navarro",
   "48351":"Newton","48353":"Nolan","48355":"Nueces","48357":"Ochiltree","48359":"Oldham",
   "48361":"Orange","48363":"Palo Pinto","48365":"Panola","48367":"Parker","48369":"Parmer",
-  "48371":"Pecos","48373":"Polk","48375":"Presidio","48377":"Rains","48379":"Randall",
-  "48381":"Reagan","48383":"Real","48385":"Red River","48387":"Reeves","48389":"Refugio",
-  "48391":"Roberts","48393":"Robertson","48395":"Rockwall","48397":"Runnels","48399":"Rusk",
-  "48401":"Sabine","48403":"San Augustine","48405":"San Jacinto","48407":"San Patricio","48409":"San Saba",
-  "48411":"Schleicher","48413":"Scurry","48415":"Shackelford","48417":"Shelby","48419":"Sherman",
-  "48421":"Smith","48423":"Somervell","48425":"Starr","48427":"Stephens","48429":"Sterling",
-  "48431":"Stonewall","48433":"Sutton","48435":"Swisher","48437":"Tarrant","48439":"Taylor",
-  "48441":"Terrell","48443":"Terry","48445":"Throckmorton","48447":"Titus","48449":"Tom Green",
-  "48451":"Travis","48453":"Trinity","48455":"Tyler","48457":"Upshur","48459":"Upton",
-  "48461":"Uvalde","48463":"Val Verde","48465":"Van Zandt","48467":"Victoria","48469":"Walker",
-  "48471":"Waller","48473":"Ward","48475":"Washington","48477":"Webb","48479":"Wharton",
-  "48481":"Wheeler","48483":"Wichita","48485":"Wilbarger","48487":"Willacy","48489":"Williamson",
-  "48491":"Wilson","48493":"Winkler","48495":"Wise","48497":"Wood","48499":"Yoakum",
-  "48501":"Young","48503":"Zapata","48505":"Zavala","48507":"Zablocki"
+  "48371":"Pecos","48373":"Polk","48375":"Potter","48377":"Presidio","48379":"Rains",
+  "48381":"Randall","48383":"Reagan","48385":"Real","48387":"Red River","48389":"Reeves",
+  "48391":"Refugio","48393":"Roberts","48395":"Robertson","48397":"Rockwall","48399":"Runnels",
+  "48401":"Rusk","48403":"Sabine","48405":"San Augustine","48407":"San Jacinto","48409":"San Patricio",
+  "48411":"San Saba","48413":"Schleicher","48415":"Scurry","48417":"Shackelford","48419":"Shelby",
+  "48421":"Sherman","48423":"Smith","48425":"Somervell","48427":"Starr","48429":"Stephens",
+  "48431":"Sterling","48433":"Stonewall","48435":"Sutton","48437":"Swisher","48439":"Tarrant",
+  "48441":"Taylor","48443":"Terrell","48445":"Terry","48447":"Throckmorton","48449":"Titus",
+  "48451":"Tom Green","48453":"Travis","48455":"Trinity","48457":"Tyler","48459":"Upshur",
+  "48461":"Upton","48463":"Uvalde","48465":"Val Verde","48467":"Van Zandt","48469":"Victoria",
+  "48471":"Walker","48473":"Waller","48475":"Ward","48477":"Washington","48479":"Webb",
+  "48481":"Wharton","48483":"Wheeler","48485":"Wichita","48487":"Wilbarger","48489":"Willacy",
+  "48491":"Williamson","48493":"Wilson","48495":"Winkler","48497":"Wise","48499":"Wood",
+  "48501":"Yoakum","48503":"Young","48505":"Zapata","48507":"Zavala"
 };
 
 async function handleStats(env) {
@@ -7742,6 +7743,43 @@ export default {
       const options = {};
       if (body.reset) options.reset = true;
       const result = await seedFullCounty(body.countyFips, body.countyName, env, options);
+      return jsonResponse(result);
+    }
+
+    // POST: /api/election/seed-county-info — seed ONLY county voting info (no ballots)
+    // Useful for backfilling missing county_info without re-seeding ballots
+    if (url.pathname === "/api/election/seed-county-info") {
+      const auth = request.headers.get("Authorization");
+      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+      const body = await request.json().catch(() => ({}));
+      // Support single county or batch mode
+      if (body.batch) {
+        // Batch mode: seed county_info for all counties missing it
+        const results = [];
+        const errors = [];
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        for (const fips of TX_FIPS) {
+          const existing = await env.ELECTION_DATA.get(`county_info:${fips}`);
+          if (existing) continue; // already has info
+          const name = TX_COUNTY_NAMES[fips];
+          if (!name) continue;
+          try {
+            const r = await seedCountyInfo(fips, name, env);
+            results.push({ fips, name, ...r });
+          } catch (e) {
+            errors.push({ fips, name, error: e.message });
+          }
+          await sleep(3000); // rate limit between API calls
+        }
+        return jsonResponse({ mode: "batch", seeded: results.length, errors: errors.length, results, errorDetails: errors });
+      }
+      // Single county mode
+      if (!body.countyFips || !body.countyName) {
+        return jsonResponse({ error: "countyFips and countyName required (or use batch:true)" }, 400);
+      }
+      const result = await seedCountyInfo(body.countyFips, body.countyName, env);
       return jsonResponse(result);
     }
 
