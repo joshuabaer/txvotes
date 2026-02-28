@@ -81,7 +81,10 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 - [x] **Simplify ballot page top section** — Removed duplicate AI limitations text (was identical to dismissible disclaimer). Moved "Spread the word" Share CTA below all races. Collapsed Share button to "Share Texas Votes" in action bar. Deployed.
 - [x] **Translate all remaining English on Spanish pages** — Covered by the Spanish translation audit (item 47). Added `data-t` + TR entries for all untranslated strings found across landing, stats, candidates, open-source, audit, and data-quality pages. Deployed.
 - [x] **Use neutral Spanish dialect in all AI prompts** — Added "español neutro" dialect instructions to 6 locations in pwa-guide.js: SYSTEM_PROMPT, handlePWA_Summary langInstruction, buildUserPrompt Spanish text fields, buildUserPrompt candidateTranslations schema, handleSeedTranslations user prompt, and handleSeedTranslations system prompt. Deployed.
-- [ ] **Update existing KV-cached translations to neutral dialect** — Re-run `POST /api/election/seed-translations` for both parties (and any county translations) after updating the prompts to regenerate all cached Spanish candidate translations in the neutral dialect. Verify via the app with `?lang=es`.
+- [ ] **Update existing KV-cached translations to neutral dialect** — Prompts already use neutral dialect (no code changes needed). Operational steps remaining:
+  1. Run `POST /api/election/seed-translations` with `{"party":"republican"}` and `{"party":"democrat"}` to regenerate statewide translations
+  2. Optionally regenerate county translations (add `"countyFips":"48453"` etc. for each county with existing translations)
+  3. **Verify:** Visit `https://txvotes.app/tx/app?lang=es`, generate a guide, confirm neutral Latin American Spanish (no regional slang, "usted" forms)
 
 ### Audit Score Improvements
 _Latest audit (Feb 23): ChatGPT 7.5, Gemini 7.5, Claude 8.2, Grok 7.8 (avg 7.8/10). Dimension averages: Bias 8.3, Accuracy 7.0, Framing 8.0, Pros/Cons 7.3, Transparency 9.3. Lowest: Accuracy (7.0) and Pros/Cons (7.3)._
@@ -327,7 +330,7 @@ _Phase 1 (multi-state infrastructure) complete. Plan at `docs/plans/plan_dc_prim
 - [ ] **Migrate TX KV keys to `tx:` prefix** — Currently TX keys are unprefixed for backward compat. Plan and execute migration to `tx:` prefix for consistency.
 
 ### Diagnostics & Data Quality
-- [ ] **Fix all outstanding diagnostic issues** — Review /data-quality, /admin/coverage, /api/balance-check, and /health endpoints on the live site. Identify and fix any warnings, errors, stale data, or failing checks. Ensure all diagnostic pages render correctly and report healthy status.
+- [x] **Fix all outstanding diagnostic issues** — Fixed 7 issues: proposition tone threshold, county name column, JSON parse guards, health check audit status, stale "repo pending" text, route comment, test mock. PR #6 merged.
 
 ### Code Quality
 
@@ -338,7 +341,7 @@ _Phase 1 (multi-state infrastructure) complete. Plan at `docs/plans/plan_dc_prim
 - [ ] Replace atxvotes-api worker with Cloudflare redirect rule — atxvotes.app only does 301 redirects to txvotes.app now (cron moved to usvotes-api). Replace the worker with a Cloudflare Bulk Redirect rule to eliminate the redundant worker entirely.
 - [ ] Rename txvotes-api worker to usvotes-api in Cloudflare dashboard — config already uses `usvotes-api` but deploying requires the old name since `txvotes-api` owns the routes. Unassign routes from `txvotes-api` in the dashboard, then deploy with `usvotes-api` name. Temporarily reverted in wrangler.txvotes.toml to keep deploys working.
 - [ ] **Set up tx.usvotes.app and dc.usvotes.app subdomains** — Configure Cloudflare DNS for usvotes.app with `tx` and `dc` subdomains pointing to the usvotes-api worker. Add route patterns in wrangler.txvotes.toml for `tx.usvotes.app/*` and `dc.usvotes.app/*`. Should work identically to txvotes.app and dcvotes.app respectively.
-- [ ] **Fix happy-dom missing in worktrees** — Worktrees created by agents lack node_modules, causing happy-dom test failures (interview-flow and interview-edge-cases tests). Either install deps in worktree setup, or add happy-dom as a dev dependency at root level.
+- [x] **Fix happy-dom missing in worktrees** — Added "Worktree Testing" section to CLAUDE.md with `npm install` instructions. PR #5 merged.
 
 ### Collaboration Readiness
 

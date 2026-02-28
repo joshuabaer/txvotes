@@ -131,13 +131,13 @@ export const TOP_COUNTIES = [
   { fips: "48491", name: "Williamson" },
   { fips: "48339", name: "Montgomery" },
   { fips: "48141", name: "El Paso" },
-  { fips: "48303", name: "Nueces" },
+  { fips: "48355", name: "Nueces" },
   { fips: "48167", name: "Galveston" },
   { fips: "48039", name: "Brazoria" },
   { fips: "48257", name: "Kaufman" },
   { fips: "48251", name: "Johnson" },
-  { fips: "48355", name: "Parker" },
-  { fips: "48367", name: "Lubbock" },
+  { fips: "48367", name: "Parker" },
+  { fips: "48303", name: "Lubbock" },
   { fips: "48061", name: "Cameron" },
   { fips: "48309", name: "McLennan" },
   { fips: "48027", name: "Bell" },
@@ -170,6 +170,16 @@ Find:
 7. Can voters use phones in the voting booth?
 8. Key local resources (election office website, local voter guide links)
 
+SEARCH STRATEGY for small/rural counties:
+- Try the county clerk or elections administrator page on the county website
+- Search "${countyName} County Texas elections" and "${countyName} County Texas county clerk"
+- Check the Texas Secretary of State county clerk directory: https://www.sos.state.tx.us/elections/voter/county.shtml
+- For phone numbers, try the county courthouse main number
+- Many small counties use precinct-based voting (not vote centers)
+- If no dedicated elections website exists, use the county's main website
+- Default early voting hours for small counties: 8 AM - 5 PM weekdays, extended last week
+- Election Day hours in Texas are always 7:00 AM - 7:00 PM statewide
+
 Return ONLY this JSON:
 {
   "countyFips": "${countyFips}",
@@ -193,7 +203,8 @@ Return ONLY this JSON:
   ]
 }
 
-IMPORTANT: Return ONLY valid JSON. Use null for any field you cannot verify.`;
+IMPORTANT: Return ONLY valid JSON. Use null for any field you cannot verify.
+Even for very small counties, you should be able to find at least a phone number and basic website. Use the TX SOS county clerk directory as a fallback.`;
 
   const result = await callClaudeWithSearch(env, prompt);
   if (!result) return { error: "No response from Claude" };
@@ -215,7 +226,13 @@ export async function seedCountyBallot(countyFips, countyName, party, env) {
 
   const prompt = `Research ALL local ${partyLabel} primary races for ${countyName} County, Texas in the March 3, 2026 Texas Primary Election.
 
-Search the Texas Secretary of State candidate filings and local news sources.
+SEARCH STRATEGY — perform these searches in order:
+1. Search "${countyName} County Texas ${partyLabel} primary 2026 candidates"
+2. Search "site:sos.state.tx.us ${countyName} county 2026 primary filing"
+3. Search "${countyName} County Texas March 2026 election ballot"
+4. Search "ballotpedia ${countyName} County Texas 2026"
+
+Every Texas county has at least a County Judge and 4 Commissioner precincts. Most also have Sheriff, County Clerk, District Clerk, Tax Assessor-Collector, Constables, and Justices of the Peace. Search until you find the contested races.
 
 Include ONLY county-level races such as:
 - County Judge
@@ -279,10 +296,19 @@ IMPORTANT:
 - Only include races that are actually on the ${partyLabel} primary ballot
 - Use exact candidate names from official filings
 - For endorsements: each entry must be an object with "name" (endorser name) and "type" (one of: labor union, editorial board, advocacy group, business group, elected official, political organization, professional association, community organization, public figure)
-- If you cannot find any local races for this county/party, return {"races": [], "propositions": []}`;
+- Do NOT return an empty races array unless you have exhausted all search strategies and confirmed this party has zero contested county-level races in ${countyName} County
+- If you truly cannot find any local races for this county/party after thorough searching, return {"races": [], "propositions": []}`;
 
-  const result = await callClaudeWithSearch(env, prompt);
+  const result = await callClaudeWithSearch(env, prompt, { maxSearchUses: 15 });
   if (!result) return { error: "No response from Claude" };
+
+  // Detect empty ballot — treat as retryable error so the step is NOT marked completed.
+  // Claude may return {"races":[],"propositions":[]} when web_search fails to find data.
+  // Retrying with reset will re-attempt the search.
+  if (!result.races || result.races.length === 0) {
+    console.warn(`[SEED] ${countyName}/${party}: Claude returned 0 races — treating as retryable error`);
+    return { error: `No races found for ${countyName} County ${partyLabel} primary — search may need retry` };
+  }
 
   // Scope source attribution per-candidate (matching updater.js pattern)
   const apiSources = result._apiSources || [];
@@ -351,15 +377,74 @@ IMPORTANT:
   return { success: true, countyFips, countyName, party, raceCount: (result.races || []).length };
 }
 
+// ─── County-specific search hints for precinct maps ──────────────────────────
+// These help Claude find the right GIS portals and PDF maps for each county.
+// Counties with known GIS/open data portals get targeted hints.
+
+const PRECINCT_MAP_HINTS = {
+  Harris: "Search geo-harriscounty.opendata.arcgis.com for commissioner precincts. Also try hctax.net commissioner precinct map PDF.",
+  Dallas: "Search dallascountyvotes.org/public-information/precincts-maps/ for precinct-to-commissioner mappings.",
+  Tarrant: "Search data-tarrantcounty.opendata.arcgis.com for commissioner precinct boundaries. Also try tarrantcountytx.gov interactive maps.",
+  Bexar: "Search maps.bexar.org/Commissioners/ for interactive commissioner precinct map. Also try gis-bexar.opendata.arcgis.com.",
+  Travis: "Search traviscountytx.gov/maps/gis-comm-pct for commissioner precinct GIS data. Voting precincts use 3-digit numbers where first digit = commissioner precinct.",
+  Collin: "Search collincountytx.gov Commissioners Court precincts page for PDF maps and interactive maps.",
+  Denton: "Search dentoncounty.gov for commissioner precinct maps and GIS data.",
+  Hidalgo: "Search hidalgocounty.us for commissioner precinct maps.",
+  "Fort Bend": "Search fortbendcountytx.gov/government/departments/county-services/engineering/gis-data for GIS downloads. Voting precinct first digit = commissioner precinct.",
+  Williamson: "Search geohub.wilcotx.gov for precinct data. Also try gisweb.wilco.org/drop/web/Precincts/OverallPrecincts.pdf.",
+  Montgomery: "Search mctx.org for commissioner precinct information. Precinct 1 (Walker), 2 (Riley), 3 (Wheeler), 4 (Meador).",
+  "El Paso": "Search epcountyvotes.com/maps/county-commissioner-maps for commissioner precinct maps.",
+  Nueces: "Search nuecesco.com for commissioner precinct maps.",
+  Galveston: "Search galvestoncountytx.gov for commissioner precinct maps and GIS portal.",
+  Brazoria: "Search brazoriacountytx.gov for commissioner precinct maps.",
+  Kaufman: "Search kaufmancounty.net for commissioner precinct maps.",
+  Johnson: "Search johnsoncountytx.org/departments/elections-office/precinct-maps for voting-to-commissioner precinct mapping.",
+  Parker: "Search parkercountytx.com for commissioner precinct maps.",
+  Lubbock: "Search lubbockcounty.gov for commissioner precinct maps.",
+  Cameron: "Search cameroncountytx.gov for commissioner precinct maps.",
+  McLennan: "Search mclennan.maps.arcgis.com or mclennanvotes.com for precinct maps.",
+  Bell: "Search bellcountytx.com for commissioner precinct maps.",
+  Gregg: "Search co.gregg.tx.us for commissioner precinct information.",
+  Randall: "Search randallcounty.org for commissioner precinct maps.",
+  Potter: "Search pottercounty.com for commissioner precinct maps.",
+  Smith: "Search smith-county.com for commissioner precinct maps.",
+  Victoria: "Search victoriacountytx.org for commissioner precinct maps.",
+  Jefferson: "Search co.jefferson.tx.us for commissioner precinct maps.",
+  Midland: "Search midlandcounty.com for commissioner precinct maps.",
+  Ector: "Search co.ector.tx.us for commissioner precinct maps.",
+};
+
 /**
- * Seeds precinct map (ZIP → commissioner precinct) for a county
+ * Seeds precinct map (ZIP → commissioner precinct) for a county.
+ *
+ * Strategy: Texas counties have 4 commissioner precincts. Many counties
+ * number their voting precincts so the first digit = commissioner precinct
+ * (e.g., voting precinct 234 is in commissioner precinct 2). The prompt
+ * instructs Claude to use this convention plus county GIS data to build
+ * a best-effort ZIP-to-commissioner-precinct mapping.
+ *
+ * ZIP codes often span multiple precincts, so the mapping uses the
+ * "majority precinct" — the commissioner precinct that covers the largest
+ * area of that ZIP code.
  */
 export async function seedPrecinctMap(countyFips, countyName, env) {
+  const hint = PRECINCT_MAP_HINTS[countyName] || "";
+  const hintBlock = hint ? `\nCOUNTY-SPECIFIC HINT: ${hint}\n` : "";
+
   const prompt = `Research the County Commissioner precinct boundaries for ${countyName} County, Texas.
 
-I need a mapping of ZIP codes to County Commissioner precinct numbers.
+I need a mapping of ZIP codes to County Commissioner precinct numbers (1-4).
 
-Search for ${countyName} County Commissioner precinct maps, GIS data, or official boundary descriptions.
+BACKGROUND: Every Texas county has exactly 4 commissioner precincts. Many Texas counties number their voting precincts so the FIRST DIGIT of the voting precinct number equals the commissioner precinct (e.g., voting precinct 234 = commissioner precinct 2, voting precinct 406 = commissioner precinct 4). This convention is used by Travis, Fort Bend, Williamson, and many other counties.
+
+RESEARCH STRATEGY (try in this order):
+1. Search for "${countyName} County Texas commissioner precinct map" — look for PDF maps or GIS portals
+2. Search for "${countyName} County Texas GIS" or "${countyName} County open data arcgis" — look for boundary shapefiles
+3. Search for "${countyName} County election precincts" — find voting precinct lists grouped by commissioner precinct
+4. Search for "site:${countyName.toLowerCase().replace(/ /g, "")}county" or the county's official website for precinct information
+5. If the county lists voting precincts by commissioner precinct, use the first-digit convention to verify
+${hintBlock}
+For each ZIP code primarily within ${countyName} County, determine which commissioner precinct (1, 2, 3, or 4) covers the MAJORITY of that ZIP code's area. If a ZIP code is split roughly equally, assign it to the precinct that covers the largest portion.
 
 Return ONLY this JSON:
 {
@@ -367,21 +452,46 @@ Return ONLY this JSON:
   ...
 }
 
-For example: {"78701": "2", "78702": "1"}
+For example: {"78701": "2", "78702": "1", "78703": "4"}
 
 IMPORTANT:
 - Return ONLY valid JSON
+- Precinct numbers must be "1", "2", "3", or "4" (strings)
 - Only include ZIP codes that are primarily within ${countyName} County
-- If you cannot determine the mapping reliably, return {}`;
+- If a ZIP code spans multiple precincts, use the MAJORITY precinct
+- Use at least 5 web searches to verify your mapping
+- If you truly cannot determine ANY mappings reliably, return {}
+- It is better to return a partial mapping (some ZIPs) than an empty one`;
 
-  const result = await callClaudeWithSearch(env, prompt);
+  const result = await callClaudeWithSearch(env, prompt, { maxSearchUses: 15 });
   if (!result || Object.keys(result).length === 0) {
     return { error: "Could not determine precinct map" };
   }
 
+  // Validate: all values should be "1"-"4"
+  const validPrecincts = new Set(["1", "2", "3", "4"]);
+  const cleaned = {};
+  let invalidCount = 0;
+  for (const [zip, precinct] of Object.entries(result)) {
+    const p = String(precinct);
+    if (validPrecincts.has(p) && /^\d{5}$/.test(zip)) {
+      cleaned[zip] = p;
+    } else {
+      invalidCount++;
+    }
+  }
+
+  if (Object.keys(cleaned).length === 0) {
+    return { error: "Could not determine precinct map (all entries invalid)" };
+  }
+
+  if (invalidCount > 0) {
+    console.warn(`[PRECINCT MAP] ${countyName}: filtered out ${invalidCount} invalid entries`);
+  }
+
   const key = `precinct_map:${countyFips}`;
-  await env.ELECTION_DATA.put(key, JSON.stringify(result), { expirationTtl: 2592000 });
-  return { success: true, countyFips, countyName, zipCount: Object.keys(result).length };
+  await env.ELECTION_DATA.put(key, JSON.stringify(cleaned), { expirationTtl: 2592000 });
+  return { success: true, countyFips, countyName, zipCount: Object.keys(cleaned).length, invalidCount };
 }
 
 /**
@@ -390,7 +500,8 @@ IMPORTANT:
  * - Rate limits (429) and overloaded (529) retry up to 3 times
  * - Server errors (5xx) throw with status detail
  */
-async function callClaudeWithSearch(env, userPrompt) {
+async function callClaudeWithSearch(env, userPrompt, options = {}) {
+  const maxSearchUses = options.maxSearchUses || 10;
   const body = {
     model: "claude-sonnet-4-20250514",
     max_tokens: 8192,
@@ -407,7 +518,7 @@ async function callClaudeWithSearch(env, userPrompt) {
       "6. National wire services (apnews.com, reuters.com)\n" +
       "7. AVOID: blogs, social media, opinion sites, unverified sources\n\n" +
       "CONFLICT RESOLUTION: If sources disagree, trust official filings over campaign claims, and campaign claims over news reporting.",
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 10 }],
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxSearchUses }],
     messages: [{ role: "user", content: userPrompt }],
   };
 

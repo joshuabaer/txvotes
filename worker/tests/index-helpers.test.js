@@ -350,6 +350,42 @@ describe("TX_FIPS in index.js source", () => {
     const matches = countyNamesBlock.match(/"48\d{3}":/g);
     expect(matches.length).toBeGreaterThanOrEqual(250);
   });
+
+  it("TX_COUNTY_NAMES maps well-known FIPS codes to correct county names", () => {
+    // Verify critical FIPS-to-name mappings against US Census / FCC official data
+    // Source: https://transition.fcc.gov/oet/info/maps/census/fips/fips.txt
+    const wellKnown = {
+      "48201": "Harris",
+      "48113": "Dallas",
+      "48439": "Tarrant",
+      "48029": "Bexar",
+      "48453": "Travis",
+      "48085": "Collin",
+      "48141": "El Paso",
+      "48157": "Fort Bend",
+      "48491": "Williamson",
+      "48339": "Montgomery",
+      "48375": "Potter",
+      "48381": "Randall",
+      "48423": "Smith",
+      "48469": "Victoria",
+      "48451": "Tom Green",
+      "48303": "Lubbock",
+      "48355": "Nueces",
+      "48367": "Parker",
+      "48421": "Sherman",
+      "48507": "Zavala",
+      "48505": "Zapata",
+      "48503": "Young",
+    };
+    for (const [fips, expectedName] of Object.entries(wellKnown)) {
+      expect(indexSrc).toContain(`"${fips}":"${expectedName}"`);
+    }
+  });
+
+  it("TX_COUNTY_NAMES does not contain fictitious county names", () => {
+    expect(indexSrc).not.toContain('"Zablocki"');
+  });
 });
 
 // ---------------------------------------------------------------------------
