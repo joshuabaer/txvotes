@@ -724,7 +724,48 @@ describe("handleOverrideFeedback — index.js source verification", () => {
 });
 
 // ===========================================================================
-// 13. clearOverride cleans up empty party objects
+// 13. shareRace and shareGuide use getEffectiveChoice
+// ===========================================================================
+describe("Share functions use getEffectiveChoice — source verification", () => {
+  it("shareRace uses getEffectiveChoice instead of raw recommendation", () => {
+    expect(APP_JS).toContain("var _srChoice=getEffectiveChoice(race)");
+    expect(APP_JS).toContain("lines.push('My pick: '+_srChoice)");
+  });
+
+  it("shareRace does not use race.recommendation.candidateName for pick text", () => {
+    // The old buggy pattern was: lines.push('My pick: '+race.recommendation.candidateName)
+    expect(APP_JS).not.toContain(
+      "lines.push('My pick: '+race.recommendation.candidateName)"
+    );
+  });
+
+  it("shareRace still shows recommendation reasoning when available", () => {
+    expect(APP_JS).toContain(
+      "if(race.recommendation&&race.recommendation.reasoning)lines.push(race.recommendation.reasoning)"
+    );
+  });
+
+  it("shareGuide uses getEffectiveChoice instead of raw recommendation", () => {
+    expect(APP_JS).toContain("var _sgName=getEffectiveChoice(r)");
+    expect(APP_JS).toContain("if(_sgName)lines.push(r.office");
+  });
+
+  it("shareGuide does not use r.recommendation.candidateName for line text", () => {
+    // The old buggy pattern was: lines.push(r.office+...+': '+r.recommendation.candidateName)
+    expect(APP_JS).not.toContain(
+      "': '+r.recommendation.candidateName)"
+    );
+  });
+
+  it("shareGuide filter includes races with overrides (not just AI recommendations)", () => {
+    expect(APP_JS).toContain(
+      "r.isContested&&(r.recommendation||getOverride(r))"
+    );
+  });
+});
+
+// ===========================================================================
+// 14. clearOverride cleans up empty party objects
 // ===========================================================================
 describe("clearOverride cleanup — source verification", () => {
   it("removes empty party sub-object after clearing last override", () => {
