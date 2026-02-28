@@ -4095,10 +4095,11 @@ var APP_JS = [
   "function shareGuide(){" +
     "var b=getBallot();if(!b)return;" +
     "var lines=[_stateLabel()+' \\u2014 My Voting Guide','Build yours at txvotes.app',''];" +
-    "var races=b.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)}).filter(function(r){return r.isContested&&r.recommendation});" +
+    "var races=b.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)}).filter(function(r){return r.isContested&&(r.recommendation||getOverride(r))});" +
     "for(var i=0;i<races.length;i++){" +
       "var r=races[i];" +
-      "lines.push(r.office+(r.district?' \\u2014 '+r.district:'')+': '+r.recommendation.candidateName)" +
+      "var _sgName=getEffectiveChoice(r);" +
+      "if(_sgName)lines.push(r.office+(r.district?' \\u2014 '+r.district:'')+': '+_sgName)" +
     "}" +
     "if(b.propositions&&b.propositions.length){" +
       "lines.push('');lines.push('Propositions:');" +
@@ -4131,9 +4132,10 @@ var APP_JS = [
     "var races=b.races.slice().sort(function(a,b){return sortOrder(a)-sortOrder(b)});" +
     "var race=races[idx];if(!race)return;" +
     "var lines=[race.office+(race.district?' \\u2014 '+race.district:'')];" +
-    "if(race.recommendation){" +
-      "lines.push('My pick: '+race.recommendation.candidateName);" +
-      "if(race.recommendation.reasoning)lines.push(race.recommendation.reasoning)" +
+    "var _srChoice=getEffectiveChoice(race);" +
+    "if(_srChoice){" +
+      "lines.push('My pick: '+_srChoice);" +
+      "if(race.recommendation&&race.recommendation.reasoning)lines.push(race.recommendation.reasoning)" +
     "}" +
     "lines.push('');lines.push('Build your own voting guide at txvotes.app');" +
     "var text=lines.join('\\n');" +
