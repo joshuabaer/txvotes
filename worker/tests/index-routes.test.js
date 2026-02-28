@@ -561,6 +561,8 @@ describe("Admin endpoints require authentication", () => {
     "/api/admin/llm-experiment/status",
     "/api/admin/llm-experiment/results",
     "/llm-experiment",
+    "/admin/spot-check",
+    "/admin/spot-check/export",
   ];
 
   for (const endpoint of adminGetEndpoints) {
@@ -582,6 +584,8 @@ describe("Admin endpoints require authentication", () => {
     "/api/admin/cleanup",
     "/api/admin/baseline/seed",
     "/api/admin/baseline/update",
+    "/api/admin/spot-check/review",
+    "/api/admin/spot-check/reset",
   ];
 
   for (const endpoint of adminPostEndpoints) {
