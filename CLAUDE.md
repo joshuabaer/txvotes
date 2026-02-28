@@ -47,6 +47,13 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 cd worker && npx vitest run
 ```
 
+### Worktree Testing
+
+Git worktrees (`.claude/worktrees/`) do not include `node_modules`. Before running tests in a worktree, install dependencies first:
+```bash
+cd worker && npm install && npx vitest run
+```
+
 1629 tests across 19 test files:
 
 - **interview-flow.test.js** — Interview flow UI tests (happy-dom + vitest)
