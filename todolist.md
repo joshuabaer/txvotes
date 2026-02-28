@@ -26,11 +26,11 @@ _From data audit (Feb 23). All 254 counties now have ballot keys. Some have empt
   - Smith (48423): 5 Republican + 2 Democrat races (seeded in previous session)
   - Archer (48009): 3 Republican races found. No Democrat primary (expected — small rural red county).
   - Austin County (48015): Still 0 races — may genuinely lack contested county-level primaries (population ~30K, very rural). Consider marking as "no contested county races."
-  - **Verify:** Check `/admin/coverage` — Randall, Smith, Archer should show race counts > 0
+  - ~~**Verify:** Check `/admin/coverage` — Randall, Smith, Archer should show race counts > 0~~ **Verified 2/27** — all three show Y for County Info, GOP Ballot, and Dem Ballot on `/admin/coverage`.
 
 #### FIPS Mapping Bug (fixed in PR #7)
 - [x] **Fix Potter County missing from TX_COUNTY_NAMES** — Potter County (FIPS 48375) was missing, shifting 67 counties (48375-48507) by one position. Fixed FIPS mapping, corrected TOP_COUNTIES FIPS swaps (Nueces, Parker, Lubbock). Also added batch `seed-county-info` endpoint.
-  - **Verify:** Check `/admin/coverage` — spot-check: 48453=Travis, 48439=Tarrant, 48375=Potter, 48507=Zavala (not "Zablocki")
+  - ~~**Verify:** Check `/admin/coverage` — spot-check: 48453=Travis, 48439=Tarrant, 48375=Potter, 48507=Zavala (not "Zablocki")~~ **Verified 2/27** — all four FIPS mappings correct on live site.
 
 #### Statewide Candidate Data Gaps
 _From data audit. 65 statewide candidates, most fields 95%+ filled._
@@ -44,8 +44,7 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
   - 10/30 top counties have maps from initial seed; remaining 20 need manual GIS research
 
 #### County Info
-- [x] Enrich county_info for all 254 counties — FIPS mapping fix (PR #7) corrected 67 counties' names. Batch seed-county-info endpoint added. All 254/254 counties now have county_info in KV (confirmed via seed run: 11 new, 0 errors).
-  - **Verify:** Check `/admin/coverage` — all 254 counties should have county_info
+- [x] Enrich county_info for all 254 counties — FIPS mapping fix (PR #7) corrected 67 counties' names. Batch seed-county-info endpoint added. All 254/254 counties now have county_info in KV (confirmed via seed run: 11 new, 0 errors). Verified on `/admin/coverage`.
 
 #### Other Data Tasks
 - [x] Fix seeding script error handling — added error classification (AUTH/RATE_LIMIT/SERVER/etc), KV-based progress tracking, failed steps NOT marked completed, `reset` option via API, auth errors abort immediately. 16 new tests (50 total).
@@ -150,6 +149,7 @@ _From automated code review of "Add automated AI audit runner" (interview-flow-t
 - [x] Ballot page footer showed "Nonpartisan by Design · Privacy Policy · v25" — changed to "Texas Votes · How It Works · Privacy"
 
 - [x] **Bug: Sharing a race shares AI recommendation instead of user's override pick** — Fixed `shareRace()` and `shareGuide()` in pwa.js to use `getEffectiveChoice()` instead of raw `race.recommendation.candidateName`. Cheat sheet was already correct.
+- [ ] **Include `https://` in sharing links** — Shared URLs (race share, guide share) need the `https://` protocol prefix so that messaging apps (iMessage, WhatsApp, SMS, etc.) render a link preview/unfurl. Without the protocol, many apps treat the text as plain text with no preview.
 
 ### Daily Updater & Freshness
 - [ ] Add county ballots and voting info to daily updater refresh — currently only statewide races are auto-updated; county ballots, county_info, and precinct maps are seeded once and never refreshed
