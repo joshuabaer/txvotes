@@ -22,9 +22,11 @@ id = "1b02b19492f243c8b503d99d0ff11761"
 binding = "ANALYTICS"
 dataset = "usvotes_events"
 
-# Daily update cron: 12:00 UTC = 6:00 AM CT
+# Cron schedules:
+# - Daily update: 12:00 UTC = 6:00 AM CT
+# - Hourly cron: runs stats email at 13:00 UTC = 7:00 AM CT (daily), every hour during election window
 [triggers]
-crons = ["0 12 * * *"]
+crons = ["0 12 * * *", "0 * * * *"]
 
 # Environment variables (public, non-secret)
 [vars]

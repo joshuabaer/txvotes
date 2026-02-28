@@ -9,6 +9,7 @@ import { checkRateLimit, rateLimitResponse } from "./rate-limit.js";
 import { runSingleExperiment, runFullExperiment, getExperimentStatus, getExperimentResults, EXPERIMENT_PROFILES, VALID_LLMS as EXPERIMENT_LLMS } from "./llm-experiment.js";
 import { STATE_CONFIG, VALID_STATES, DEFAULT_STATE, ELECTION_PHASES, getElectionPhase } from "./state-config.js";
 import { resolveDCAddress } from "./dc-mar.js";
+import { runStatsEmail } from "./stats-email.js";
 
 // Shared CSS for static pages — matches app design tokens from pwa.js
 const PAGE_CSS = `<meta name="theme-color" content="rgb(33,89,143)" media="(prefers-color-scheme:light)"><meta name="theme-color" content="rgb(28,28,31)" media="(prefers-color-scheme:dark)">
@@ -8219,7 +8220,11 @@ export default {
     const today = new Date().toISOString().slice(0, 10);
     const cronLog = { timestamp: new Date().toISOString(), tasks: {} };
 
+    // Only run daily tasks on the daily cron (0 12 * * *), not the hourly stats cron
+    const isDailyCron = event.cron === "0 12 * * *";
+
     // Daily update with error tracking
+    if (isDailyCron) {
     try {
       const result = await runDailyUpdate(env);
       cronLog.tasks.dailyUpdate = { status: "success", ...result };
@@ -8250,7 +8255,20 @@ export default {
       cronLog.tasks.healthCheck = { status: "error", error: err.message || String(err) };
       console.error("Cron healthCheck error:", err);
     }
+    } // end isDailyCron
 
+
+    // Stats email — daily at 7am CT, hourly during election window
+    // Only runs on hourly cron (0 * * * *) to avoid duplicate sends at 12:00 UTC
+    if (!isDailyCron) {
+    try {
+      const emailResult = await runStatsEmail(env, { cronSchedule: event.cron, now: new Date() });
+      cronLog.tasks.statsEmail = { status: "success", ...emailResult };
+    } catch (err) {
+      cronLog.tasks.statsEmail = { status: "error", error: err.message || String(err) };
+      console.error("Cron statsEmail error:", err);
+    }
+    }
     // Write cron status to KV
     try {
       await env.ELECTION_DATA.put(`cron_status:${today}`, JSON.stringify(cronLog));
