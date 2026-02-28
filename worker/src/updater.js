@@ -4,6 +4,7 @@ import { TOP_COUNTIES, seedCountyBallot, seedCountyInfo, seedPrecinctMap } from 
 import { logTokenUsage } from "./usage-logger.js";
 import { checkSingleCandidateBalance } from "./balance-check.js";
 import { buildCondensedBallotDescription } from "./pwa-guide.js";
+import { ELECTION_SUFFIX } from "./state-config.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -632,8 +633,8 @@ export function isUpdateMeaningful(updates) {
 
 const PARTIES = ["republican", "democrat"];
 const BALLOT_KEYS = {
-  republican: "ballot:statewide:republican_primary_2026",
-  democrat: "ballot:statewide:democrat_primary_2026",
+  republican: `ballot:statewide:republican${ELECTION_SUFFIX}`,
+  democrat: `ballot:statewide:democrat${ELECTION_SUFFIX}`,
 };
 
 // ---------------------------------------------------------------------------
@@ -712,7 +713,7 @@ export async function seedBaseline(party, env) {
     baseline.races.push(baselineRace);
   }
 
-  const key = `${BASELINE_KEY_PREFIX}${party}_primary_2026`;
+  const key = `${BASELINE_KEY_PREFIX}${party}${ELECTION_SUFFIX}`;
   await env.ELECTION_DATA.put(key, JSON.stringify(baseline));
 
   return { success: true, candidateCount, key };
@@ -932,7 +933,7 @@ export async function runDailyUpdate(env, options = {}) {
     // --- Load verified baseline for this party (if it exists) ---
     let baseline = null;
     try {
-      const baselineKey = `${BASELINE_KEY_PREFIX}${party}_primary_2026`;
+      const baselineKey = `${BASELINE_KEY_PREFIX}${party}${ELECTION_SUFFIX}`;
       const baselineRaw = await env.ELECTION_DATA.get(baselineKey);
       if (baselineRaw) baseline = JSON.parse(baselineRaw);
     } catch { /* no baseline or corrupt — proceed without it */ }
@@ -1922,7 +1923,7 @@ export async function runCountyRefresh(env, options = {}) {
     for (const party of PARTIES) {
       try {
         // Check if county ballot exists in KV -- only refresh existing data
-        const ballotKey = `ballot:county:${county.fips}:${party}_primary_2026`;
+        const ballotKey = `ballot:county:${county.fips}:${party}${ELECTION_SUFFIX}`;
         const existing = await env.ELECTION_DATA.get(ballotKey);
 
         if (!existing) {

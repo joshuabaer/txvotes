@@ -6,47 +6,7 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexSrc = readFileSync(join(__dirname, "../src/index.js"), "utf-8");
 
-// ---------------------------------------------------------------------------
-// Extract and evaluate helper functions from index.js source.
-// These functions are not exported, so we extract them from the source string
-// and evaluate them, similar to how audit-export.test.js works.
-// ---------------------------------------------------------------------------
-
-// Extract nameToSlug function body and create a callable
-const nameToSlugBody = `
-  if (!name) return "";
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-`;
-function nameToSlug(name) {
-  if (!name) return "";
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
-// Extract isSparseCandidate logic
-function isSparseCandidate(c) {
-  let filled = 0;
-  if (c.pros && (Array.isArray(c.pros) ? c.pros.length : true)) filled++;
-  if (c.cons && (Array.isArray(c.cons) ? c.cons.length : true)) filled++;
-  if (c.endorsements && (Array.isArray(c.endorsements) ? c.endorsements.length : true)) filled++;
-  if (c.keyPositions && c.keyPositions.length) filled++;
-  return filled < 2;
-}
-
-// Extract escapeHtml logic
-function escapeHtml(str) {
-  if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-// Extract resolveTone logic
-function resolveTone(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && !Array.isArray(value)) {
-    return value["3"] || value[Object.keys(value).sort()[0]] || null;
-  }
-  return null;
-}
+import { nameToSlug, isSparseCandidate, escapeHtml, resolveTone } from "../src/index.js";
 
 // ---------------------------------------------------------------------------
 // nameToSlug
@@ -759,8 +719,8 @@ describe("Health check endpoint", () => {
   });
 
   it("health check validates both statewide ballots", () => {
-    expect(indexSrc).toContain("ballot:statewide:republican_primary_2026");
-    expect(indexSrc).toContain("ballot:statewide:democrat_primary_2026");
+    expect(indexSrc).toContain("ballot:statewide:republican");
+    expect(indexSrc).toContain("ballot:statewide:democrat");
   });
 
   it("health check returns status ok/degraded/down", () => {
@@ -923,11 +883,10 @@ describe("Admin KV cleanup endpoint", () => {
     expect(indexSrc).toContain('url.pathname === "/api/admin/cleanup"');
   });
 
-  it("requires ADMIN_SECRET auth", () => {
+  it("requires admin auth", () => {
     const routeIdx = indexSrc.indexOf('url.pathname === "/api/admin/cleanup"');
     const nextLines = indexSrc.slice(routeIdx, routeIdx + 300);
-    expect(nextLines).toContain("ADMIN_SECRET");
-    expect(nextLines).toContain("Unauthorized");
+    expect(nextLines).toContain("checkAdminAuth");
   });
 
   it("routes to handleAdminCleanup", () => {

@@ -7,7 +7,7 @@ import { checkBallotBalance, formatBalanceSummary } from "./balance-check.js";
 import { getUsageLog, estimateCost } from "./usage-logger.js";
 import { checkRateLimit, rateLimitResponse } from "./rate-limit.js";
 import { runSingleExperiment, runFullExperiment, getExperimentStatus, getExperimentResults, EXPERIMENT_PROFILES, VALID_LLMS as EXPERIMENT_LLMS } from "./llm-experiment.js";
-import { STATE_CONFIG, VALID_STATES, DEFAULT_STATE, ELECTION_PHASES, getElectionPhase } from "./state-config.js";
+import { STATE_CONFIG, VALID_STATES, DEFAULT_STATE, ELECTION_PHASES, getElectionPhase, ELECTION_SUFFIX } from "./state-config.js";
 import { resolveDCAddress } from "./dc-mar.js";
 import { runStatsEmail } from "./stats-email.js";
 
@@ -401,7 +401,7 @@ async function loadAllCandidates(env) {
   // Load statewide ballots — both parties in parallel
   const parties = ["republican", "democrat"];
   const statewideRaws = await Promise.all(parties.map(async (party) => {
-    const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+    const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}${ELECTION_SUFFIX}`);
     return { party, raw };
   }));
 
@@ -859,29 +859,7 @@ function handleSampleBallot(phase = 'pre-election') {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sample Ballot — Texas Votes</title>
-  <meta name="description" content="See what a personalized Texas Votes ballot looks like with realistic race cards, candidate recommendations, and party switching.">
-  <meta property="og:title" content="Sample Ballot — Texas Votes">
-  <meta property="og:description" content="See what a personalized Texas Votes ballot looks like with realistic race cards, candidate recommendations, and party switching.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://txvotes.app/sample">
-  <meta property="og:site_name" content="Texas Votes">
-  <meta property="og:image" content="https://txvotes.app/og-image.png">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:type" content="image/png">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Sample Ballot — Texas Votes">
-  <meta name="twitter:description" content="See what a personalized Texas Votes ballot looks like with realistic race cards, candidate recommendations, and party switching.">
-  <meta name="twitter:image" content="https://txvotes.app/og-image.png">
-  <meta name="theme-color" content="rgb(33,89,143)" media="(prefers-color-scheme:light)">
-  <meta name="theme-color" content="rgb(28,28,31)" media="(prefers-color-scheme:dark)">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  ${pageHead({ title: "Sample Ballot — Texas Votes", description: "See what a personalized Texas Votes ballot looks like with realistic race cards, candidate recommendations, and party switching.", url: "https://txvotes.app/sample" })}
   <style>
     /* ---- Design tokens (mirrors pwa.js) ---- */
     :root{
@@ -3809,7 +3787,7 @@ async function handleBalanceCheck(env) {
 
   for (const party of parties) {
     try {
-      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}${ELECTION_SUFFIX}`);
       if (!raw) {
         results[party] = { error: "No ballot data" };
         continue;
@@ -3870,7 +3848,7 @@ async function handleBallotFetch(request, env) {
   // Load statewide ballot
   let raw;
   try {
-    raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+    raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}${ELECTION_SUFFIX}`);
   } catch (err) {
     return jsonResponse({ error: "KV read failed: " + (err.message || String(err)) }, 500);
   }
@@ -3881,7 +3859,7 @@ async function handleBallotFetch(request, env) {
   // If county FIPS provided, merge county-specific races
   if (county) {
     try {
-      const countyRaw = await env.ELECTION_DATA.get(`ballot:county:${county}:${party}_primary_2026`);
+      const countyRaw = await env.ELECTION_DATA.get(`ballot:county:${county}:${party}${ELECTION_SUFFIX}`);
       if (countyRaw) {
         try {
           const statewide = JSON.parse(raw);
@@ -3969,7 +3947,7 @@ async function handleGenerateTones(request, env) {
     return jsonResponse({ error: "Required: party, prop (number), tone (int)" }, 400);
   }
 
-  const key = `ballot:statewide:${party}_primary_2026`;
+  const key = `ballot:statewide:${party}${ELECTION_SUFFIX}`;
   const raw = await env.ELECTION_DATA.get(key);
   if (!raw) return jsonResponse({ error: "no ballot data" }, 404);
 
@@ -4083,8 +4061,8 @@ async function handleGenerateCandidateTones(request, env) {
 
   // Support both statewide and county ballots
   const key = countyFips
-    ? `ballot:county:${countyFips}:${party}_primary_2026`
-    : `ballot:statewide:${party}_primary_2026`;
+    ? `ballot:county:${countyFips}:${party}${ELECTION_SUFFIX}`
+    : `ballot:statewide:${party}${ELECTION_SUFFIX}`;
   const raw = await env.ELECTION_DATA.get(key);
   if (!raw) return jsonResponse({ error: "no ballot data" }, 404);
 
@@ -4749,8 +4727,8 @@ async function handleStats(env, phase = 'pre-election') {
 
   const [manifestRaw, repBallotRaw, demBallotRaw, auditSummaryRaw, ...usageLogRaws] = await Promise.all([
     env.ELECTION_DATA.get("manifest"),
-    env.ELECTION_DATA.get("ballot:statewide:republican_primary_2026"),
-    env.ELECTION_DATA.get("ballot:statewide:democrat_primary_2026"),
+    env.ELECTION_DATA.get(`ballot:statewide:republican${ELECTION_SUFFIX}`),
+    env.ELECTION_DATA.get(`ballot:statewide:democrat${ELECTION_SUFFIX}`),
     env.ELECTION_DATA.get("audit:summary"),
     ...usageLogDays.map(d => env.ELECTION_DATA.get(`usage_log:${d}`)),
   ]);
@@ -4785,7 +4763,7 @@ async function handleStats(env, phase = 'pre-election') {
     const batch = TX_FIPS.slice(i, i + BATCH);
     const reads = batch.flatMap(fips => [
       env.ELECTION_DATA.get(`county_info:${fips}`).then(v => ({ type: "info", has: !!v })),
-      env.ELECTION_DATA.get(`ballot:county:${fips}:republican_primary_2026`).then(v => ({ type: "ballot", has: !!v })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:republican${ELECTION_SUFFIX}`).then(v => ({ type: "ballot", has: !!v })),
     ]);
     const results = await Promise.all(reads);
     for (const r of results) {
@@ -5172,7 +5150,7 @@ async function handleDataQuality(env, phase = 'pre-election') {
   // Load statewide ballots
   for (const party of parties) {
     try {
-      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}${ELECTION_SUFFIX}`);
       if (raw) { try { ballots[party] = JSON.parse(raw); } catch { ballots[party] = null; } }
       else { ballots[party] = null; }
     } catch { ballots[party] = null; }
@@ -5438,8 +5416,8 @@ async function handleDataQuality(env, phase = 'pre-election') {
     const batch = TX_FIPS.slice(i, i + BATCH);
     const reads = batch.flatMap(fips => [
       env.ELECTION_DATA.get(`county_info:${fips}`).then(v => ({ type: "info", fips, has: !!v })),
-      env.ELECTION_DATA.get(`ballot:county:${fips}:republican_primary_2026`).then(v => ({ type: "rep", fips, has: !!v })),
-      env.ELECTION_DATA.get(`ballot:county:${fips}:democrat_primary_2026`).then(v => ({ type: "dem", fips, has: !!v })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:republican${ELECTION_SUFFIX}`).then(v => ({ type: "rep", fips, has: !!v })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:democrat${ELECTION_SUFFIX}`).then(v => ({ type: "dem", fips, has: !!v })),
     ]);
     const results = await Promise.all(reads);
     for (const r of results) {
@@ -5731,8 +5709,8 @@ async function handleHealthCheck(env) {
   // 2. Statewide ballot data exists and is valid JSON
   try {
     const [repRaw, demRaw] = await Promise.all([
-      env.ELECTION_DATA.get("ballot:statewide:republican_primary_2026"),
-      env.ELECTION_DATA.get("ballot:statewide:democrat_primary_2026"),
+      env.ELECTION_DATA.get(`ballot:statewide:republican${ELECTION_SUFFIX}`),
+      env.ELECTION_DATA.get(`ballot:statewide:democrat${ELECTION_SUFFIX}`),
     ]);
     const repOk = !!repRaw;
     const demOk = !!demRaw;
@@ -5911,8 +5889,8 @@ async function handleAdminStatus(env) {
 
   const [manifestRaw, repRaw, demRaw, cronTodayRaw, cronYesterdayRaw, auditRaw, healthLogRaw] = await Promise.all([
     env.ELECTION_DATA.get("manifest").catch(e => { errors.push("manifest: " + e.message); return null; }),
-    env.ELECTION_DATA.get("ballot:statewide:republican_primary_2026").catch(e => { errors.push("rep ballot: " + e.message); return null; }),
-    env.ELECTION_DATA.get("ballot:statewide:democrat_primary_2026").catch(e => { errors.push("dem ballot: " + e.message); return null; }),
+    env.ELECTION_DATA.get(`ballot:statewide:republican${ELECTION_SUFFIX}`).catch(e => { errors.push("rep ballot: " + e.message); return null; }),
+    env.ELECTION_DATA.get(`ballot:statewide:democrat${ELECTION_SUFFIX}`).catch(e => { errors.push("dem ballot: " + e.message); return null; }),
     env.ELECTION_DATA.get(`cron_status:${today}`).catch(e => { errors.push("cron today: " + e.message); return null; }),
     env.ELECTION_DATA.get(`cron_status:${yesterday}`).catch(e => { errors.push("cron yesterday: " + e.message); return null; }),
     env.ELECTION_DATA.get("audit:summary").catch(e => { errors.push("audit: " + e.message); return null; }),
@@ -6128,7 +6106,7 @@ async function runCronHealthCheck(env) {
   // Check statewide ballots
   for (const party of ["republican", "democrat"]) {
     try {
-      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}${ELECTION_SUFFIX}`);
       if (!raw) {
         issues.push({ check: `ballot:${party}`, detail: `${party} statewide ballot missing`, timestamp: new Date().toISOString() });
       } else {
@@ -6175,7 +6153,7 @@ async function handleAdminCoverage(env) {
   // Load statewide ballots
   for (const party of parties) {
     try {
-      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}${ELECTION_SUFFIX}`);
       if (raw) {
         try { ballots[party] = JSON.parse(raw); } catch { ballots[party] = null; errors.push(`${party} ballot: invalid JSON`); }
       } else {
@@ -6279,8 +6257,8 @@ async function handleAdminCoverage(env) {
     const batch = TX_FIPS.slice(i, i + BATCH);
     const reads = batch.flatMap(fips => [
       env.ELECTION_DATA.get(`county_info:${fips}`).then(v => ({ type: "info", fips, has: !!v })).catch(() => ({ type: "info", fips, has: false })),
-      env.ELECTION_DATA.get(`ballot:county:${fips}:republican_primary_2026`).then(v => ({ type: "rep", fips, has: !!v })).catch(() => ({ type: "rep", fips, has: false })),
-      env.ELECTION_DATA.get(`ballot:county:${fips}:democrat_primary_2026`).then(v => ({ type: "dem", fips, has: !!v })).catch(() => ({ type: "dem", fips, has: false })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:republican${ELECTION_SUFFIX}`).then(v => ({ type: "rep", fips, has: !!v })).catch(() => ({ type: "rep", fips, has: false })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:democrat${ELECTION_SUFFIX}`).then(v => ({ type: "dem", fips, has: !!v })).catch(() => ({ type: "dem", fips, has: false })),
     ]);
     const results = await Promise.all(reads);
     for (const r of results) {
@@ -6787,7 +6765,7 @@ async function handleOverrideFeedback(request, env) {
  */
 async function handleAdminBaselineView(url, env) {
   const party = url.searchParams.get("party") || "republican";
-  const baselineKey = `${BASELINE_KEY_PREFIX}${party}_primary_2026`;
+  const baselineKey = `${BASELINE_KEY_PREFIX}${party}${ELECTION_SUFFIX}`;
   let raw;
   try {
     raw = await env.ELECTION_DATA.get(baselineKey);
@@ -6905,7 +6883,7 @@ async function handleAdminBaselineUpdate(request, env) {
     return jsonResponse({ error: "party and candidateName are required" }, 400);
   }
 
-  const baselineKey = `${BASELINE_KEY_PREFIX}${body.party}_primary_2026`;
+  const baselineKey = `${BASELINE_KEY_PREFIX}${body.party}${ELECTION_SUFFIX}`;
   let raw;
   try {
     raw = await env.ELECTION_DATA.get(baselineKey);
@@ -8429,10 +8407,8 @@ export default {
 
     // POST: /api/audit/run — trigger automated AI audit
     if (url.pathname === "/api/audit/run") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
 
       // Rate limit: one audit run every 10 minutes (hard limit, force flag does NOT bypass)
       const AUDIT_RATE_LIMIT_MS = 10 * 60 * 1000;
@@ -8466,19 +8442,15 @@ export default {
 
     // POST: /api/election/trigger uses ADMIN_SECRET
     if (url.pathname === "/api/election/trigger") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       return handleTrigger(request, env);
     }
 
     // POST: /api/election/seed-county — populate county-specific data
     if (url.pathname === "/api/election/seed-county") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       const body = await request.json().catch(() => ({}));
       if (!body.countyFips || !body.countyName) {
         return jsonResponse({ error: "countyFips and countyName required" }, 400);
@@ -8492,10 +8464,8 @@ export default {
     // POST: /api/election/seed-county-info — seed ONLY county voting info (no ballots)
     // Useful for backfilling missing county_info without re-seeding ballots
     if (url.pathname === "/api/election/seed-county-info") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       const body = await request.json().catch(() => ({}));
       // Support single county or batch mode
       if (body.batch) {
@@ -8528,28 +8498,22 @@ export default {
 
     // POST: /api/election/generate-tones — pre-generate proposition text at all tone levels
     if (url.pathname === "/api/election/generate-tones") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       return handleGenerateTones(request, env);
     }
 
     // POST: /api/election/generate-candidate-tones — pre-generate candidate text at all tone levels
     if (url.pathname === "/api/election/generate-candidate-tones") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       return handleGenerateCandidateTones(request, env);
     }
 
     // POST: /api/election/seed-translations — pre-generate Spanish translations for candidate data
     if (url.pathname === "/api/election/seed-translations") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       const body = await request.json().catch(() => ({}));
       const txParty = body.party || "republican";
       const txCountyFips = body.countyFips || null;
@@ -8752,28 +8716,22 @@ export default {
 
     // POST: /api/admin/cleanup — list/delete stale KV keys
     if (url.pathname === "/api/admin/cleanup") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       return handleAdminCleanup(url, env);
     }
 
     // POST: /api/admin/baseline/seed — seed verified baseline from current KV ballot data
     if (url.pathname === "/api/admin/baseline/seed") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       return handleAdminBaselineSeed(request, env);
     }
 
     // POST: /api/admin/baseline/update — update specific candidate baseline fields
     if (url.pathname === "/api/admin/baseline/update") {
-      const auth = request.headers.get("Authorization");
-      if (!auth || auth !== `Bearer ${env.ADMIN_SECRET}`) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
       return handleAdminBaselineUpdate(request, env);
     }
 
@@ -8849,3 +8807,5 @@ export default {
   },
 
 };
+
+export { normalizeEndorsement, nameToSlug, isSparseCandidate, escapeHtml, resolveTone, resolveToneArray };

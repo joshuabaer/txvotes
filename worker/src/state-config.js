@@ -64,6 +64,9 @@ export function getElectionPhase(stateCode, options = {}) {
   return 'post-election';
 }
 
+// Election suffix for KV key construction (changes each election cycle)
+export const ELECTION_SUFFIX = '_primary_2026';
+
 // Valid state codes
 export const VALID_STATES = Object.keys(STATE_CONFIG);
 

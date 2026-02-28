@@ -8,6 +8,7 @@
 
 import { getUsageLog, estimateCost } from "./usage-logger.js";
 import { checkBallotBalance } from "./balance-check.js";
+import { ELECTION_SUFFIX } from "./state-config.js";
 
 // Election date for frequency switching
 const ELECTION_DATE = "2026-03-03";
@@ -103,8 +104,8 @@ export async function collectEmailStats(env, options = {}) {
       cronStatusRaw,
       cronStatusYesterdayRaw,
     ] = await Promise.all([
-      env.ELECTION_DATA.get("ballot:statewide:republican_primary_2026"),
-      env.ELECTION_DATA.get("ballot:statewide:democrat_primary_2026"),
+      env.ELECTION_DATA.get("ballot:statewide:republican" + ELECTION_SUFFIX),
+      env.ELECTION_DATA.get("ballot:statewide:democrat" + ELECTION_SUFFIX),
       env.ELECTION_DATA.get("audit:summary"),
       env.ELECTION_DATA.get(`usage_log:${today}`),
       env.ELECTION_DATA.get(`usage_log:${yesterday}`),

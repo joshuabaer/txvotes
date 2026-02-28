@@ -2,7 +2,7 @@
 // Ported from ClaudeService.swift
 
 import { logTokenUsage } from "./usage-logger.js";
-import { getElectionPhase, ELECTION_PHASES } from "./state-config.js";
+import { getElectionPhase, ELECTION_PHASES, ELECTION_SUFFIX } from "./state-config.js";
 
 const SYSTEM_PROMPT =
   "You are a non-partisan voting guide assistant for Texas elections. " +
@@ -20,6 +20,22 @@ const SYSTEM_PROMPT =
   "Respond with ONLY valid JSON — no markdown, no explanation, no text outside the JSON object.";
 
 const MODELS = ["claude-sonnet-4-6", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"];
+
+function bufToHex(buffer) {
+  var arr = new Uint8Array(buffer);
+  var hex = "";
+  for (var i = 0; i < arr.length; i++) {
+    hex += arr[i].toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+async function resolvePhase(url, env) {
+  var stateCode = url.pathname.startsWith("/dc/") ? "dc" : "tx";
+  var testPhase = url.searchParams.get("test_phase");
+  var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
+  return getElectionPhase(stateCode, { kvPhase });
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -71,11 +87,7 @@ async function hashGuideKey(profile, ballot, party, lang, readingLevel, llm) {
 
   var data = new TextEncoder().encode(JSON.stringify(keyObj));
   var hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  var hashArray = new Uint8Array(hashBuffer);
-  var hex = "";
-  for (var i = 0; i < hashArray.length; i++) {
-    hex += hashArray[i].toString(16).padStart(2, "0");
-  }
+  var hex = bufToHex(hashBuffer);
   return hex;
 }
 
@@ -83,10 +95,7 @@ export async function handlePWA_Guide(request, env) {
   try {
     // Check election phase — block guide generation after polls close
     var requestUrl = new URL(request.url);
-    var stateCode = requestUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
-    var testPhase = requestUrl.searchParams.get("test_phase");
-    var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
-    var phase = getElectionPhase(stateCode, { kvPhase });
+    var phase = await resolvePhase(requestUrl, env);
     if (phase === "post-election" || phase === "election-night") {
       return json({ error: "Guide generation is closed. The primary election has ended.", phase }, 410);
     }
@@ -105,10 +114,10 @@ export async function handlePWA_Guide(request, env) {
 
     // Parallel KV reads — statewide, legacy fallback, county, and manifest are independent
     var [statewideRaw, legacyRaw, countyRaw, manifestRaw] = await Promise.all([
-      env.ELECTION_DATA.get("ballot:statewide:" + party + "_primary_2026"),
-      env.ELECTION_DATA.get("ballot:" + party + "_primary_2026"),
+      env.ELECTION_DATA.get("ballot:statewide:" + party + ELECTION_SUFFIX),
+      env.ELECTION_DATA.get("ballot:" + party + ELECTION_SUFFIX),
       countyFips
-        ? env.ELECTION_DATA.get("ballot:county:" + countyFips + ":" + party + "_primary_2026")
+        ? env.ELECTION_DATA.get("ballot:county:" + countyFips + ":" + party + ELECTION_SUFFIX)
         : Promise.resolve(null),
       env.ELECTION_DATA.get("manifest"),
     ]);
@@ -180,11 +189,7 @@ export async function handlePWA_Guide(request, env) {
         electionName: ballot.electionName,
       }));
       var ballotDescHashBuf = await crypto.subtle.digest("SHA-256", ballotDescData);
-      var ballotDescHashArr = new Uint8Array(ballotDescHashBuf);
-      var ballotDescHex = "";
-      for (var h = 0; h < ballotDescHashArr.length; h++) {
-        ballotDescHex += ballotDescHashArr[h].toString(16).padStart(2, "0");
-      }
+      var ballotDescHex = bufToHex(ballotDescHashBuf);
       ballotDescCacheKey = "ballot_desc:" + ballotDescHex;
       var cachedDesc = await env.ELECTION_DATA.get(ballotDescCacheKey);
       if (cachedDesc) {
@@ -269,10 +274,7 @@ export async function handlePWA_Summary(request, env) {
   try {
     // Check election phase — block summary generation after polls close
     var summaryUrl = new URL(request.url);
-    var summaryState = summaryUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
-    var summaryTestPhase = summaryUrl.searchParams.get("test_phase");
-    var summaryKvPhase = (summaryTestPhase && ELECTION_PHASES.includes(summaryTestPhase)) ? summaryTestPhase : await env.ELECTION_DATA.get("site_phase:" + summaryState);
-    var summaryPhase = getElectionPhase(summaryState, { kvPhase: summaryKvPhase });
+    var summaryPhase = await resolvePhase(summaryUrl, env);
     if (summaryPhase === "post-election" || summaryPhase === "election-night") {
       return json({ error: "Guide generation is closed. The primary election has ended.", phase: summaryPhase }, 410);
     }
@@ -557,7 +559,7 @@ async function loadCachedTranslations(env, party, countyFips) {
   var translations = [];
 
   // Load statewide translations
-  var statewideKey = "translations:es:" + party + "_primary_2026";
+  var statewideKey = "translations:es:" + party + ELECTION_SUFFIX;
   var statewideRaw = await env.ELECTION_DATA.get(statewideKey);
   if (statewideRaw) {
     try {
@@ -570,7 +572,7 @@ async function loadCachedTranslations(env, party, countyFips) {
 
   // Load county-specific translations if countyFips provided
   if (countyFips) {
-    var countyKey = "translations:es:county:" + countyFips + ":" + party + "_primary_2026";
+    var countyKey = "translations:es:county:" + countyFips + ":" + party + ELECTION_SUFFIX;
     var countyRaw = await env.ELECTION_DATA.get(countyKey);
     if (countyRaw) {
       try {
@@ -602,27 +604,26 @@ async function loadCachedTranslations(env, party, countyFips) {
  */
 export async function handleSeedTranslations(env, party, countyFips) {
   // Load ballot data
-  var ballotKey, translationKey;
+  var ballotKey, translationKey, ballotRaw;
   if (countyFips) {
-    ballotKey = "ballot:county:" + countyFips + ":" + party + "_primary_2026";
-    translationKey = "translations:es:county:" + countyFips + ":" + party + "_primary_2026";
-  } else {
-    ballotKey = "ballot:statewide:" + party + "_primary_2026";
-    translationKey = "translations:es:" + party + "_primary_2026";
-    // Fallback to legacy key
-    var raw = await env.ELECTION_DATA.get(ballotKey);
-    if (!raw) {
-      ballotKey = "ballot:" + party + "_primary_2026";
-      raw = await env.ELECTION_DATA.get(ballotKey);
+    ballotKey = "ballot:county:" + countyFips + ":" + party + ELECTION_SUFFIX;
+    translationKey = "translations:es:county:" + countyFips + ":" + party + ELECTION_SUFFIX;
+    ballotRaw = await env.ELECTION_DATA.get(ballotKey);
+    if (!ballotRaw) {
+      return { error: "No ballot data found at " + ballotKey };
     }
-    if (!raw) {
+  } else {
+    ballotKey = "ballot:statewide:" + party + ELECTION_SUFFIX;
+    translationKey = "translations:es:" + party + ELECTION_SUFFIX;
+    // Fallback to legacy key
+    ballotRaw = await env.ELECTION_DATA.get(ballotKey);
+    if (!ballotRaw) {
+      ballotKey = "ballot:" + party + ELECTION_SUFFIX;
+      ballotRaw = await env.ELECTION_DATA.get(ballotKey);
+    }
+    if (!ballotRaw) {
       return { error: "No ballot data found for " + party };
     }
-  }
-
-  var ballotRaw = await env.ELECTION_DATA.get(ballotKey);
-  if (!ballotRaw) {
-    return { error: "No ballot data found at " + ballotKey };
   }
 
   var ballot = JSON.parse(ballotRaw);
@@ -1772,10 +1773,7 @@ export async function handlePWA_GuideStream(request, env) {
   var requestUrl = new URL(request.url);
 
   // Check election phase — block guide generation after polls close
-  var stateCode = requestUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
-  var testPhase = requestUrl.searchParams.get("test_phase");
-  var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
-  var phase = getElectionPhase(stateCode, { kvPhase });
+  var phase = await resolvePhase(requestUrl, env);
   if (phase === "post-election" || phase === "election-night") {
     return new Response("event: error\ndata: " + JSON.stringify({ error: "Guide generation is closed. The primary election has ended.", phase }) + "\n\n", {
       status: 410,
@@ -1836,10 +1834,10 @@ export async function handlePWA_GuideStream(request, env) {
     try {
       // Parallel KV reads
       var [statewideRaw, legacyRaw, countyRaw, manifestRaw] = await Promise.all([
-        env.ELECTION_DATA.get("ballot:statewide:" + party + "_primary_2026"),
-        env.ELECTION_DATA.get("ballot:" + party + "_primary_2026"),
+        env.ELECTION_DATA.get("ballot:statewide:" + party + ELECTION_SUFFIX),
+        env.ELECTION_DATA.get("ballot:" + party + ELECTION_SUFFIX),
         countyFips
-          ? env.ELECTION_DATA.get("ballot:county:" + countyFips + ":" + party + "_primary_2026")
+          ? env.ELECTION_DATA.get("ballot:county:" + countyFips + ":" + party + ELECTION_SUFFIX)
           : Promise.resolve(null),
         env.ELECTION_DATA.get("manifest"),
       ]);
@@ -1968,11 +1966,7 @@ export async function handlePWA_GuideStream(request, env) {
           electionName: ballot.electionName,
         }));
         var ballotDescHashBuf = await crypto.subtle.digest("SHA-256", ballotDescData);
-        var ballotDescHashArr = new Uint8Array(ballotDescHashBuf);
-        var ballotDescHex = "";
-        for (var h = 0; h < ballotDescHashArr.length; h++) {
-          ballotDescHex += ballotDescHashArr[h].toString(16).padStart(2, "0");
-        }
+        var ballotDescHex = bufToHex(ballotDescHashBuf);
         ballotDescCacheKey = "ballot_desc:" + ballotDescHex;
         var cachedDesc = await env.ELECTION_DATA.get(ballotDescCacheKey);
         if (cachedDesc) {

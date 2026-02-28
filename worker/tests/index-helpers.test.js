@@ -2,51 +2,10 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { normalizeEndorsement, nameToSlug, isSparseCandidate, escapeHtml, resolveTone, resolveToneArray } from "../src/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexSrc = readFileSync(join(__dirname, "../src/index.js"), "utf-8");
-
-// ---------------------------------------------------------------------------
-// Extract helper functions from index.js source (same approach as routes.test.js)
-// ---------------------------------------------------------------------------
-
-function normalizeEndorsement(e) {
-  if (typeof e === "string") return { name: e, type: null };
-  return { name: e.name || String(e), type: e.type || null };
-}
-
-function resolveTone(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && !Array.isArray(value)) {
-    return value["3"] || value[Object.keys(value).sort()[0]] || null;
-  }
-  return null;
-}
-
-function resolveToneArray(arr) {
-  if (!Array.isArray(arr)) return [];
-  return arr.map(item => resolveTone(item)).filter(Boolean);
-}
-
-function nameToSlug(name) {
-  if (!name) return "";
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
-function isSparseCandidate(c) {
-  let filled = 0;
-  if (c.pros && (Array.isArray(c.pros) ? c.pros.length : true)) filled++;
-  if (c.cons && (Array.isArray(c.cons) ? c.cons.length : true)) filled++;
-  if (c.endorsements && (Array.isArray(c.endorsements) ? c.endorsements.length : true)) filled++;
-  if (c.keyPositions && c.keyPositions.length) filled++;
-  return filled < 2;
-}
-
-function escapeHtml(str) {
-  if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function classifyConfidence(candidate) {
   const hasSources = candidate.sources && candidate.sources.length > 0;

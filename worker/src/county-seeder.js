@@ -13,6 +13,7 @@
 import { extractSourcesFromResponse, mergeSources, validateRaceUpdate } from "./updater.js";
 import { logTokenUsage } from "./usage-logger.js";
 import { buildCondensedBallotDescription } from "./pwa-guide.js";
+import { ELECTION_SUFFIX } from "./state-config.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -342,7 +343,7 @@ IMPORTANT:
   // Ensure countyName is in the ballot data for the candidates index
   if (!result.countyName) result.countyName = countyName;
 
-  const key = `ballot:county:${countyFips}:${party}_primary_2026`;
+  const key = `ballot:county:${countyFips}:${party}${ELECTION_SUFFIX}`;
   await env.ELECTION_DATA.put(key, JSON.stringify(result));
   // Invalidate candidates_index cache so it rebuilds with new county data
   try { await env.ELECTION_DATA.delete("candidates_index"); } catch { /* non-fatal */ }

@@ -11,6 +11,7 @@ import {
   VALID_LLMS,
   SYSTEM_PROMPT,
 } from "./pwa-guide.js";
+import { ELECTION_SUFFIX } from "./state-config.js";
 
 // MARK: - Cost Rates (per 1M tokens)
 
@@ -207,11 +208,11 @@ async function runSingleExperiment(env, profileId, llmKey, runNumber) {
 
   try {
     // 1. Read ballot data from KV
-    var ballotKey = "ballot:statewide:" + expProfile.party + "_primary_2026";
+    var ballotKey = "ballot:statewide:" + expProfile.party + ELECTION_SUFFIX;
     var raw = await env.ELECTION_DATA.get(ballotKey);
     if (!raw) {
       // Try legacy key
-      raw = await env.ELECTION_DATA.get("ballot:" + expProfile.party + "_primary_2026");
+      raw = await env.ELECTION_DATA.get("ballot:" + expProfile.party + ELECTION_SUFFIX);
     }
     if (!raw) {
       result.error = "No ballot data found for " + expProfile.party;
