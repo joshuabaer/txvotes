@@ -1902,22 +1902,31 @@ function handleNonpartisan() {
 
 async function handleAuditPage(env) {
   // Load audit results from KV
-  const [summaryRaw, chatgptRaw, geminiRaw, grokRaw, claudeRaw] = await Promise.all([
-    env.ELECTION_DATA.get("audit:summary"),
-    env.ELECTION_DATA.get("audit:result:chatgpt"),
-    env.ELECTION_DATA.get("audit:result:gemini"),
-    env.ELECTION_DATA.get("audit:result:grok"),
-    env.ELECTION_DATA.get("audit:result:claude"),
-  ]);
+  let summaryRaw = null, chatgptRaw = null, geminiRaw = null, grokRaw = null, claudeRaw = null;
+  try {
+    [summaryRaw, chatgptRaw, geminiRaw, grokRaw, claudeRaw] = await Promise.all([
+      env.ELECTION_DATA.get("audit:summary"),
+      env.ELECTION_DATA.get("audit:result:chatgpt"),
+      env.ELECTION_DATA.get("audit:result:gemini"),
+      env.ELECTION_DATA.get("audit:result:grok"),
+      env.ELECTION_DATA.get("audit:result:claude"),
+    ]);
+  } catch (err) {
+    console.error("handleAuditPage KV read error:", err);
+  }
 
   const providerResults = {
-    chatgpt: chatgptRaw ? JSON.parse(chatgptRaw) : null,
-    gemini: geminiRaw ? JSON.parse(geminiRaw) : null,
-    grok: grokRaw ? JSON.parse(grokRaw) : null,
-    claude: claudeRaw ? JSON.parse(claudeRaw) : null,
+    chatgpt: null,
+    gemini: null,
+    grok: null,
+    claude: null,
   };
+  for (const [key, raw] of [["chatgpt", chatgptRaw], ["gemini", geminiRaw], ["grok", grokRaw], ["claude", claudeRaw]]) {
+    if (raw) { try { providerResults[key] = JSON.parse(raw); } catch { /* invalid JSON — treat as null */ } }
+  }
 
-  const summary = summaryRaw ? JSON.parse(summaryRaw) : null;
+  let summary = null;
+  if (summaryRaw) { try { summary = JSON.parse(summaryRaw); } catch { /* invalid JSON */ } }
 
   // Build audit cards HTML dynamically
   function renderAuditCard(result, fallbackName) {
@@ -3713,16 +3722,20 @@ async function handleBalanceCheck(env) {
   const results = {};
 
   for (const party of parties) {
-    const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
-    if (!raw) {
-      results[party] = { error: "No ballot data" };
-      continue;
-    }
     try {
-      const ballot = JSON.parse(raw);
-      results[party] = checkBallotBalance(ballot);
-    } catch (parseErr) {
-      results[party] = { error: "Invalid ballot JSON: " + (parseErr.message || String(parseErr)) };
+      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+      if (!raw) {
+        results[party] = { error: "No ballot data" };
+        continue;
+      }
+      try {
+        const ballot = JSON.parse(raw);
+        results[party] = checkBallotBalance(ballot);
+      } catch (parseErr) {
+        results[party] = { error: "Invalid ballot JSON: " + (parseErr.message || String(parseErr)) };
+      }
+    } catch (err) {
+      results[party] = { error: "KV read failed: " + (err.message || String(err)) };
     }
   }
 
@@ -3741,15 +3754,23 @@ async function handleBalanceCheck(env) {
 // MARK: - Election Data Endpoints
 
 async function handleManifest(env) {
-  const raw = await env.ELECTION_DATA.get("manifest");
-  if (!raw) {
-    return jsonResponse({ republican: null, democrat: null }, 200, {
-      "Cache-Control": "public, max-age=300",
-    });
+  try {
+    const raw = await env.ELECTION_DATA.get("manifest");
+    if (!raw) {
+      return jsonResponse({ republican: null, democrat: null }, 200, {
+        "Cache-Control": "public, max-age=300",
+      });
+    }
+    try {
+      return jsonResponse(JSON.parse(raw), 200, {
+        "Cache-Control": "public, max-age=300",
+      });
+    } catch {
+      return jsonResponse({ error: "Invalid manifest JSON" }, 500);
+    }
+  } catch (err) {
+    return jsonResponse({ error: "KV read failed: " + (err.message || String(err)) }, 500);
   }
-  return jsonResponse(JSON.parse(raw), 200, {
-    "Cache-Control": "public, max-age=300",
-  });
 }
 
 async function handleBallotFetch(request, env) {
@@ -3761,25 +3782,32 @@ async function handleBallotFetch(request, env) {
   }
 
   // Load statewide ballot
-  let raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+  let raw;
+  try {
+    raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+  } catch (err) {
+    return jsonResponse({ error: "KV read failed: " + (err.message || String(err)) }, 500);
+  }
   if (!raw) {
     return jsonResponse({ error: "No ballot data available" }, 404);
   }
 
   // If county FIPS provided, merge county-specific races
   if (county) {
-    const countyRaw = await env.ELECTION_DATA.get(`ballot:county:${county}:${party}_primary_2026`);
-    if (countyRaw) {
-      try {
-        const statewide = JSON.parse(raw);
-        const countyBallot = JSON.parse(countyRaw);
-        statewide.races = statewide.races.concat(countyBallot.races || []);
-        if (countyBallot.propositions) {
-          statewide.propositions = (statewide.propositions || []).concat(countyBallot.propositions);
-        }
-        raw = JSON.stringify(statewide);
-      } catch { /* use statewide-only if merge fails */ }
-    }
+    try {
+      const countyRaw = await env.ELECTION_DATA.get(`ballot:county:${county}:${party}_primary_2026`);
+      if (countyRaw) {
+        try {
+          const statewide = JSON.parse(raw);
+          const countyBallot = JSON.parse(countyRaw);
+          statewide.races = statewide.races.concat(countyBallot.races || []);
+          if (countyBallot.propositions) {
+            statewide.propositions = (statewide.propositions || []).concat(countyBallot.propositions);
+          }
+          raw = JSON.stringify(statewide);
+        } catch { /* use statewide-only if merge fails */ }
+      }
+    } catch { /* county KV read failed — use statewide-only */ }
   }
 
   const etag = `"${await hashString(raw)}"`;
@@ -3805,19 +3833,23 @@ async function handleCountyInfo(request, env) {
     return jsonResponse({ error: "fips parameter required" }, 400);
   }
 
-  const raw = await env.ELECTION_DATA.get(`county_info:${fips}`);
-  if (!raw) {
-    return jsonResponse({ error: "No county info available", countyFips: fips }, 404);
-  }
+  try {
+    const raw = await env.ELECTION_DATA.get(`county_info:${fips}`);
+    if (!raw) {
+      return jsonResponse({ error: "No county info available", countyFips: fips }, 404);
+    }
 
-  return new Response(raw, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=3600",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+    return new Response(raw, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (err) {
+    return jsonResponse({ error: "KV read failed: " + (err.message || String(err)) }, 500);
+  }
 }
 
 async function handleTrigger(request, env) {
@@ -4637,10 +4669,14 @@ async function handleStats(env) {
     ...usageLogDays.map(d => env.ELECTION_DATA.get(`usage_log:${d}`)),
   ]);
 
-  const manifest = manifestRaw ? JSON.parse(manifestRaw) : {};
-  const repBallot = repBallotRaw ? JSON.parse(repBallotRaw) : null;
-  const demBallot = demBallotRaw ? JSON.parse(demBallotRaw) : null;
-  const auditSummary = auditSummaryRaw ? JSON.parse(auditSummaryRaw) : null;
+  let manifest = {};
+  if (manifestRaw) { try { manifest = JSON.parse(manifestRaw); } catch { /* invalid JSON */ } }
+  let repBallot = null;
+  if (repBallotRaw) { try { repBallot = JSON.parse(repBallotRaw); } catch { /* invalid JSON */ } }
+  let demBallot = null;
+  if (demBallotRaw) { try { demBallot = JSON.parse(demBallotRaw); } catch { /* invalid JSON */ } }
+  let auditSummary = null;
+  if (auditSummaryRaw) { try { auditSummary = JSON.parse(auditSummaryRaw); } catch { /* invalid JSON */ } }
 
   // --- Count ballot coverage ---
   const ballots = { republican: repBallot, democrat: demBallot };
@@ -5049,18 +5085,27 @@ async function handleDataQuality(env) {
 
   // Load statewide ballots
   for (const party of parties) {
-    const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
-    ballots[party] = raw ? JSON.parse(raw) : null;
+    try {
+      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+      if (raw) { try { ballots[party] = JSON.parse(raw); } catch { ballots[party] = null; } }
+      else { ballots[party] = null; }
+    } catch { ballots[party] = null; }
   }
 
   // Load manifest for freshness
-  const manifestRaw = await env.ELECTION_DATA.get("manifest");
-  const manifest = manifestRaw ? JSON.parse(manifestRaw) : {};
+  let manifest = {};
+  try {
+    const manifestRaw = await env.ELECTION_DATA.get("manifest");
+    if (manifestRaw) { try { manifest = JSON.parse(manifestRaw); } catch { /* invalid JSON */ } }
+  } catch { /* KV read failed */ }
 
   // Load today's update log
   const today = new Date().toISOString().slice(0, 10);
-  const updateLogRaw = await env.ELECTION_DATA.get(`update_log:${today}`);
-  const updateLog = updateLogRaw ? JSON.parse(updateLogRaw) : null;
+  let updateLog = null;
+  try {
+    const updateLogRaw = await env.ELECTION_DATA.get(`update_log:${today}`);
+    if (updateLogRaw) { try { updateLog = JSON.parse(updateLogRaw); } catch { /* invalid JSON */ } }
+  } catch { /* KV read failed */ }
 
   // --- Data Freshness ---
   let freshnessCards = "";
@@ -6022,14 +6067,20 @@ async function runCronHealthCheck(env) {
 async function handleAdminCoverage(env) {
   const parties = ["republican", "democrat"];
   const ballots = {};
+  const errors = [];
 
   // Load statewide ballots
   for (const party of parties) {
-    const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
-    if (raw) {
-      try { ballots[party] = JSON.parse(raw); } catch { ballots[party] = null; }
-    } else {
+    try {
+      const raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+      if (raw) {
+        try { ballots[party] = JSON.parse(raw); } catch { ballots[party] = null; errors.push(`${party} ballot: invalid JSON`); }
+      } else {
+        ballots[party] = null;
+      }
+    } catch (err) {
       ballots[party] = null;
+      errors.push(`${party} ballot: KV read failed — ${err.message || String(err)}`);
     }
   }
 
@@ -6124,9 +6175,9 @@ async function handleAdminCoverage(env) {
   for (let i = 0; i < TX_FIPS.length; i += BATCH) {
     const batch = TX_FIPS.slice(i, i + BATCH);
     const reads = batch.flatMap(fips => [
-      env.ELECTION_DATA.get(`county_info:${fips}`).then(v => ({ type: "info", fips, has: !!v })),
-      env.ELECTION_DATA.get(`ballot:county:${fips}:republican_primary_2026`).then(v => ({ type: "rep", fips, has: !!v })),
-      env.ELECTION_DATA.get(`ballot:county:${fips}:democrat_primary_2026`).then(v => ({ type: "dem", fips, has: !!v })),
+      env.ELECTION_DATA.get(`county_info:${fips}`).then(v => ({ type: "info", fips, has: !!v })).catch(() => ({ type: "info", fips, has: false })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:republican_primary_2026`).then(v => ({ type: "rep", fips, has: !!v })).catch(() => ({ type: "rep", fips, has: false })),
+      env.ELECTION_DATA.get(`ballot:county:${fips}:democrat_primary_2026`).then(v => ({ type: "dem", fips, has: !!v })).catch(() => ({ type: "dem", fips, has: false })),
     ]);
     const results = await Promise.all(reads);
     for (const r of results) {
@@ -6187,6 +6238,7 @@ async function handleAdminCoverage(env) {
     <a href="/" class="back-top">&larr; Texas Votes</a>
     <h1>Data Coverage Dashboard</h1>
     <p class="subtitle">Texas Votes election data completeness at a glance.</p>
+    ${errors.length > 0 ? `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:var(--rs);padding:0.75rem 1rem;margin-bottom:1.5rem;font-size:0.85rem;color:#dc2626"><strong>Fetch errors:</strong><ul style="margin:0.5rem 0 0;padding-left:1.25rem">${errors.map(e => '<li>' + escapeHtml(e) + '</li>').join("")}</ul></div>` : ""}
 
     <h2>Statewide Ballot Summary</h2>
     <table>
@@ -6633,7 +6685,12 @@ async function handleOverrideFeedback(request, env) {
 async function handleAdminBaselineView(url, env) {
   const party = url.searchParams.get("party") || "republican";
   const baselineKey = `${BASELINE_KEY_PREFIX}${party}_primary_2026`;
-  const raw = await env.ELECTION_DATA.get(baselineKey);
+  let raw;
+  try {
+    raw = await env.ELECTION_DATA.get(baselineKey);
+  } catch (err) {
+    return jsonResponse({ error: "KV read failed: " + (err.message || String(err)), party, key: baselineKey }, 500);
+  }
 
   if (!raw) {
     return jsonResponse({
@@ -6686,7 +6743,12 @@ async function handleAdminBaselineView(url, env) {
  * Returns the last 30 days of fallback triggers.
  */
 async function handleAdminBaselineLog(env) {
-  const raw = await env.ELECTION_DATA.get(BASELINE_LOG_KEY);
+  let raw;
+  try {
+    raw = await env.ELECTION_DATA.get(BASELINE_LOG_KEY);
+  } catch (err) {
+    return jsonResponse({ error: "KV read failed: " + (err.message || String(err)) }, 500);
+  }
   if (!raw) {
     return jsonResponse({
       entries: [],
@@ -6741,7 +6803,12 @@ async function handleAdminBaselineUpdate(request, env) {
   }
 
   const baselineKey = `${BASELINE_KEY_PREFIX}${body.party}_primary_2026`;
-  const raw = await env.ELECTION_DATA.get(baselineKey);
+  let raw;
+  try {
+    raw = await env.ELECTION_DATA.get(baselineKey);
+  } catch (err) {
+    return jsonResponse({ error: "KV read failed: " + (err.message || String(err)) }, 500);
+  }
   if (!raw) {
     return jsonResponse({ error: `No baseline found for ${body.party}. Seed it first.` }, 404);
   }
@@ -6938,10 +7005,15 @@ async function handleAdminCleanup(url, env) {
 // MARK: - Admin LLM Benchmark Dashboard
 
 async function handleAdminBenchmark(env) {
-  const [status, results] = await Promise.all([
-    getExperimentStatus(env),
-    getExperimentResults(env),
-  ]);
+  let status = null, results = null;
+  try {
+    [status, results] = await Promise.all([
+      getExperimentStatus(env),
+      getExperimentResults(env),
+    ]);
+  } catch (err) {
+    console.error("handleAdminBenchmark KV read error:", err);
+  }
 
   const isRunning = status && status.status === "running";
   const hasResults = results && results.ranking && results.ranking.length > 0;
