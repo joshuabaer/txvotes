@@ -329,6 +329,10 @@ _Phase 1 (multi-state infrastructure) complete. Plan at `docs/plans/plan_dc_prim
 ### Diagnostics & Data Quality
 - [ ] **Fix all outstanding diagnostic issues** — Review /data-quality, /admin/coverage, /api/balance-check, and /health endpoints on the live site. Identify and fix any warnings, errors, stale data, or failing checks. Ensure all diagnostic pages render correctly and report healthy status.
 
+### Code Quality
+
+- [ ] **Fix inconsistent error handling across similar endpoints** — Audit all KV-reading endpoints (handleDataQuality, handleAdminCoverage, handleBalanceCheck, handleHealthCheck, etc.) for inconsistent error handling patterns. Some have top-level try/catch, some have per-operation try/catch, some have none. Standardize on a consistent pattern (e.g., per-operation try/catch with graceful fallback) across all handlers that read and parse KV data.
+
 ### Infrastructure
 
 - [ ] Replace atxvotes-api worker with Cloudflare redirect rule — atxvotes.app only does 301 redirects to txvotes.app now (cron moved to usvotes-api). Replace the worker with a Cloudflare Bulk Redirect rule to eliminate the redundant worker entirely.

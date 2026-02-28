@@ -51,7 +51,7 @@ function createMockEnv(kvOverrides = {}) {
         republican: { updatedAt: new Date().toISOString(), version: "1" },
         democrat: { updatedAt: new Date().toISOString(), version: "1" },
       }),
-      "audit:summary": JSON.stringify({ providers: {}, averageScore: null }),
+      "audit:summary": JSON.stringify({ providers: {}, averageScore: null, lastRun: new Date().toISOString() }),
       ...kvOverrides,
     }),
     ADMIN_SECRET: "test-secret-123",
