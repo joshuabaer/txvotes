@@ -21,14 +21,16 @@ _From data audit (Feb 23). All 254 counties now have ballot keys. Some have empt
 - [x] Seed 23 missing counties — all FIPS 48445-48507 now have ballot data in KV
 - [x] Retry failed county ballots — Galveston (48167) and Jefferson (48245) both seeded successfully
 - [x] Seed missing party ballots — Kaufman (48257), Nueces (48303), McLennan (48309), Gregg (48183) all now have both party ballots
-- [ ] Re-seed empty county ballots — Randall (48381), Smith (48423), Archer (48009), Austin County (48015) have 0 races but real contested races exist. Seeder silently returned empty arrays. (Investigation documented in docs/plans/empty_county_investigation.md)
-  - Run with `reset` flag to clear stale progress:
-    ```
-    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48381","countyName":"Randall","reset":true}'
-    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48423","countyName":"Smith","reset":true}'
-    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48009","countyName":"Archer","reset":true}'
-    curl -X POST "https://txvotes.app/api/election/seed-county" -H "Authorization: Bearer $ADMIN_SECRET" -H "Content-Type: application/json" -d '{"countyFips":"48015","countyName":"Austin","reset":true}'
-    ```
+- [ ] Re-seed empty county ballots — Code fixes deployed via PR #7 (reject empty results, better prompts) and PR #8 (robust JSON extraction). Seeded results:
+  - Randall (48381): 1 Republican race (seeded in previous session)
+  - Smith (48423): 5 Republican + 2 Democrat races (seeded in previous session)
+  - Archer (48009): 3 Republican races found. No Democrat primary (expected — small rural red county).
+  - Austin County (48015): Still 0 races — may genuinely lack contested county-level primaries (population ~30K, very rural). Consider marking as "no contested county races."
+  - **Verify:** Check `/admin/coverage` — Randall, Smith, Archer should show race counts > 0
+
+#### FIPS Mapping Bug (fixed in PR #7)
+- [x] **Fix Potter County missing from TX_COUNTY_NAMES** — Potter County (FIPS 48375) was missing, shifting 67 counties (48375-48507) by one position. Fixed FIPS mapping, corrected TOP_COUNTIES FIPS swaps (Nueces, Parker, Lubbock). Also added batch `seed-county-info` endpoint.
+  - **Verify:** Check `/admin/coverage` — spot-check: 48453=Travis, 48439=Tarrant, 48375=Potter, 48507=Zavala (not "Zablocki")
 
 #### Statewide Candidate Data Gaps
 _From data audit. 65 statewide candidates, most fields 95%+ filled._
@@ -38,24 +40,12 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 - [x] Add source citations to all candidates — Ballotpedia + TX SOS URLs added to all 65 statewide candidates
 
 #### Precinct Maps
-- [ ] Seed precinct maps for remaining top 30 counties — 10/30 done; ran script for remaining 20 but all returned empty (ZIP-to-commissioner-precinct data not available via web search for smaller counties). May need manual research or GIS data sources.
+- [ ] Seed precinct maps for top counties — Code improvements deployed (PR #7: first-digit convention, GIS hints, validation). Re-seeding attempted for 28 counties but all return "Could not determine precinct map" — ZIP-to-commissioner-precinct data isn't available via web search. **Fundamental data sourcing problem, not a code problem.** Options: (1) hardcode static maps using official county GIS PDFs, (2) accept limitation and deprioritize.
+  - 10/30 top counties have maps from initial seed; remaining 20 need manual GIS research
 
 #### County Info
-- [ ] Enrich county_info for remaining ~11 counties — elections websites, phone numbers, vote center status. 243/254 now have voting info, ~11 still missing
-  - Get list of under-enriched counties from coverage page, then bulk seed:
-    ```
-    curl -s -u "admin:$ADMIN_SECRET" "https://txvotes.app/admin/coverage" \
-      | grep -oP '48\d{3}(?=</td><td class="cov-no">)' | sort -u > missing_counties.txt
-    while read fips; do
-      echo "Seeding $fips..."
-      curl -s -X POST "https://txvotes.app/api/election/seed-county" \
-        -H "Authorization: Bearer $ADMIN_SECRET" \
-        -H "Content-Type: application/json" \
-        -d "{\"countyFips\":\"$fips\",\"countyName\":\"County $fips\"}"
-      echo ""
-      sleep 2
-    done < missing_counties.txt
-    ```
+- [x] Enrich county_info for all 254 counties — FIPS mapping fix (PR #7) corrected 67 counties' names. Batch seed-county-info endpoint added. All 254/254 counties now have county_info in KV (confirmed via seed run: 11 new, 0 errors).
+  - **Verify:** Check `/admin/coverage` — all 254 counties should have county_info
 
 #### Other Data Tasks
 - [x] Fix seeding script error handling — added error classification (AUTH/RATE_LIMIT/SERVER/etc), KV-based progress tracking, failed steps NOT marked completed, `reset` option via API, auth errors abort immediately. 16 new tests (50 total).
@@ -81,10 +71,8 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 - [x] **Simplify ballot page top section** — Removed duplicate AI limitations text (was identical to dismissible disclaimer). Moved "Spread the word" Share CTA below all races. Collapsed Share button to "Share Texas Votes" in action bar. Deployed.
 - [x] **Translate all remaining English on Spanish pages** — Covered by the Spanish translation audit (item 47). Added `data-t` + TR entries for all untranslated strings found across landing, stats, candidates, open-source, audit, and data-quality pages. Deployed.
 - [x] **Use neutral Spanish dialect in all AI prompts** — Added "español neutro" dialect instructions to 6 locations in pwa-guide.js: SYSTEM_PROMPT, handlePWA_Summary langInstruction, buildUserPrompt Spanish text fields, buildUserPrompt candidateTranslations schema, handleSeedTranslations user prompt, and handleSeedTranslations system prompt. Deployed.
-- [ ] **Update existing KV-cached translations to neutral dialect** — Prompts already use neutral dialect (no code changes needed). Operational steps remaining:
-  1. Run `POST /api/election/seed-translations` with `{"party":"republican"}` and `{"party":"democrat"}` to regenerate statewide translations
-  2. Optionally regenerate county translations (add `"countyFips":"48453"` etc. for each county with existing translations)
-  3. **Verify:** Visit `https://txvotes.app/tx/app?lang=es`, generate a guide, confirm neutral Latin American Spanish (no regional slang, "usted" forms)
+- [x] **Update existing KV-cached translations to neutral dialect** — Translation batch fix deployed via PR #8 (6 candidates per API call to avoid Worker timeout). Seeds completed: 33/33 Republican, 31/31 Democrat candidates translated.
+  - **Verify:** Visit `https://txvotes.app/tx/app?lang=es`, generate a guide, confirm neutral Latin American Spanish (no regional slang, "usted" forms)
 
 ### Audit Score Improvements
 _Latest audit (Feb 23): ChatGPT 7.5, Gemini 7.5, Claude 8.2, Grok 7.8 (avg 7.8/10). Dimension averages: Bias 8.3, Accuracy 7.0, Framing 8.0, Pros/Cons 7.3, Transparency 9.3. Lowest: Accuracy (7.0) and Pros/Cons (7.3)._
