@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { APP_JS, handlePWA, handlePWA_Manifest } from "../src/pwa.js";
+import { STATE_CONFIG } from "../src/state-config.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -11,9 +12,33 @@ function bootApp(opts = {}) {
   if (opts.start) {
     history.replaceState(null, "", "/app?start=1");
   }
-  // Set _STATE before evaluating APP_JS
+  // Set _STATE and _STATE_CFG before evaluating APP_JS
   if (opts.state) {
     window._STATE = opts.state;
+    const cfg = STATE_CONFIG[opts.state] || STATE_CONFIG['tx'];
+    window._STATE_CFG = {
+      abbr: cfg.abbr,
+      name: cfg.name,
+      label: cfg.label,
+      defaultCity: cfg.defaultCity || '',
+      defaultParty: cfg.defaultParty,
+      electionDate: cfg.electionDate,
+      electionName: cfg.electionName,
+      parties: cfg.parties,
+    };
+  } else {
+    // Default to TX config
+    const cfg = STATE_CONFIG['tx'];
+    window._STATE_CFG = {
+      abbr: cfg.abbr,
+      name: cfg.name,
+      label: cfg.label,
+      defaultCity: cfg.defaultCity || '',
+      defaultParty: cfg.defaultParty,
+      electionDate: cfg.electionDate,
+      electionName: cfg.electionName,
+      parties: cfg.parties,
+    };
   }
   const indirectEval = eval;
   indirectEval(APP_JS);
@@ -114,6 +139,7 @@ beforeEach(() => {
   // Clean up globals
   delete window._STATE;
   delete window._APP_BASE;
+  delete window._STATE_CFG;
   delete window.S;
 });
 
@@ -247,9 +273,9 @@ describe("State-aware branding", () => {
     expect(window._stateName).toBe("Texas");
   });
 
-  it("_stateName is DC for state=dc", () => {
+  it("_stateName is Washington DC for state=dc", () => {
     bootApp({ start: true, state: "dc" });
-    expect(window._stateName).toBe("DC");
+    expect(window._stateName).toBe("Washington DC");
   });
 
   it("_stateFullName is Texas for state=tx", () => {
@@ -402,9 +428,12 @@ describe("Address reset preserves state defaults", () => {
 // 9. Election date awareness
 // ===========================================================================
 describe("Election date awareness", () => {
-  it("APP_JS contains both TX and DC election date constructors", () => {
-    expect(APP_JS).toContain("new Date(2026,2,3)"); // March 3 TX
-    expect(APP_JS).toContain("new Date(2026,5,16)"); // June 16 DC
+  it("APP_JS references TX and DC election dates via _STATE_CFG", () => {
+    // Election dates are now read from _STATE_CFG.electionDate (ISO strings)
+    expect(APP_JS).toContain("_STATE_CFG.electionDate"); // dynamic election date
+    // Key dates section still has DC-specific date constructors for registration/early voting
+    expect(APP_JS).toContain("new Date(2026,4,18)"); // May 18 DC registration deadline
+    expect(APP_JS).toContain("new Date(2026,1,2)"); // Feb 2 TX registration deadline
   });
 
   it("TX save sets election date to 2026-03-03", () => {

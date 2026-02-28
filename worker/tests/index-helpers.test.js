@@ -460,13 +460,12 @@ describe("Route patterns — additional coverage", () => {
     expect(indexSrc).toContain("Unauthorized");
   });
 
-  it("handleBallotFetch validates party parameter", () => {
+  it("handleBallotFetch validates party parameter from state config", () => {
     const ballotBlock = indexSrc.slice(
       indexSrc.indexOf("async function handleBallotFetch"),
       indexSrc.indexOf("async function handleCountyInfo")
     );
-    expect(ballotBlock).toContain("republican");
-    expect(ballotBlock).toContain("democrat");
+    expect(ballotBlock).toContain("validParties.includes(party)");
     expect(ballotBlock).toContain("party parameter required");
   });
 
@@ -509,7 +508,7 @@ describe("Route patterns — additional coverage", () => {
   });
 
   it("/tx/app/api/polymarket returns empty odds", () => {
-    expect(indexSrc).toContain("/tx/app/api/polymarket");
+    expect(indexSrc).toContain("app/api/polymarket");
     expect(indexSrc).toContain("odds: {}");
   });
 

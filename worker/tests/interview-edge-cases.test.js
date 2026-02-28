@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { APP_JS } from "../src/pwa.js";
+import { STATE_CONFIG } from "../src/state-config.js";
 
 // ---------------------------------------------------------------------------
 // Helpers — same as interview-flow.test.js
@@ -15,6 +16,20 @@ function bootApp(opts = {}) {
   if (opts.start) {
     history.replaceState(null, "", "/app?start=1");
   }
+  // Set _STATE and _STATE_CFG before evaluating APP_JS
+  const stateCode = opts.state || 'tx';
+  window._STATE = stateCode;
+  const cfg = STATE_CONFIG[stateCode] || STATE_CONFIG['tx'];
+  window._STATE_CFG = {
+    abbr: cfg.abbr,
+    name: cfg.name,
+    label: cfg.label,
+    defaultCity: cfg.defaultCity || '',
+    defaultParty: cfg.defaultParty,
+    electionDate: cfg.electionDate,
+    electionName: cfg.electionName,
+    parties: cfg.parties,
+  };
   const indirectEval = eval;
   indirectEval(APP_JS);
 }

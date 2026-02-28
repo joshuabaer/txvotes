@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { APP_JS } from "../src/pwa.js";
+import { STATE_CONFIG } from "../src/state-config.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -9,6 +10,7 @@ import { APP_JS } from "../src/pwa.js";
 /** Boot the app by evaluating APP_JS inside the current happy-dom document.
  *  @param {Object} [opts]
  *  @param {boolean} [opts.start] - if true, simulate ?start=1 so Phase 0 auto-advances to Phase 1
+ *  @param {string} [opts.state] - state code ('tx', 'dc', etc.)
  */
 function bootApp(opts = {}) {
   // Minimal DOM structure the app expects
@@ -19,6 +21,21 @@ function bootApp(opts = {}) {
   if (opts.start) {
     history.replaceState(null, "", "/app?start=1");
   }
+
+  // Set _STATE and _STATE_CFG before evaluating APP_JS
+  const stateCode = opts.state || 'tx';
+  window._STATE = stateCode;
+  const cfg = STATE_CONFIG[stateCode] || STATE_CONFIG['tx'];
+  window._STATE_CFG = {
+    abbr: cfg.abbr,
+    name: cfg.name,
+    label: cfg.label,
+    defaultCity: cfg.defaultCity || '',
+    defaultParty: cfg.defaultParty,
+    electionDate: cfg.electionDate,
+    electionName: cfg.electionName,
+    parties: cfg.parties,
+  };
 
   // Evaluate the app code in the global scope.
   // Script tags don't auto-execute in happy-dom, so we use indirect eval.

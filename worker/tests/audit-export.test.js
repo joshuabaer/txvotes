@@ -610,11 +610,14 @@ describe("Source ranking: prompt-level enforcement", () => {
   });
 
   it("county-seeder.js system prompt lists all 7 tiers", () => {
-    expect(seederSrc).toContain("Texas Secretary of State filings");
+    // Tier 1 is now state-agnostic ("Official state election authority filings")
+    // to support multi-state operation beyond Texas
+    expect(seederSrc).toContain("Official state election authority filings");
     expect(seederSrc).toContain("County election offices");
     expect(seederSrc).toContain("Official campaign websites");
     expect(seederSrc).toContain("ballotpedia.org");
-    expect(seederSrc).toContain("texastribune.org");
+    // Tier 5 is now state-agnostic (news outlets for the active state)
+    expect(seederSrc).toContain("news outlets");
     expect(seederSrc).toContain("apnews.com");
     expect(seederSrc).toContain("AVOID: blogs, social media");
   });

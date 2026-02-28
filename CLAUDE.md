@@ -35,6 +35,7 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 - **worker/src/index.js** — Cloudflare Worker entry point, routing, static pages
 - **worker/src/pwa.js** — Single-file PWA: HTML, CSS, and JS served inline from the worker
 - **worker/src/pwa-guide.js** — Claude API integration for personalized voting guide generation
+- **worker/src/state-config.js** — Multi-state configuration registry (TX, DC, CO), election phases, path parsing
 - **worker/src/county-seeder.js** — Data population pipeline for county races/info via Claude + web_search
 - **worker/src/updater.js** — Daily updater cron (runs on usvotes-api)
 - **worker/src/audit-runner.js** — Automated AI audit runner (submits methodology export to ChatGPT, Gemini, Grok, Claude APIs for bias scoring)
@@ -54,7 +55,7 @@ Git worktrees (`.claude/worktrees/`) do not include `node_modules`. Before runni
 cd worker && npm install && npx vitest run
 ```
 
-1629 tests across 19 test files:
+2218 tests across 28 test files:
 
 - **interview-flow.test.js** — Interview flow UI tests (happy-dom + vitest)
 - **index-helpers.test.js** — Helper functions, route patterns, candidate profiles, data quality
@@ -75,6 +76,15 @@ cd worker && npm install && npx vitest run
 - **stats.test.js** — Public stats page rendering, security, caching, i18n, graceful degradation
 - **rate-limit.test.js** — Rate limiting logic and edge cases
 - **llm-experiment.test.js** — LLM experiment profiles, runner, analysis, scoring, admin endpoints
+- **state-config.test.js** — Multi-state config, dynamic regex, election phase, state parsing
+- **state-selector.test.js** — State selector UI, _STATE_CFG injection, state switching
+- **dc-mar.test.js** — DC Master Address Repository API integration
+- **index-routes.test.js** — Dynamic routing, CORS, state-aware API dispatch
+- **ballot-override.test.js** — Ballot override/feedback routes
+- **spot-check.test.js** — Admin spot-check page
+- **stats-email.test.js** — Stats email generation, multi-state KV reads
+- **post-election.test.js** — Post-election phase handling
+- **usage-logger.test.js** — Usage logging
 
 ## Key Patterns
 

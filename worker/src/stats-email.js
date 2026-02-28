@@ -8,6 +8,7 @@
 
 import { getUsageLog, estimateCost } from "./usage-logger.js";
 import { checkBallotBalance } from "./balance-check.js";
+import { STATE_CONFIG } from "./state-config.js";
 
 // Election date for frequency switching
 const ELECTION_DATE = "2026-03-03";
@@ -66,10 +67,13 @@ export function shouldSendEmail(cronSchedule, now) {
  * @param {object} env - Cloudflare Worker env bindings
  * @param {object} [options] - Options
  * @param {Date} [options.now] - Current time for date calculations
+ * @param {string} [options.stateCode] - State code to load ballot data for (default: 'tx')
  * @returns {object} Stats data for email template
  */
 export async function collectEmailStats(env, options = {}) {
   const now = options.now || new Date();
+  const stateCode = (options && options.stateCode) || 'tx';
+  const kvPrefix = (STATE_CONFIG[stateCode] && STATE_CONFIG[stateCode].kvPrefix) || '';
   const today = now.toISOString().slice(0, 10);
   const yesterday = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
 
@@ -103,8 +107,8 @@ export async function collectEmailStats(env, options = {}) {
       cronStatusRaw,
       cronStatusYesterdayRaw,
     ] = await Promise.all([
-      env.ELECTION_DATA.get("ballot:statewide:republican_primary_2026"),
-      env.ELECTION_DATA.get("ballot:statewide:democrat_primary_2026"),
+      env.ELECTION_DATA.get(kvPrefix + "ballot:statewide:republican_primary_2026"),
+      env.ELECTION_DATA.get(kvPrefix + "ballot:statewide:democrat_primary_2026"),
       env.ELECTION_DATA.get("audit:summary"),
       env.ELECTION_DATA.get(`usage_log:${today}`),
       env.ELECTION_DATA.get(`usage_log:${yesterday}`),

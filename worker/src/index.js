@@ -7,7 +7,7 @@ import { checkBallotBalance, formatBalanceSummary } from "./balance-check.js";
 import { getUsageLog, estimateCost } from "./usage-logger.js";
 import { checkRateLimit, rateLimitResponse } from "./rate-limit.js";
 import { runSingleExperiment, runFullExperiment, getExperimentStatus, getExperimentResults, EXPERIMENT_PROFILES, VALID_LLMS as EXPERIMENT_LLMS } from "./llm-experiment.js";
-import { STATE_CONFIG, VALID_STATES, DEFAULT_STATE, ELECTION_PHASES, getElectionPhase } from "./state-config.js";
+import { STATE_CONFIG, VALID_STATES, DEFAULT_STATE, ELECTION_PHASES, getElectionPhase, parseStateFromPath } from "./state-config.js";
 import { resolveDCAddress } from "./dc-mar.js";
 import { runStatsEmail } from "./stats-email.js";
 
@@ -3861,16 +3861,20 @@ async function handleManifest(env) {
 
 async function handleBallotFetch(request, env) {
   const url = new URL(request.url);
+  const stateCode = parseStateFromPath(url.pathname) || DEFAULT_STATE;
+  const stateConfig = STATE_CONFIG[stateCode] || STATE_CONFIG[DEFAULT_STATE];
+  const kvPrefix = stateConfig.kvPrefix;
+  const validParties = stateConfig.parties;
   const party = url.searchParams.get("party");
   const county = url.searchParams.get("county");
-  if (!party || !["republican", "democrat"].includes(party)) {
-    return jsonResponse({ error: "party parameter required (republican|democrat)" }, 400);
+  if (!party || !validParties.includes(party)) {
+    return jsonResponse({ error: `party parameter required (${validParties.join('|')})` }, 400);
   }
 
   // Load statewide ballot
   let raw;
   try {
-    raw = await env.ELECTION_DATA.get(`ballot:statewide:${party}_primary_2026`);
+    raw = await env.ELECTION_DATA.get(`${kvPrefix}ballot:statewide:${party}_primary_2026`);
   } catch (err) {
     return jsonResponse({ error: "KV read failed: " + (err.message || String(err)) }, 500);
   }
@@ -3881,7 +3885,7 @@ async function handleBallotFetch(request, env) {
   // If county FIPS provided, merge county-specific races
   if (county) {
     try {
-      const countyRaw = await env.ELECTION_DATA.get(`ballot:county:${county}:${party}_primary_2026`);
+      const countyRaw = await env.ELECTION_DATA.get(`${kvPrefix}ballot:county:${county}:${party}_primary_2026`);
       if (countyRaw) {
         try {
           const statewide = JSON.parse(raw);
@@ -3914,13 +3918,15 @@ async function handleBallotFetch(request, env) {
 
 async function handleCountyInfo(request, env) {
   const url = new URL(request.url);
+  const stateCode = parseStateFromPath(url.pathname) || DEFAULT_STATE;
+  const kvPrefix = (STATE_CONFIG[stateCode] || STATE_CONFIG[DEFAULT_STATE]).kvPrefix;
   const fips = url.searchParams.get("fips");
   if (!fips) {
     return jsonResponse({ error: "fips parameter required" }, 400);
   }
 
   try {
-    const raw = await env.ELECTION_DATA.get(`county_info:${fips}`);
+    const raw = await env.ELECTION_DATA.get(`${kvPrefix}county_info:${fips}`);
     if (!raw) {
       return jsonResponse({ error: "No county info available", countyFips: fips }, 404);
     }
@@ -8186,63 +8192,37 @@ export default {
         redirectUrl.hash = url.hash;
         return new Response(null, { status: 301, headers: { Location: redirectUrl.pathname + redirectUrl.search + redirectUrl.hash } });
       }
-      // State-prefixed PWA routes: /tx/app*, /dc/app*
-      if (url.pathname === "/tx/app/clear") {
-        return handlePWA_Clear("/", "Clear Data \u2014 Texas Votes", "Reset your Texas Votes data and start fresh.", "https://txvotes.app/og-image-clear.png");
-      }
-      if (url.pathname === "/tx/app") {
-        return handlePWA("tx");
-      }
-      if (url.pathname === "/tx/app/sw.js") {
-        return handlePWA_SW("tx");
-      }
-      if (url.pathname === "/tx/app/manifest.json") {
-        return handlePWA_Manifest("tx");
-      }
-      if (url.pathname === "/tx/app/api/manifest") {
-        return handleManifest(env);
-      }
-      if (url.pathname === "/tx/app/api/ballot") {
-        return handleBallotFetch(request, env);
-      }
-      if (url.pathname === "/tx/app/api/phase") {
-        const txPhase = await resolveElectionPhase(url, env, 'tx');
-        return jsonResponse({ phase: txPhase, resultsUrl: STATE_CONFIG.tx.resultsUrl, runoffDate: STATE_CONFIG.tx.runoffDate });
-      }
-      if (url.pathname === "/tx/app/api/county-info") {
-        return handleCountyInfo(request, env);
-      }
-      if (url.pathname === "/tx/app/api/polymarket") {
-        return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
-      }
-      // DC PWA routes
-      if (url.pathname === "/dc/app/clear") {
-        return handlePWA_Clear("/", "Clear Data \u2014 DC Votes", "Reset your DC Votes data and start fresh.", "https://txvotes.app/og-image-clear.png");
-      }
-      if (url.pathname === "/dc/app") {
-        return handlePWA("dc");
-      }
-      if (url.pathname === "/dc/app/sw.js") {
-        return handlePWA_SW("dc");
-      }
-      if (url.pathname === "/dc/app/manifest.json") {
-        return handlePWA_Manifest("dc");
-      }
-      if (url.pathname === "/dc/app/api/manifest") {
-        return handleManifest(env);
-      }
-      if (url.pathname === "/dc/app/api/ballot") {
-        return handleBallotFetch(request, env);
-      }
-      if (url.pathname === "/dc/app/api/phase") {
-        const dcPhase = await resolveElectionPhase(url, env, 'dc');
-        return jsonResponse({ phase: dcPhase, resultsUrl: STATE_CONFIG.dc.resultsUrl, runoffDate: STATE_CONFIG.dc.runoffDate });
-      }
-      if (url.pathname === "/dc/app/api/county-info") {
-        return handleCountyInfo(request, env);
-      }
-      if (url.pathname === "/dc/app/api/polymarket") {
-        return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
+      // State-prefixed PWA routes: /{state}/app* — dynamic dispatch for all states
+      for (const sc of VALID_STATES) {
+        const cfg = STATE_CONFIG[sc];
+        if (url.pathname === `/${sc}/app/clear`) {
+          return handlePWA_Clear("/", `Clear Data \u2014 ${cfg.label}`, `Reset your ${cfg.label} data and start fresh.`, "https://txvotes.app/og-image-clear.png");
+        }
+        if (url.pathname === `/${sc}/app`) {
+          return handlePWA(sc);
+        }
+        if (url.pathname === `/${sc}/app/sw.js`) {
+          return handlePWA_SW(sc);
+        }
+        if (url.pathname === `/${sc}/app/manifest.json`) {
+          return handlePWA_Manifest(sc);
+        }
+        if (url.pathname === `/${sc}/app/api/manifest`) {
+          return handleManifest(env);
+        }
+        if (url.pathname === `/${sc}/app/api/ballot`) {
+          return handleBallotFetch(request, env);
+        }
+        if (url.pathname === `/${sc}/app/api/phase`) {
+          const phase = await resolveElectionPhase(url, env, sc);
+          return jsonResponse({ phase, resultsUrl: cfg.resultsUrl, runoffDate: cfg.runoffDate });
+        }
+        if (url.pathname === `/${sc}/app/api/county-info`) {
+          return handleCountyInfo(request, env);
+        }
+        if (url.pathname === `/${sc}/app/api/polymarket`) {
+          return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
+        }
       }
       // Health check endpoint (public, no auth)
       if (url.pathname === "/health") {
@@ -8374,7 +8354,7 @@ export default {
     }
 
     // CORS preflight for PWA API routes (state-prefixed)
-    if (request.method === "OPTIONS" && (url.pathname.startsWith("/tx/app/api/") || url.pathname.startsWith("/dc/app/api/"))) {
+    if (request.method === "OPTIONS" && VALID_STATES.some(sc => url.pathname.startsWith(`/${sc}/app/api/`))) {
       return new Response(null, {
         status: 204,
         headers: {
@@ -8391,40 +8371,41 @@ export default {
     }
 
     // Analytics event endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/tx/app/api/ev" || url.pathname === "/dc/app/api/ev") {
+    if (VALID_STATES.some(sc => url.pathname === `/${sc}/app/api/ev`)) {
       return handleAnalyticsEvent(request, env);
     }
 
     // Override feedback endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/tx/app/api/override-feedback" || url.pathname === "/dc/app/api/override-feedback") {
+    if (VALID_STATES.some(sc => url.pathname === `/${sc}/app/api/override-feedback`)) {
       return handleOverrideFeedback(request, env);
     }
 
     // PWA POST routes (no auth — server-side guide gen protects secrets)
     // Rate-limit guide and summary endpoints to prevent API proxy abuse
-    if (url.pathname === "/tx/app/api/guide" || url.pathname === "/dc/app/api/guide") {
+    if (VALID_STATES.some(sc => url.pathname === `/${sc}/app/api/guide`)) {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_Guide(request, env);
     }
-    if (url.pathname === "/tx/app/api/guide-stream" || url.pathname === "/dc/app/api/guide-stream") {
+    if (VALID_STATES.some(sc => url.pathname === `/${sc}/app/api/guide-stream`)) {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_GuideStream(request, env);
     }
-    if (url.pathname === "/tx/app/api/summary" || url.pathname === "/dc/app/api/summary") {
+    if (VALID_STATES.some(sc => url.pathname === `/${sc}/app/api/summary`)) {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "summary", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_Summary(request, env);
     }
-    if (url.pathname === "/tx/app/api/districts") {
-      return handleDistricts(request, env);
-    }
+    // Districts: DC uses MAR API, all other states use Census geocoder
     if (url.pathname === "/dc/app/api/districts") {
       return handleDCDistricts(request, env);
+    }
+    if (VALID_STATES.some(sc => sc !== "dc" && url.pathname === `/${sc}/app/api/districts`)) {
+      return handleDistricts(request, env);
     }
 
     // POST: /api/audit/run — trigger automated AI audit

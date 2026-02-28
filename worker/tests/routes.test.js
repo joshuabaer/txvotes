@@ -347,7 +347,7 @@ describe("Static pages in index.js source", () => {
   });
 
   it("handleDistricts route exists", () => {
-    expect(indexSrc).toContain("/tx/app/api/districts");
+    expect(indexSrc).toContain("app/api/districts");
     expect(indexSrc).toContain("handleDistricts");
   });
 
@@ -1078,33 +1078,32 @@ describe("Multi-state routing infrastructure", () => {
     expect(indexSrc).toContain("status: 301");
   });
 
-  it("has /tx/app route for Texas PWA", () => {
-    expect(indexSrc).toContain('url.pathname === "/tx/app"');
-    expect(indexSrc).toContain('handlePWA("tx")');
+  it("has dynamic state routing for PWA", () => {
+    // Dynamic routing uses VALID_STATES loop with template literals
+    expect(indexSrc).toContain("for (const sc of VALID_STATES)");
+    expect(indexSrc).toContain("handlePWA(sc)");
   });
 
-  it("has /tx/app/sw.js route for Texas service worker", () => {
-    expect(indexSrc).toContain('url.pathname === "/tx/app/sw.js"');
-    expect(indexSrc).toContain('handlePWA_SW("tx")');
+  it("has dynamic state routing for service worker", () => {
+    expect(indexSrc).toContain("handlePWA_SW(sc)");
   });
 
-  it("has /tx/app/manifest.json route for Texas manifest", () => {
-    expect(indexSrc).toContain('url.pathname === "/tx/app/manifest.json"');
-    expect(indexSrc).toContain('handlePWA_Manifest("tx")');
+  it("has dynamic state routing for manifest", () => {
+    expect(indexSrc).toContain("handlePWA_Manifest(sc)");
   });
 
-  it("has /tx/app/api/* routes for Texas API", () => {
-    expect(indexSrc).toContain('url.pathname === "/tx/app/api/ballot"');
-    expect(indexSrc).toContain('url.pathname === "/tx/app/api/guide"');
-    expect(indexSrc).toContain('url.pathname === "/tx/app/api/guide-stream"');
-    expect(indexSrc).toContain('url.pathname === "/tx/app/api/summary"');
-    expect(indexSrc).toContain('url.pathname === "/tx/app/api/districts"');
-    expect(indexSrc).toContain('url.pathname === "/tx/app/api/ev"');
+  it("has dynamic state routing for API endpoints", () => {
+    expect(indexSrc).toContain("handleBallotFetch(request, env)");
+    expect(indexSrc).toContain("handlePWA_Guide(request, env)");
+    expect(indexSrc).toContain("handlePWA_GuideStream(request, env)");
+    expect(indexSrc).toContain("handlePWA_Summary(request, env)");
+    expect(indexSrc).toContain("handleDistricts(request, env)");
+    expect(indexSrc).toContain("handleAnalyticsEvent(request, env)");
   });
 
-  it("has /dc/app route for DC stub", () => {
-    expect(indexSrc).toContain('url.pathname === "/dc/app"');
-    expect(indexSrc).toContain("handleDCComingSoon");
+  it("has DC-specific districts route", () => {
+    expect(indexSrc).toContain("/dc/app/api/districts");
+    expect(indexSrc).toContain("handleDCDistricts");
   });
 
   it("vanity routes redirect to /tx/app", () => {
@@ -1119,8 +1118,9 @@ describe("Multi-state routing infrastructure", () => {
     expect(indexSrc).not.toContain('href="/app?start=1"');
   });
 
-  it("CORS preflight handles /tx/app/api/ paths", () => {
-    expect(indexSrc).toContain('url.pathname.startsWith("/tx/app/api/")');
+  it("CORS preflight handles state-prefixed API paths", () => {
+    expect(indexSrc).toContain("VALID_STATES.some");
+    expect(indexSrc).toContain("app/api/");
   });
 
   it("backward-compat redirect for /clear -> /tx/app/clear", () => {

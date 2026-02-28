@@ -13,6 +13,7 @@
 import { extractSourcesFromResponse, mergeSources, validateRaceUpdate } from "./updater.js";
 import { logTokenUsage } from "./usage-logger.js";
 import { buildCondensedBallotDescription } from "./pwa-guide.js";
+import { STATE_CONFIG } from "./state-config.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -156,9 +157,18 @@ export const TOP_COUNTIES = [
  * @param {string} countyFips - FIPS code
  * @param {string} countyName - County name
  * @param {object} env - Cloudflare env bindings
+ * @param {string} [stateCode='tx'] - State code from STATE_CONFIG
  */
-export async function seedCountyInfo(countyFips, countyName, env) {
-  const prompt = `Research the voting information for ${countyName} County, Texas for the March 3, 2026 Texas Primary Election.
+export async function seedCountyInfo(countyFips, countyName, env, stateCode = 'tx') {
+  const config = STATE_CONFIG[stateCode] || STATE_CONFIG.tx;
+  const stateName = config.name;
+  const electionName = config.electionName;
+  const electionDate = config.electionDate;
+  const kvPrefix = config.kvPrefix;
+  // Format ISO date (YYYY-MM-DD) to human-readable (e.g., "March 3, 2026")
+  const electionDateHuman = new Date(electionDate + 'T12:00:00Z').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const prompt = `Research the voting information for ${countyName} County, ${stateName} for the ${electionDateHuman} ${electionName}.
 
 Find:
 1. Does the county use Vote Centers (any location) or precinct-based voting?
@@ -172,7 +182,7 @@ Find:
 
 SEARCH STRATEGY for small/rural counties:
 - Try the county clerk or elections administrator page on the county website
-- Search "${countyName} County Texas elections" and "${countyName} County Texas county clerk"
+- Search "${countyName} County ${stateName} elections" and "${countyName} County ${stateName} county clerk"
 - Check the Texas Secretary of State county clerk directory: https://www.sos.state.tx.us/elections/voter/county.shtml
 - For phone numbers, try the county courthouse main number
 - Many small counties use precinct-based voting (not vote centers)
@@ -206,10 +216,10 @@ Return ONLY this JSON:
 IMPORTANT: Return ONLY valid JSON. Use null for any field you cannot verify.
 Even for very small counties, you should be able to find at least a phone number and basic website. Use the TX SOS county clerk directory as a fallback.`;
 
-  const result = await callClaudeWithSearch(env, prompt);
+  const result = await callClaudeWithSearch(env, prompt, { stateName });
   if (!result) return { error: "No response from Claude" };
 
-  const key = `county_info:${countyFips}`;
+  const key = `${kvPrefix}county_info:${countyFips}`;
   await env.ELECTION_DATA.put(key, JSON.stringify(result), { expirationTtl: 604800 });
   return { success: true, countyFips, countyName };
 }
@@ -220,19 +230,24 @@ Even for very small counties, you should be able to find at least a phone number
  * @param {string} countyName
  * @param {string} party - "republican" or "democrat"
  * @param {object} env
+ * @param {string} [stateCode='tx'] - State code from STATE_CONFIG
  */
-export async function seedCountyBallot(countyFips, countyName, party, env) {
+export async function seedCountyBallot(countyFips, countyName, party, env, stateCode = 'tx') {
+  const config = STATE_CONFIG[stateCode] || STATE_CONFIG.tx;
+  const stateName = config.name;
+  const electionName = config.electionName;
+  const kvPrefix = config.kvPrefix;
   const partyLabel = party.charAt(0).toUpperCase() + party.slice(1);
 
-  const prompt = `Research ALL local ${partyLabel} primary races for ${countyName} County, Texas in the March 3, 2026 Texas Primary Election.
+  const prompt = `Research ALL local ${partyLabel} primary races for ${countyName} County, ${stateName} in the ${electionName}.
 
 SEARCH STRATEGY — perform these searches in order:
-1. Search "${countyName} County Texas ${partyLabel} primary 2026 candidates"
+1. Search "${countyName} County ${stateName} ${partyLabel} primary 2026 candidates"
 2. Search "site:sos.state.tx.us ${countyName} county 2026 primary filing"
-3. Search "${countyName} County Texas March 2026 election ballot"
-4. Search "ballotpedia ${countyName} County Texas 2026"
+3. Search "${countyName} County ${stateName} March 2026 election ballot"
+4. Search "ballotpedia ${countyName} County ${stateName} 2026"
 
-Every Texas county has at least a County Judge and 4 Commissioner precincts. Most also have Sheriff, County Clerk, District Clerk, Tax Assessor-Collector, Constables, and Justices of the Peace. Search until you find the contested races.
+Every county in ${stateName} has at least a County Judge and 4 Commissioner precincts. Most also have Sheriff, County Clerk, District Clerk, Tax Assessor-Collector, Constables, and Justices of the Peace. Search until you find the contested races.
 
 Include ONLY county-level races such as:
 - County Judge
@@ -258,7 +273,7 @@ Return ONLY this JSON:
 {
   "id": "${countyFips}_${party}_primary_2026",
   "party": "${party}",
-  "electionDate": "2026-03-03",
+  "electionDate": "${config.electionDate}",
   "electionName": "2026 ${partyLabel} Primary - ${countyName} County",
   "races": [
     {
@@ -299,7 +314,7 @@ IMPORTANT:
 - Do NOT return an empty races array unless you have exhausted all search strategies and confirmed this party has zero contested county-level races in ${countyName} County
 - If you truly cannot find any local races for this county/party after thorough searching, return {"races": [], "propositions": []}`;
 
-  const result = await callClaudeWithSearch(env, prompt, { maxSearchUses: 15 });
+  const result = await callClaudeWithSearch(env, prompt, { maxSearchUses: 15, stateName });
   if (!result) return { error: "No response from Claude" };
 
   // Detect empty ballot — treat as retryable error so the step is NOT marked completed.
@@ -342,7 +357,7 @@ IMPORTANT:
   // Ensure countyName is in the ballot data for the candidates index
   if (!result.countyName) result.countyName = countyName;
 
-  const key = `ballot:county:${countyFips}:${party}_primary_2026`;
+  const key = `${kvPrefix}ballot:county:${countyFips}:${party}_primary_2026`;
   await env.ELECTION_DATA.put(key, JSON.stringify(result));
   // Invalidate candidates_index cache so it rebuilds with new county data
   try { await env.ELECTION_DATA.delete("candidates_index"); } catch { /* non-fatal */ }
@@ -426,20 +441,29 @@ const PRECINCT_MAP_HINTS = {
  * ZIP codes often span multiple precincts, so the mapping uses the
  * "majority precinct" — the commissioner precinct that covers the largest
  * area of that ZIP code.
+ *
+ * @param {string} countyFips
+ * @param {string} countyName
+ * @param {object} env
+ * @param {string} [stateCode='tx'] - State code from STATE_CONFIG
  */
-export async function seedPrecinctMap(countyFips, countyName, env) {
+export async function seedPrecinctMap(countyFips, countyName, env, stateCode = 'tx') {
+  const config = STATE_CONFIG[stateCode] || STATE_CONFIG.tx;
+  const stateName = config.name;
+  const kvPrefix = config.kvPrefix;
+
   const hint = PRECINCT_MAP_HINTS[countyName] || "";
   const hintBlock = hint ? `\nCOUNTY-SPECIFIC HINT: ${hint}\n` : "";
 
-  const prompt = `Research the County Commissioner precinct boundaries for ${countyName} County, Texas.
+  const prompt = `Research the County Commissioner precinct boundaries for ${countyName} County, ${stateName}.
 
 I need a mapping of ZIP codes to County Commissioner precinct numbers (1-4).
 
-BACKGROUND: Every Texas county has exactly 4 commissioner precincts. Many Texas counties number their voting precincts so the FIRST DIGIT of the voting precinct number equals the commissioner precinct (e.g., voting precinct 234 = commissioner precinct 2, voting precinct 406 = commissioner precinct 4). This convention is used by Travis, Fort Bend, Williamson, and many other counties.
+BACKGROUND: Every ${stateName} county has exactly 4 commissioner precincts. Many counties number their voting precincts so the FIRST DIGIT of the voting precinct number equals the commissioner precinct (e.g., voting precinct 234 = commissioner precinct 2, voting precinct 406 = commissioner precinct 4). This convention is used by Travis, Fort Bend, Williamson, and many other counties.
 
 RESEARCH STRATEGY (try in this order):
-1. Search for "${countyName} County Texas commissioner precinct map" — look for PDF maps or GIS portals
-2. Search for "${countyName} County Texas GIS" or "${countyName} County open data arcgis" — look for boundary shapefiles
+1. Search for "${countyName} County ${stateName} commissioner precinct map" — look for PDF maps or GIS portals
+2. Search for "${countyName} County ${stateName} GIS" or "${countyName} County open data arcgis" — look for boundary shapefiles
 3. Search for "${countyName} County election precincts" — find voting precinct lists grouped by commissioner precinct
 4. Search for "site:${countyName.toLowerCase().replace(/ /g, "")}county" or the county's official website for precinct information
 5. If the county lists voting precincts by commissioner precinct, use the first-digit convention to verify
@@ -463,7 +487,7 @@ IMPORTANT:
 - If you truly cannot determine ANY mappings reliably, return {}
 - It is better to return a partial mapping (some ZIPs) than an empty one`;
 
-  const result = await callClaudeWithSearch(env, prompt, { maxSearchUses: 15 });
+  const result = await callClaudeWithSearch(env, prompt, { maxSearchUses: 15, stateName });
   if (!result || Object.keys(result).length === 0) {
     return { error: "Could not determine precinct map" };
   }
@@ -489,7 +513,7 @@ IMPORTANT:
     console.warn(`[PRECINCT MAP] ${countyName}: filtered out ${invalidCount} invalid entries`);
   }
 
-  const key = `precinct_map:${countyFips}`;
+  const key = `${kvPrefix}precinct_map:${countyFips}`;
   await env.ELECTION_DATA.put(key, JSON.stringify(cleaned), { expirationTtl: 2592000 });
   return { success: true, countyFips, countyName, zipCount: Object.keys(cleaned).length, invalidCount };
 }
@@ -587,14 +611,20 @@ export function extractJSON(text) {
  * - Rate limits (429) and overloaded (529) retry up to 3 times
  * - Server errors (5xx) throw with status detail
  * - Non-JSON responses trigger a single repair retry
+ * @param {object} env
+ * @param {string} userPrompt
+ * @param {object} [options]
+ * @param {number} [options.maxSearchUses]
+ * @param {string} [options.stateName] - State name for system prompt context (default: 'Texas')
  */
 async function callClaudeWithSearch(env, userPrompt, options = {}) {
   const maxSearchUses = options.maxSearchUses || 10;
+  const stateName = options.stateName || 'Texas';
   const body = {
     model: "claude-sonnet-4-20250514",
     max_tokens: 8192,
     system:
-      "You are a nonpartisan election data researcher for Texas. " +
+      `You are a nonpartisan election data researcher for ${stateName}. ` +
       "Use web_search to find verified, factual information about elections. " +
       "Never fabricate information — if you cannot verify something, use null.\n\n" +
       "CRITICAL OUTPUT FORMAT: Your response MUST be ONLY valid JSON. " +
@@ -602,11 +632,11 @@ async function callClaudeWithSearch(env, userPrompt, options = {}) {
       "Do NOT start your response with phrases like \"I'll help you\" or \"Here is the data\". " +
       "Your entire response must be a single JSON object starting with { and ending with }.\n\n" +
       "SOURCE PRIORITY: When evaluating web_search results, prefer sources in this order:\n" +
-      "1. Texas Secretary of State filings (sos.state.tx.us)\n" +
-      "2. County election offices ({county}.tx.us)\n" +
+      "1. Official state election authority filings\n" +
+      "2. County election offices\n" +
       "3. Official campaign websites\n" +
       "4. Nonpartisan references (ballotpedia.org, votesmart.org)\n" +
-      "5. Established Texas news outlets (texastribune.org, dallasnews.com)\n" +
+      `5. Established ${stateName} news outlets\n` +
       "6. National wire services (apnews.com, reuters.com)\n" +
       "7. AVOID: blogs, social media, opinion sites, unverified sources\n\n" +
       "CONFLICT RESOLUTION: If sources disagree, trust official filings over campaign claims, and campaign claims over news reporting.",
@@ -769,8 +799,13 @@ async function attemptJSONRepair(env, brokenText) {
  * @param {object} env
  * @param {object} [options]
  * @param {boolean} [options.reset] - Clear progress before starting
+ * @param {string} [options.stateCode='tx'] - State code from STATE_CONFIG
  */
 export async function seedFullCounty(countyFips, countyName, env, options = {}) {
+  const stateCode = options.stateCode || 'tx';
+  const config = STATE_CONFIG[stateCode] || STATE_CONFIG.tx;
+  const stateParties = config.parties;
+
   const results = { countyFips, countyName, steps: {}, errors: [] };
 
   // Handle reset option — clear progress for this county
@@ -782,26 +817,23 @@ export async function seedFullCounty(countyFips, countyName, env, options = {}) 
   const progress = await loadProgress(env, countyFips);
 
   // Step definitions: key, label, async fn
+  const partyStepDefs = stateParties.map((party) => ({
+    key: party,
+    progressKey: `ballot:${countyFips}:${party}`,
+    fn: () => seedCountyBallot(countyFips, countyName, party, env, stateCode),
+  }));
+
   const stepDefs = [
     {
       key: "countyInfo",
       progressKey: `info:${countyFips}`,
-      fn: () => seedCountyInfo(countyFips, countyName, env),
+      fn: () => seedCountyInfo(countyFips, countyName, env, stateCode),
     },
-    {
-      key: "republican",
-      progressKey: `ballot:${countyFips}:republican`,
-      fn: () => seedCountyBallot(countyFips, countyName, "republican", env),
-    },
-    {
-      key: "democrat",
-      progressKey: `ballot:${countyFips}:democrat`,
-      fn: () => seedCountyBallot(countyFips, countyName, "democrat", env),
-    },
+    ...partyStepDefs,
     {
       key: "precinctMap",
       progressKey: `precinct:${countyFips}`,
-      fn: () => seedPrecinctMap(countyFips, countyName, env),
+      fn: () => seedPrecinctMap(countyFips, countyName, env, stateCode),
     },
   ];
 

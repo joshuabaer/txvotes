@@ -11,6 +11,7 @@ import {
   VALID_LLMS,
   SYSTEM_PROMPT,
 } from "./pwa-guide.js";
+import { STATE_CONFIG } from "./state-config.js";
 
 // MARK: - Cost Rates (per 1M tokens)
 
@@ -175,9 +176,12 @@ const EXPERIMENT_PROFILES = [
  * @param {string} profileId - ID from EXPERIMENT_PROFILES
  * @param {string} llmKey - LLM key (e.g. "claude", "chatgpt")
  * @param {number} runNumber - Repetition number (1-based)
+ * @param {string} [stateCode] - State code for KV prefix lookup (default: 'tx')
  * @returns {object} Structured result with timing, response, scores, etc.
  */
-async function runSingleExperiment(env, profileId, llmKey, runNumber) {
+async function runSingleExperiment(env, profileId, llmKey, runNumber, stateCode) {
+  stateCode = stateCode || 'tx';
+  var kvPrefix = (STATE_CONFIG[stateCode] && STATE_CONFIG[stateCode].kvPrefix) || '';
   const expProfile = EXPERIMENT_PROFILES.find(function(p) { return p.id === profileId; });
   if (!expProfile) {
     return { error: "Unknown profile: " + profileId, model: llmKey, profile: profileId, run: runNumber };
@@ -207,11 +211,11 @@ async function runSingleExperiment(env, profileId, llmKey, runNumber) {
 
   try {
     // 1. Read ballot data from KV
-    var ballotKey = "ballot:statewide:" + expProfile.party + "_primary_2026";
+    var ballotKey = kvPrefix + "ballot:statewide:" + expProfile.party + "_primary_2026";
     var raw = await env.ELECTION_DATA.get(ballotKey);
     if (!raw) {
       // Try legacy key
-      raw = await env.ELECTION_DATA.get("ballot:" + expProfile.party + "_primary_2026");
+      raw = await env.ELECTION_DATA.get(kvPrefix + "ballot:" + expProfile.party + "_primary_2026");
     }
     if (!raw) {
       result.error = "No ballot data found for " + expProfile.party;
@@ -322,12 +326,14 @@ async function runSingleExperiment(env, profileId, llmKey, runNumber) {
  * @param {string[]} [options.models] - LLM keys to test (default: all 8)
  * @param {string[]} [options.profiles] - Profile IDs to test (default: all 7)
  * @param {number} [options.runs] - Number of repetitions (default: 3)
+ * @param {string} [options.stateCode] - State code for KV prefix lookup (default: 'tx')
  * @returns {object} Summary of the experiment run
  */
 async function runFullExperiment(env, options) {
   var models = (options && options.models) || VALID_LLMS.slice();
   var profileIds = (options && options.profiles) || EXPERIMENT_PROFILES.map(function(p) { return p.id; });
   var runs = (options && options.runs) || 3;
+  var stateCode = (options && options.stateCode) || 'tx';
 
   var totalCalls = models.length * profileIds.length * runs;
   var completed = 0;
@@ -367,7 +373,7 @@ async function runFullExperiment(env, options) {
 
         // Run the experiment
         console.log("[EXPERIMENT] " + model + " | " + profileId + " | run " + runNumber + " (" + (completed + 1) + "/" + totalCalls + ")");
-        var result = await runSingleExperiment(env, profileId, model, runNumber);
+        var result = await runSingleExperiment(env, profileId, model, runNumber, stateCode);
 
         if (result.error) {
           errors++;

@@ -4,6 +4,7 @@ import { TOP_COUNTIES, seedCountyBallot, seedCountyInfo, seedPrecinctMap } from 
 import { logTokenUsage } from "./usage-logger.js";
 import { checkSingleCandidateBalance } from "./balance-check.js";
 import { buildCondensedBallotDescription } from "./pwa-guide.js";
+import { STATE_CONFIG } from "./state-config.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -310,7 +311,7 @@ export function mergeSources(existing, incoming) {
   return merged.slice(0, 20);
 }
 
-export const ELECTION_DAY = "2026-03-03"; // Texas Primary Election Day
+export const ELECTION_DAY = "2026-03-03"; // Texas Primary Election Day (default; use STATE_CONFIG for per-state)
 export const ELECTION_CYCLE = "primary_2026";
 const MANIFEST_SCHEMA_VERSION = 2;
 
@@ -630,7 +631,24 @@ export function isUpdateMeaningful(updates) {
   return false;
 }
 
-const PARTIES = ["republican", "democrat"];
+const PARTIES = ["republican", "democrat"]; // default TX parties (backward compat)
+
+/**
+ * Returns the statewide ballot KV keys for each party, prefixed per state.
+ * TX has an empty kvPrefix so keys are unchanged for backward compatibility.
+ */
+function getBallotKeys(stateCode = 'tx') {
+  const config = STATE_CONFIG[stateCode] || STATE_CONFIG.tx;
+  const prefix = config.kvPrefix;
+  const parties = config.parties;
+  const keys = {};
+  for (const party of parties) {
+    keys[party] = `${prefix}ballot:statewide:${party}_primary_2026`;
+  }
+  return keys;
+}
+
+// Legacy BALLOT_KEYS constant (TX, no prefix) — kept for seedBaseline backward compat
 const BALLOT_KEYS = {
   republican: "ballot:statewide:republican_primary_2026",
   democrat: "ballot:statewide:democrat_primary_2026",
@@ -878,16 +896,21 @@ export function applyBaselineFallback(mergedRace, baselineRace, contradictions) 
  * race, validates, merges, and stores the result.
  *
  * @param {object} env - Cloudflare Worker env bindings
- * @param {object} [options] - { parties?: string[], dryRun?: boolean }
+ * @param {object} [options] - { stateCode?: string, parties?: string[], dryRun?: boolean }
  * @returns {{ updated: string[], errors: string[] }}
  */
 export async function runDailyUpdate(env, options = {}) {
+  const stateCode = options.stateCode || 'tx';
+  const stateConfig = STATE_CONFIG[stateCode] || STATE_CONFIG.tx;
+  const electionDay = stateConfig.electionDate;
+
   // Stop updating after election day
-  if (new Date() > new Date(ELECTION_DAY + "T23:59:59Z")) {
-    return { skipped: true, reason: `Past election day (${ELECTION_DAY})` };
+  if (new Date() > new Date(electionDay + "T23:59:59Z")) {
+    return { skipped: true, reason: `Past election day (${electionDay})` };
   }
 
-  const parties = options.parties || PARTIES;
+  const ballotKeys = getBallotKeys(stateCode);
+  const parties = options.parties || stateConfig.parties;
   const dryRun = options.dryRun || false;
   const log = [];
   const errors = [];
@@ -911,7 +934,7 @@ export async function runDailyUpdate(env, options = {}) {
   const dayOfYear = Math.floor((now - startOfYear) / (1000 * 60 * 60 * 24));
 
   for (const party of parties) {
-    const key = BALLOT_KEYS[party];
+    const key = ballotKeys[party];
     const raw = await env.ELECTION_DATA.get(key);
     if (!raw) {
       errors.push(`${party}: no existing ballot in KV`);
@@ -1235,7 +1258,7 @@ export async function runDailyUpdate(env, options = {}) {
   // Election Day itself when traffic peaks and cache rebuilds are most costly.
   // Data shouldn't be changing while voting is in progress.
   const todayStr = new Date().toISOString().slice(0, 10);
-  const isElectionDay = todayStr === ELECTION_DAY;
+  const isElectionDay = todayStr === electionDay;
   if (updated.length > 0 && !dryRun && !isElectionDay) {
     try { await env.ELECTION_DATA.delete("candidates_index"); } catch { /* non-fatal */ }
   }
@@ -1872,13 +1895,19 @@ export function getCountyRefreshSlice(date) {
  * With staleness: stale counties cost 0 API calls (skipped)
  *
  * @param {object} env - Cloudflare Worker env bindings
- * @param {object} [options] - { dryRun?: boolean, counties?: array }
+ * @param {object} [options] - { stateCode?: string, dryRun?: boolean, counties?: array }
  * @returns {{ countiesRefreshed: string[], countyErrors: string[], countyLog: string[], countiesSkippedStale: string[] }}
  */
 export async function runCountyRefresh(env, options = {}) {
+  const stateCode = options.stateCode || 'tx';
+  const stateConfig = STATE_CONFIG[stateCode] || STATE_CONFIG.tx;
+  const electionDay = stateConfig.electionDate;
+  const kvPrefix = stateConfig.kvPrefix;
+  const stateParties = stateConfig.parties;
+
   // Stop updating after election day
-  if (new Date() > new Date(ELECTION_DAY + "T23:59:59Z")) {
-    return { skipped: true, reason: `Past election day (${ELECTION_DAY})` };
+  if (new Date() > new Date(electionDay + "T23:59:59Z")) {
+    return { skipped: true, reason: `Past election day (${electionDay})` };
   }
 
   const dryRun = options.dryRun || false;
@@ -1903,7 +1932,7 @@ export async function runCountyRefresh(env, options = {}) {
     // --- Refresh county_info ---
     try {
       if (!dryRun) {
-        const infoResult = await seedCountyInfo(county.fips, county.name, env);
+        const infoResult = await seedCountyInfo(county.fips, county.name, env, stateCode);
         if (infoResult.error) {
           countyErrors.push(`${county.name}/info: ${infoResult.error}`);
         } else {
@@ -1918,11 +1947,11 @@ export async function runCountyRefresh(env, options = {}) {
 
     await sleep(3000);
 
-    // --- Refresh ballots for both parties ---
-    for (const party of PARTIES) {
+    // --- Refresh ballots for all state parties ---
+    for (const party of stateParties) {
       try {
         // Check if county ballot exists in KV -- only refresh existing data
-        const ballotKey = `ballot:county:${county.fips}:${party}_primary_2026`;
+        const ballotKey = `${kvPrefix}ballot:county:${county.fips}:${party}_primary_2026`;
         const existing = await env.ELECTION_DATA.get(ballotKey);
 
         if (!existing) {
@@ -1931,7 +1960,7 @@ export async function runCountyRefresh(env, options = {}) {
         }
 
         if (!dryRun) {
-          const result = await seedCountyBallot(county.fips, county.name, party, env);
+          const result = await seedCountyBallot(county.fips, county.name, party, env, stateCode);
           if (result.error) {
             countyErrors.push(`${county.name}/${party}: ${result.error}`);
           } else {

@@ -2,7 +2,7 @@
 // Ported from ClaudeService.swift
 
 import { logTokenUsage } from "./usage-logger.js";
-import { getElectionPhase, ELECTION_PHASES } from "./state-config.js";
+import { getElectionPhase, ELECTION_PHASES, STATE_CONFIG, DEFAULT_STATE, parseStateFromPath } from "./state-config.js";
 
 const SYSTEM_PROMPT =
   "You are a non-partisan voting guide assistant for Texas elections. " +
@@ -83,7 +83,9 @@ export async function handlePWA_Guide(request, env) {
   try {
     // Check election phase — block guide generation after polls close
     var requestUrl = new URL(request.url);
-    var stateCode = requestUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
+    var stateCode = parseStateFromPath(requestUrl.pathname) || DEFAULT_STATE;
+    var stateConfig = STATE_CONFIG[stateCode] || STATE_CONFIG[DEFAULT_STATE];
+    var kvPrefix = stateConfig.kvPrefix;
     var testPhase = requestUrl.searchParams.get("test_phase");
     var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
     var phase = getElectionPhase(stateCode, { kvPhase });
@@ -105,10 +107,10 @@ export async function handlePWA_Guide(request, env) {
 
     // Parallel KV reads — statewide, legacy fallback, county, and manifest are independent
     var [statewideRaw, legacyRaw, countyRaw, manifestRaw] = await Promise.all([
-      env.ELECTION_DATA.get("ballot:statewide:" + party + "_primary_2026"),
-      env.ELECTION_DATA.get("ballot:" + party + "_primary_2026"),
+      env.ELECTION_DATA.get(kvPrefix + "ballot:statewide:" + party + "_primary_2026"),
+      env.ELECTION_DATA.get(kvPrefix + "ballot:" + party + "_primary_2026"),
       countyFips
-        ? env.ELECTION_DATA.get("ballot:county:" + countyFips + ":" + party + "_primary_2026")
+        ? env.ELECTION_DATA.get(kvPrefix + "ballot:county:" + countyFips + ":" + party + "_primary_2026")
         : Promise.resolve(null),
       env.ELECTION_DATA.get("manifest"),
     ]);
@@ -164,7 +166,7 @@ export async function handlePWA_Guide(request, env) {
     // Check for cached Spanish translations in KV
     var cachedTranslations = null;
     if (lang === "es") {
-      cachedTranslations = await loadCachedTranslations(env, party, countyFips);
+      cachedTranslations = await loadCachedTranslations(env, party, countyFips, kvPrefix);
     }
 
     // Build ballot description (with KV caching)
@@ -269,7 +271,7 @@ export async function handlePWA_Summary(request, env) {
   try {
     // Check election phase — block summary generation after polls close
     var summaryUrl = new URL(request.url);
-    var summaryState = summaryUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
+    var summaryState = parseStateFromPath(summaryUrl.pathname) || DEFAULT_STATE;
     var summaryTestPhase = summaryUrl.searchParams.get("test_phase");
     var summaryKvPhase = (summaryTestPhase && ELECTION_PHASES.includes(summaryTestPhase)) ? summaryTestPhase : await env.ELECTION_DATA.get("site_phase:" + summaryState);
     var summaryPhase = getElectionPhase(summaryState, { kvPhase: summaryKvPhase });
@@ -553,11 +555,12 @@ function buildUserPrompt(profile, ballotDesc, ballot, party, lang, readingLevel,
  *
  * @returns {Array|null} Array of translation objects or null if none cached
  */
-async function loadCachedTranslations(env, party, countyFips) {
+async function loadCachedTranslations(env, party, countyFips, kvPrefix) {
+  kvPrefix = kvPrefix || "";
   var translations = [];
 
   // Load statewide translations
-  var statewideKey = "translations:es:" + party + "_primary_2026";
+  var statewideKey = kvPrefix + "translations:es:" + party + "_primary_2026";
   var statewideRaw = await env.ELECTION_DATA.get(statewideKey);
   if (statewideRaw) {
     try {
@@ -570,7 +573,7 @@ async function loadCachedTranslations(env, party, countyFips) {
 
   // Load county-specific translations if countyFips provided
   if (countyFips) {
-    var countyKey = "translations:es:county:" + countyFips + ":" + party + "_primary_2026";
+    var countyKey = kvPrefix + "translations:es:county:" + countyFips + ":" + party + "_primary_2026";
     var countyRaw = await env.ELECTION_DATA.get(countyKey);
     if (countyRaw) {
       try {
@@ -600,19 +603,20 @@ async function loadCachedTranslations(env, party, countyFips) {
  * @param {string|null} countyFips - Optional county FIPS code for county-specific translations
  * @returns {object} Result with success status and translation count
  */
-export async function handleSeedTranslations(env, party, countyFips) {
+export async function handleSeedTranslations(env, party, countyFips, kvPrefix) {
+  kvPrefix = kvPrefix || "";
   // Load ballot data
   var ballotKey, translationKey;
   if (countyFips) {
-    ballotKey = "ballot:county:" + countyFips + ":" + party + "_primary_2026";
-    translationKey = "translations:es:county:" + countyFips + ":" + party + "_primary_2026";
+    ballotKey = kvPrefix + "ballot:county:" + countyFips + ":" + party + "_primary_2026";
+    translationKey = kvPrefix + "translations:es:county:" + countyFips + ":" + party + "_primary_2026";
   } else {
-    ballotKey = "ballot:statewide:" + party + "_primary_2026";
-    translationKey = "translations:es:" + party + "_primary_2026";
+    ballotKey = kvPrefix + "ballot:statewide:" + party + "_primary_2026";
+    translationKey = kvPrefix + "translations:es:" + party + "_primary_2026";
     // Fallback to legacy key
     var raw = await env.ELECTION_DATA.get(ballotKey);
     if (!raw) {
-      ballotKey = "ballot:" + party + "_primary_2026";
+      ballotKey = kvPrefix + "ballot:" + party + "_primary_2026";
       raw = await env.ELECTION_DATA.get(ballotKey);
     }
     if (!raw) {
@@ -1772,7 +1776,9 @@ export async function handlePWA_GuideStream(request, env) {
   var requestUrl = new URL(request.url);
 
   // Check election phase — block guide generation after polls close
-  var stateCode = requestUrl.pathname.startsWith("/dc/") ? "dc" : "tx";
+  var stateCode = parseStateFromPath(requestUrl.pathname) || DEFAULT_STATE;
+  var stateConfig = STATE_CONFIG[stateCode] || STATE_CONFIG[DEFAULT_STATE];
+  var kvPrefix = stateConfig.kvPrefix;
   var testPhase = requestUrl.searchParams.get("test_phase");
   var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
   var phase = getElectionPhase(stateCode, { kvPhase });
@@ -1836,10 +1842,10 @@ export async function handlePWA_GuideStream(request, env) {
     try {
       // Parallel KV reads
       var [statewideRaw, legacyRaw, countyRaw, manifestRaw] = await Promise.all([
-        env.ELECTION_DATA.get("ballot:statewide:" + party + "_primary_2026"),
-        env.ELECTION_DATA.get("ballot:" + party + "_primary_2026"),
+        env.ELECTION_DATA.get(kvPrefix + "ballot:statewide:" + party + "_primary_2026"),
+        env.ELECTION_DATA.get(kvPrefix + "ballot:" + party + "_primary_2026"),
         countyFips
-          ? env.ELECTION_DATA.get("ballot:county:" + countyFips + ":" + party + "_primary_2026")
+          ? env.ELECTION_DATA.get(kvPrefix + "ballot:county:" + countyFips + ":" + party + "_primary_2026")
           : Promise.resolve(null),
         env.ELECTION_DATA.get("manifest"),
       ]);
@@ -1952,7 +1958,7 @@ export async function handlePWA_GuideStream(request, env) {
       // Load cached translations for Spanish
       var cachedTranslations = null;
       if (lang === "es") {
-        cachedTranslations = await loadCachedTranslations(env, party, countyFips);
+        cachedTranslations = await loadCachedTranslations(env, party, countyFips, kvPrefix);
       }
 
       // Build ballot description

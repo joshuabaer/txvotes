@@ -22,6 +22,15 @@ A single Cloudflare Worker serves the entire app — landing page, PWA, API rout
 - **Census Geocoder** — looks up congressional/state districts from street address
 - **Local-first** — all voter data stored in `localStorage`, nothing on our servers
 
+### Multi-State Support
+
+The app supports multiple US states via a central `STATE_CONFIG` registry in `state-config.js`. Each state has its own election settings, KV key prefix, party list, and branding. Currently configured states: **Texas (TX)**, **Washington DC**, **Colorado (CO)**.
+
+- **Routing** — `/{state}/app` (e.g., `/tx/app`, `/co/app`) dynamically dispatches to state-specific PWA instances
+- **KV namespacing** — TX uses unprefixed keys (backward compat), new states use `{state}:` prefix (e.g., `co:ballot:statewide:...`)
+- **Client-side config** — A `_STATE_CFG` JSON object is injected server-side into the PWA, replacing per-state ternary chains
+- **Adding a state** — Add an entry to `STATE_CONFIG` in `state-config.js`; routing, KV keys, and branding auto-propagate
+
 ## File Structure
 
 ```
@@ -29,14 +38,18 @@ worker/src/
 ├── index.js           # Router, landing page, static pages, API endpoints
 ├── pwa.js             # PWA single-page app (HTML/CSS/JS inline, ~3800 lines)
 ├── pwa-guide.js       # Server-side Claude API calls for guide + summary
+├── state-config.js    # Multi-state configuration registry (TX, DC, CO)
 ├── county-seeder.js   # Data population pipeline for county races via Claude + web_search
 ├── updater.js         # Daily cron job to refresh election data in KV
 ├── audit-runner.js    # AI audit runner (ChatGPT, Gemini, Claude, Grok bias scoring)
 ├── balance-check.js   # API balance/quota checker
+├── llm-experiment.js  # LLM model comparison experiment runner
+├── stats-email.js     # Stats email generation
+├── dc-mar.js          # DC Master Address Repository API integration
 ├── rate-limit.js      # Rate limiting
 └── usage-logger.js    # Usage logging
 worker/tests/
-├── 19 test files      # 1629+ tests (vitest + happy-dom)
+├── 28 test files      # 2218+ tests (vitest + happy-dom)
 worker/public/
 ├── headshots/         # Candidate headshot images
 ├── og-image*.png/svg  # Open Graph social sharing images
@@ -96,7 +109,7 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 cd worker && npx vitest run
 ```
 
-1629+ tests across 19 test files covering interview flows, guide generation, routing, bias detection, token budgets, audit scoring, rate limiting, SSE streaming, public stats, and more.
+2218+ tests across 28 test files covering interview flows, guide generation, routing, multi-state config, bias detection, token budgets, audit scoring, rate limiting, SSE streaming, public stats, and more.
 
 ## Key Features
 
@@ -105,7 +118,8 @@ cd worker && npx vitest run
 - **Smart caching** — SHA-256 hashed guide responses (1-hour TTL), ballot description caching
 - **Truncation repair** — Auto-retry with doubled token budget on truncation, partial JSON recovery
 - **AI audit system** — Automated bias scoring across 4 AI providers (ChatGPT, Gemini, Claude, Grok)
-- **County seeder** — Batch data enrichment pipeline for all 254 Texas counties
+- **Multi-state** — Extensible state configuration with per-state KV namespacing, branding, and election dates
+- **County seeder** — Batch data enrichment pipeline for county races via Claude + web_search
 - **Easter eggs** — Texas Cowboy mode (reading level 7), secret menu, vanity URLs
 
 ## Credits

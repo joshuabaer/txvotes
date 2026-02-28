@@ -5,10 +5,12 @@ export const STATE_CONFIG = {
   tx: {
     name: 'Texas',
     abbr: 'TX',
+    label: 'Texas Votes',
     electionDate: '2026-03-03',
     electionName: 'Texas Primary Election',
     parties: ['republican', 'democrat'],
     defaultParty: 'republican',
+    defaultCity: '',
     fips: '48',
     kvPrefix: '', // TX keys remain unprefixed for backward compat
     pollsCloseTime: '19:00:00-06:00', // 7 PM Central Time
@@ -18,13 +20,30 @@ export const STATE_CONFIG = {
   dc: {
     name: 'Washington DC',
     abbr: 'DC',
+    label: 'DC Votes',
     electionDate: '2026-06-16',
     electionName: 'DC Primary Election',
     parties: ['democrat', 'republican', 'statehood_green', 'libertarian'],
     defaultParty: 'democrat',
+    defaultCity: 'Washington',
     fips: '11',
     kvPrefix: 'dc:',
     pollsCloseTime: '20:00:00-05:00', // 8 PM Eastern Time
+    resultsUrl: null,
+    runoffDate: null,
+  },
+  co: {
+    name: 'Colorado',
+    abbr: 'CO',
+    label: 'CO Votes',
+    electionDate: '2026-06-30',
+    electionName: 'Colorado Primary Election',
+    parties: ['republican', 'democrat'],
+    defaultParty: 'republican',
+    defaultCity: '',
+    fips: '08',
+    kvPrefix: 'co:',
+    pollsCloseTime: '19:00:00-06:00', // 7 PM Mountain Time
     resultsUrl: null,
     runoffDate: null,
   },
@@ -70,13 +89,18 @@ export const VALID_STATES = Object.keys(STATE_CONFIG);
 // Default state (for backward compat redirects)
 export const DEFAULT_STATE = 'tx';
 
+// Build state-matching regex once from VALID_STATES
+const statePattern = VALID_STATES.join('|');
+const statePathRegex = new RegExp(`^\\/(${statePattern})\\/app(\\/|$|\\?|#)`);
+const statePrefixRegex = new RegExp(`^\\/(${statePattern})\\/app`);
+
 /**
  * Extract state code from a URL pathname.
  * Matches /{state}/app or /{state}/app/...
  * Returns null if no state prefix found.
  */
 export function parseStateFromPath(pathname) {
-  const match = pathname.match(/^\/(tx|dc)\/app(\/|$|\?|#)/);
+  const match = pathname.match(statePathRegex);
   return match ? match[1] : null;
 }
 
@@ -85,5 +109,5 @@ export function parseStateFromPath(pathname) {
  * e.g., /tx/app/api/guide -> /app/api/guide
  */
 export function stripStatePrefix(pathname) {
-  return pathname.replace(/^\/(tx|dc)\/app/, '/app');
+  return pathname.replace(statePrefixRegex, '/app');
 }

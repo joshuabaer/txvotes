@@ -693,10 +693,9 @@ describe("handleOverrideFeedback — index.js source verification", () => {
     expect(indexSrc).toContain("async function handleOverrideFeedback");
   });
 
-  it("route for /tx/app/api/override-feedback exists", () => {
-    expect(indexSrc).toContain(
-      'url.pathname === "/tx/app/api/override-feedback"'
-    );
+  it("route for override-feedback exists", () => {
+    expect(indexSrc).toContain("app/api/override-feedback");
+    expect(indexSrc).toContain("handleOverrideFeedback(request, env)");
   });
 
   it("route calls handleOverrideFeedback", () => {
