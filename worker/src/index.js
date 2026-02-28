@@ -5849,6 +5849,7 @@ function handleAdmin() {
       <a href="/admin/errors" class="stat-card"><h3>AI Errors</h3><p>Error log, failure categories, daily breakdown</p></a>
       <a href="/tx/app#/llm-experiment" class="stat-card"><h3>LLM Compare</h3><p>Compare guide output across LLM providers side-by-side</p></a>
       <a href="/admin/llm-benchmark" class="stat-card"><h3>LLM Benchmark</h3><p>Automated 8-model experiment: scoring, consensus, speed, cost rankings</p></a>
+      <a href="/admin/spot-check" class="stat-card"><h3>Spot-Check</h3><p>Human review of AI-generated candidate data, flag errors before Election Day</p></a>
     </div>
 
     <h2>API Endpoints</h2>
@@ -5874,6 +5875,10 @@ function handleAdmin() {
       <tr><td>POST</td><td><code>/api/admin/llm-experiment</code></td><td>Start LLM model comparison experiment</td></tr>
       <tr><td>GET</td><td><code>/api/admin/llm-experiment/status</code></td><td>Experiment progress</td></tr>
       <tr><td>GET</td><td><code>/api/admin/llm-experiment/results</code></td><td>Experiment results &amp; analysis</td></tr>
+      <tr><td>GET</td><td><code>/admin/spot-check</code></td><td>Spot-check candidate data review dashboard</td></tr>
+      <tr><td>GET</td><td><code>/admin/spot-check/export</code></td><td>Export flagged candidates as JSON</td></tr>
+      <tr><td>POST</td><td><code>/api/admin/spot-check/review</code></td><td>Save spot-check review decision</td></tr>
+      <tr><td>POST</td><td><code>/api/admin/spot-check/reset</code></td><td>Reset spot-check progress</td></tr>
     </table>
 
     <h2>Test Phase Preview</h2>
@@ -7351,6 +7356,539 @@ async function handleAdminBenchmark(env) {
   return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8" } });
 }
 
+// MARK: - Admin Spot-Check Dashboard
+
+/**
+ * Load spot-check review progress from KV.
+ * Returns { reviewed: {slug|party: {status,note,reviewer,timestamp}}, ... }
+ */
+async function loadSpotCheckProgress(env) {
+  const raw = await env.ELECTION_DATA.get("spot_check_progress");
+  if (!raw) return { reviewed: {} };
+  try { return JSON.parse(raw); } catch { return { reviewed: {} }; }
+}
+
+/**
+ * Save spot-check review progress to KV.
+ */
+async function saveSpotCheckProgress(env, progress) {
+  await env.ELECTION_DATA.put("spot_check_progress", JSON.stringify(progress));
+}
+
+/**
+ * Compute a numeric confidence score for a candidate (lower = less confident = review first).
+ * 0 = all ai-inferred/none, 1 = all verified.
+ */
+function candidateConfidenceScore(candidate) {
+  const conf = classifyConfidence(candidate);
+  const fieldWeights = { background: 2, keyPositions: 2, pros: 1, cons: 1, endorsements: 1, fundraising: 0.5, polling: 0.5 };
+  let score = 0, maxScore = 0;
+  for (const [field, weight] of Object.entries(fieldWeights)) {
+    maxScore += weight * 3;
+    const level = conf[field];
+    if (level === 'verified') score += weight * 3;
+    else if (level === 'sourced') score += weight * 2;
+    else if (level === 'ai-inferred') score += weight * 1;
+    // 'none' = 0
+  }
+  return maxScore > 0 ? score / maxScore : 0;
+}
+
+/**
+ * POST /api/admin/spot-check/review — save a review decision for a candidate.
+ * Body: { key: "slug|party", status: "approved"|"flagged", note?: string, reviewer?: string }
+ */
+async function handleSpotCheckReview(request, env) {
+  let body;
+  try { body = await request.json(); } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+  const { key, status, note, reviewer } = body || {};
+  if (!key || !status) {
+    return jsonResponse({ error: "Missing required fields: key, status" }, 400);
+  }
+  if (status !== "approved" && status !== "flagged") {
+    return jsonResponse({ error: "Status must be 'approved' or 'flagged'" }, 400);
+  }
+  const progress = await loadSpotCheckProgress(env);
+  progress.reviewed[key] = {
+    status,
+    note: note || "",
+    reviewer: reviewer || "admin",
+    timestamp: new Date().toISOString(),
+  };
+  await saveSpotCheckProgress(env, progress);
+  return jsonResponse({ ok: true, key, status });
+}
+
+/**
+ * GET /admin/spot-check/export — export flagged items as JSON.
+ */
+async function handleSpotCheckExport(env) {
+  const progress = await loadSpotCheckProgress(env);
+  const flagged = {};
+  for (const [key, entry] of Object.entries(progress.reviewed || {})) {
+    if (entry.status === "flagged") {
+      flagged[key] = entry;
+    }
+  }
+  return jsonResponse({ flaggedCount: Object.keys(flagged).length, flagged });
+}
+
+/**
+ * POST /api/admin/spot-check/reset — reset all spot-check review progress.
+ */
+async function handleSpotCheckReset(env) {
+  await saveSpotCheckProgress(env, { reviewed: {} });
+  return jsonResponse({ ok: true, message: "Spot-check progress reset" });
+}
+
+/**
+ * GET /admin/spot-check — the spot-check dashboard page.
+ */
+async function handleAdminSpotCheck(env) {
+  // Load candidates and progress in parallel
+  const [allCandidates, progress] = await Promise.all([
+    loadAllCandidates(env),
+    loadSpotCheckProgress(env),
+  ]);
+
+  // Enrich each candidate with confidence data and sort lowest-confidence first
+  const enriched = allCandidates.map(entry => {
+    const conf = classifyConfidence(entry.candidate);
+    const score = candidateConfidenceScore(entry.candidate);
+    const key = `${entry.slug}|${entry.party}`;
+    const review = progress.reviewed[key] || null;
+    return { ...entry, conf, score, key, review };
+  });
+
+  // Sort: unreviewed first (lowest confidence first), then reviewed
+  enriched.sort((a, b) => {
+    const aReviewed = a.review ? 1 : 0;
+    const bReviewed = b.review ? 1 : 0;
+    if (aReviewed !== bReviewed) return aReviewed - bReviewed;
+    return a.score - b.score;
+  });
+
+  // Stats
+  const total = enriched.length;
+  const reviewedCount = enriched.filter(e => e.review).length;
+  const flaggedCount = enriched.filter(e => e.review && e.review.status === "flagged").length;
+  const approvedCount = enriched.filter(e => e.review && e.review.status === "approved").length;
+  const remaining = total - reviewedCount;
+
+  // Build candidate cards HTML
+  let cardsHtml = "";
+  for (let i = 0; i < enriched.length; i++) {
+    const e = enriched[i];
+    const c = e.candidate;
+    const partyColor = e.party === "republican" ? "#c0392b" : "#2563eb";
+    const partyLabel = e.party === "republican" ? "R" : "D";
+    const reviewStatus = e.review ? e.review.status : "pending";
+    const statusIcon = reviewStatus === "approved" ? "&#10003;" : reviewStatus === "flagged" ? "&#9873;" : "&#9679;";
+    const statusColor = reviewStatus === "approved" ? "#059669" : reviewStatus === "flagged" ? "#dc2626" : "#9ca3af";
+    const collapsed = e.review ? "collapsed" : "";
+
+    const confBadge = (level) => {
+      if (level === "verified") return '<span class="sc-badge sc-verified" title="Verified: official source">verified</span>';
+      if (level === "sourced") return '<span class="sc-badge sc-sourced" title="Sourced: web sources">sourced</span>';
+      if (level === "ai-inferred") return '<span class="sc-badge sc-inferred" title="AI-Inferred: no verifiable source">ai-inferred</span>';
+      return '<span class="sc-badge sc-none" title="No data">none</span>';
+    };
+
+    // Sources
+    let sourcesHtml = "";
+    if (c.sources && c.sources.length > 0) {
+      sourcesHtml = '<div class="sc-sources"><strong>Sources:</strong> ';
+      sourcesHtml += c.sources.map(s => {
+        const title = escapeHtml(s.title || s.url || "Link");
+        const url = escapeHtml(s.url || "");
+        return url ? `<a href="${url}" target="_blank" rel="noopener">${title}</a>` : title;
+      }).join(" &middot; ");
+      sourcesHtml += "</div>";
+    }
+
+    // Field rows
+    const fieldRow = (label, value, confLevel) => {
+      if (!value || (Array.isArray(value) && value.length === 0)) return "";
+      let display;
+      if (Array.isArray(value)) {
+        display = "<ul>" + value.map(v => {
+          if (typeof v === "object" && v.name) {
+            return `<li>${escapeHtml(v.name)}${v.type ? ` <em>(${escapeHtml(v.type)})</em>` : ""}</li>`;
+          }
+          return `<li>${escapeHtml(String(v))}</li>`;
+        }).join("") + "</ul>";
+      } else {
+        display = `<p>${escapeHtml(String(value))}</p>`;
+      }
+      return `<div class="sc-field"><div class="sc-field-header"><strong>${escapeHtml(label)}</strong> ${confBadge(confLevel)}</div>${display}</div>`;
+    };
+
+    cardsHtml += `
+    <div class="sc-card ${collapsed}" data-idx="${i}" data-key="${escapeHtml(e.key)}" data-status="${reviewStatus}" id="card-${i}">
+      <div class="sc-card-header" onclick="toggleCard(${i})">
+        <span class="sc-status" style="color:${statusColor}">${statusIcon}</span>
+        <span class="sc-name">${escapeHtml(c.name)}</span>
+        <span class="sc-party" style="color:${partyColor}">(${partyLabel})</span>
+        <span class="sc-race">${escapeHtml(e.race)}</span>
+        <span class="sc-score" title="Confidence: ${(e.score * 100).toFixed(0)}%">${(e.score * 100).toFixed(0)}%</span>
+        ${e.review && e.review.note ? '<span class="sc-has-note" title="Has reviewer note">&#128221;</span>' : ""}
+      </div>
+      <div class="sc-card-body">
+        ${fieldRow("Background", c.summary || c.background, e.conf.background)}
+        ${fieldRow("Key Positions", c.keyPositions, e.conf.keyPositions)}
+        ${fieldRow("Pros", c.pros, e.conf.pros)}
+        ${fieldRow("Cons", c.cons, e.conf.cons)}
+        ${fieldRow("Endorsements", c.endorsements, e.conf.endorsements)}
+        ${fieldRow("Fundraising", c.fundraising, e.conf.fundraising)}
+        ${fieldRow("Polling", c.polling, e.conf.polling)}
+        ${sourcesHtml}
+        <div class="sc-actions">
+          <button class="sc-btn sc-approve" onclick="reviewCandidate('${escapeHtml(e.key)}', 'approved', ${i})">&#10003; Looks Good (Enter)</button>
+          <button class="sc-btn sc-flag" onclick="showFlagInput(${i})">&#9873; Flag Issue (F)</button>
+        </div>
+        <div class="sc-flag-input" id="flag-input-${i}" style="display:none">
+          <textarea id="flag-note-${i}" rows="2" placeholder="What's wrong? (be specific)"></textarea>
+          <button class="sc-btn sc-flag-submit" onclick="reviewCandidate('${escapeHtml(e.key)}', 'flagged', ${i})">Submit Flag</button>
+          <button class="sc-btn sc-cancel" onclick="hideFlagInput(${i})">Cancel</button>
+        </div>
+        ${e.review && e.review.note ? `<div class="sc-existing-note"><strong>Note:</strong> ${escapeHtml(e.review.note)} <em>(${escapeHtml(e.review.reviewer || "admin")} &mdash; ${e.review.timestamp ? new Date(e.review.timestamp).toLocaleString() : ""})</em></div>` : ""}
+      </div>
+    </div>`;
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${pageHead({
+    title: "Spot-Check \u2014 Admin",
+    description: "Human review of AI-generated candidate data.",
+  })}
+  <style>
+    .container{max-width:1000px}
+    .sc-stats{display:flex;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem;padding:1rem;background:rgba(128,128,128,.06);border:1px solid var(--border);border-radius:var(--rs)}
+    .sc-stat{flex:1;min-width:100px;text-align:center}
+    .sc-stat-num{font-size:1.5rem;font-weight:800;color:var(--blue)}
+    .sc-stat-label{font-size:0.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em}
+    .sc-stat-approved .sc-stat-num{color:#059669}
+    .sc-stat-flagged .sc-stat-num{color:#dc2626}
+    .sc-progress-bar{height:6px;background:var(--border);border-radius:3px;margin-bottom:1.5rem;overflow:hidden}
+    .sc-progress-fill{height:100%;border-radius:3px;transition:width .3s}
+    .sc-controls{display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+    .sc-controls select,.sc-controls input{padding:0.4rem 0.6rem;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--card);color:var(--text)}
+    .sc-controls input{flex:1;min-width:150px}
+    .sc-card{border:1px solid var(--border);border-radius:var(--rs);margin-bottom:0.5rem;overflow:hidden;transition:border-color .15s}
+    .sc-card[data-status="approved"]{border-left:3px solid #059669}
+    .sc-card[data-status="flagged"]{border-left:3px solid #dc2626}
+    .sc-card[data-status="pending"]{border-left:3px solid #9ca3af}
+    .sc-card.collapsed .sc-card-body{display:none}
+    .sc-card-header{display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.75rem;cursor:pointer;font-size:0.9rem;flex-wrap:wrap}
+    .sc-card-header:hover{background:rgba(128,128,128,.06)}
+    .sc-status{font-size:1rem;flex-shrink:0}
+    .sc-name{font-weight:700}
+    .sc-party{font-weight:600;font-size:0.8rem}
+    .sc-race{color:var(--text2);font-size:0.8rem;flex:1}
+    .sc-score{font-size:0.75rem;font-weight:600;padding:0.15rem 0.5rem;border-radius:99px;background:rgba(128,128,128,.1)}
+    .sc-has-note{font-size:0.8rem}
+    .sc-card-body{padding:0.75rem 1rem;border-top:1px solid var(--border)}
+    .sc-field{margin-bottom:0.75rem}
+    .sc-field-header{margin-bottom:0.25rem}
+    .sc-field-header strong{font-size:0.85rem}
+    .sc-field p,.sc-field li{font-size:0.85rem;color:var(--text)}
+    .sc-field ul{margin:0.25rem 0 0 1.25rem;padding:0}
+    .sc-field li{margin-bottom:0.15rem}
+    .sc-badge{display:inline-block;font-size:0.65rem;font-weight:600;padding:0.1rem 0.4rem;border-radius:99px;vertical-align:middle;margin-left:0.3rem}
+    .sc-verified{background:rgba(5,150,105,.12);color:#059669}
+    .sc-sourced{background:rgba(37,99,235,.12);color:#2563eb}
+    .sc-inferred{background:rgba(220,38,38,.12);color:#dc2626}
+    .sc-none{background:rgba(128,128,128,.1);color:var(--text2)}
+    .sc-sources{font-size:0.8rem;color:var(--text2);margin-top:0.5rem;padding-top:0.5rem;border-top:1px dashed var(--border)}
+    .sc-sources a{font-size:0.8rem}
+    .sc-actions{display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap}
+    .sc-btn{padding:0.4rem 0.9rem;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;background:var(--card);color:var(--text);transition:all .15s}
+    .sc-approve{color:#059669;border-color:#059669}
+    .sc-approve:hover{background:#059669;color:#fff}
+    .sc-flag{color:#dc2626;border-color:#dc2626}
+    .sc-flag:hover{background:#dc2626;color:#fff}
+    .sc-flag-submit{background:#dc2626;color:#fff;border-color:#dc2626}
+    .sc-cancel{color:var(--text2)}
+    .sc-flag-input{margin-top:0.5rem}
+    .sc-flag-input textarea{width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;margin-bottom:0.4rem;font-family:inherit;background:var(--card);color:var(--text);resize:vertical}
+    .sc-existing-note{margin-top:0.5rem;padding:0.5rem 0.75rem;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.15);border-radius:6px;font-size:0.8rem;color:var(--text)}
+    .sc-keyboard-hint{font-size:0.75rem;color:var(--text2);margin-bottom:1rem}
+    .sc-keyboard-hint kbd{background:rgba(128,128,128,.12);padding:0.1rem 0.35rem;border-radius:3px;font-size:0.7rem;font-family:inherit;border:1px solid var(--border)}
+    .sc-active-card{box-shadow:0 0 0 2px var(--blue)}
+    .sc-filter-tabs{display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .sc-filter-tab{flex:1;padding:0.4rem;text-align:center;font-size:0.8rem;font-weight:600;cursor:pointer;border:none;background:var(--card);color:var(--text2);transition:all .15s}
+    .sc-filter-tab.active{background:var(--blue);color:#fff}
+    .sc-filter-tab:not(:last-child){border-right:1px solid var(--border)}
+    .sc-export-row{display:flex;gap:0.5rem;margin-bottom:1rem;justify-content:flex-end}
+    .sc-export-btn{font-size:0.8rem;padding:0.3rem 0.7rem;background:var(--card);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);text-decoration:none;font-weight:600}
+    .sc-export-btn:hover{background:rgba(128,128,128,.06)}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/admin" class="back-top">&larr; Admin Hub</a>
+    <h1>Spot-Check: Candidate Data Review</h1>
+    <p class="subtitle" style="font-size:0.9rem">Review AI-generated candidate data before Election Day. Lowest-confidence candidates appear first.</p>
+
+    <div class="sc-stats">
+      <div class="sc-stat"><div class="sc-stat-num" id="stat-total">${total}</div><div class="sc-stat-label">Total</div></div>
+      <div class="sc-stat sc-stat-approved"><div class="sc-stat-num" id="stat-approved">${approvedCount}</div><div class="sc-stat-label">Approved</div></div>
+      <div class="sc-stat sc-stat-flagged"><div class="sc-stat-num" id="stat-flagged">${flaggedCount}</div><div class="sc-stat-label">Flagged</div></div>
+      <div class="sc-stat"><div class="sc-stat-num" id="stat-remaining">${remaining}</div><div class="sc-stat-label">Remaining</div></div>
+      <div class="sc-stat"><div class="sc-stat-num" id="stat-eta">--</div><div class="sc-stat-label">Est. Remaining</div></div>
+    </div>
+    <div class="sc-progress-bar"><div class="sc-progress-fill" id="progress-fill" style="width:${total > 0 ? ((reviewedCount / total) * 100).toFixed(1) : 0}%;background:linear-gradient(90deg,#059669,var(--blue))"></div></div>
+
+    <div class="sc-filter-tabs">
+      <button class="sc-filter-tab active" onclick="filterCards('all')">All (${total})</button>
+      <button class="sc-filter-tab" onclick="filterCards('pending')">Pending (${remaining})</button>
+      <button class="sc-filter-tab" onclick="filterCards('flagged')">Flagged (${flaggedCount})</button>
+      <button class="sc-filter-tab" onclick="filterCards('approved')">Approved (${approvedCount})</button>
+    </div>
+
+    <div class="sc-controls">
+      <select id="party-filter" onchange="applyFilters()">
+        <option value="all">Both parties</option>
+        <option value="republican">Republican</option>
+        <option value="democrat">Democrat</option>
+      </select>
+      <input type="text" id="search-input" placeholder="Search by name or race..." oninput="applyFilters()">
+    </div>
+
+    <div class="sc-keyboard-hint">
+      Keyboard: <kbd>Enter</kbd> Approve &middot; <kbd>F</kbd> Flag &middot; <kbd>&uarr;</kbd><kbd>&darr;</kbd> Navigate &middot; <kbd>Space</kbd> Expand/Collapse
+    </div>
+
+    <div class="sc-export-row">
+      <a href="/admin/spot-check/export" class="sc-export-btn">Export Flagged (JSON)</a>
+      <button class="sc-export-btn" onclick="resetProgress()">Reset All Progress</button>
+    </div>
+
+    <div id="cards-container">
+      ${cardsHtml}
+    </div>
+
+    ${generateAdminFooter()}
+  </div>
+
+  <script>
+    var activeIdx = -1;
+    var reviewTimes = [];
+    var lastReviewTime = null;
+    var currentFilter = 'all';
+
+    function toggleCard(idx) {
+      var card = document.getElementById('card-' + idx);
+      if (!card) return;
+      card.classList.toggle('collapsed');
+    }
+
+    function setActiveCard(idx) {
+      var old = document.querySelector('.sc-active-card');
+      if (old) old.classList.remove('sc-active-card');
+      var card = document.getElementById('card-' + idx);
+      if (card && card.style.display !== 'none') {
+        card.classList.add('sc-active-card');
+        card.classList.remove('collapsed');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        activeIdx = idx;
+      }
+    }
+
+    function getVisibleCards() {
+      var cards = document.querySelectorAll('.sc-card');
+      var visible = [];
+      for (var i = 0; i < cards.length; i++) {
+        if (cards[i].style.display !== 'none') visible.push(parseInt(cards[i].getAttribute('data-idx')));
+      }
+      return visible;
+    }
+
+    function navigateCard(direction) {
+      var visible = getVisibleCards();
+      if (visible.length === 0) return;
+      var curPos = visible.indexOf(activeIdx);
+      if (curPos === -1) {
+        setActiveCard(visible[0]);
+      } else {
+        var next = curPos + direction;
+        if (next >= 0 && next < visible.length) setActiveCard(visible[next]);
+      }
+    }
+
+    function showFlagInput(idx) {
+      var el = document.getElementById('flag-input-' + idx);
+      if (el) { el.style.display = 'block'; document.getElementById('flag-note-' + idx).focus(); }
+    }
+
+    function hideFlagInput(idx) {
+      var el = document.getElementById('flag-input-' + idx);
+      if (el) el.style.display = 'none';
+    }
+
+    function reviewCandidate(key, status, idx) {
+      var note = '';
+      if (status === 'flagged') {
+        var ta = document.getElementById('flag-note-' + idx);
+        note = ta ? ta.value.trim() : '';
+      }
+      fetch('/api/admin/spot-check/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: key, status: status, note: note })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          var card = document.getElementById('card-' + idx);
+          if (card) {
+            card.setAttribute('data-status', status);
+            card.classList.add('collapsed');
+            var st = card.querySelector('.sc-status');
+            if (st) {
+              st.textContent = status === 'approved' ? '\u2713' : '\u2691';
+              st.style.color = status === 'approved' ? '#059669' : '#dc2626';
+            }
+            if (status === 'flagged') hideFlagInput(idx);
+          }
+          // Track review speed
+          var now = Date.now();
+          if (lastReviewTime) reviewTimes.push(now - lastReviewTime);
+          lastReviewTime = now;
+          updateStats();
+          // Move to next unreviewed
+          var visible = getVisibleCards();
+          var curPos = visible.indexOf(idx);
+          for (var i = curPos + 1; i < visible.length; i++) {
+            var nc = document.getElementById('card-' + visible[i]);
+            if (nc && nc.getAttribute('data-status') === 'pending') {
+              setActiveCard(visible[i]);
+              return;
+            }
+          }
+        }
+      })
+      .catch(function(e) { console.error('Review error:', e); });
+    }
+
+    function updateStats() {
+      var cards = document.querySelectorAll('.sc-card');
+      var total = cards.length, approved = 0, flagged = 0;
+      for (var i = 0; i < cards.length; i++) {
+        var s = cards[i].getAttribute('data-status');
+        if (s === 'approved') approved++;
+        else if (s === 'flagged') flagged++;
+      }
+      var reviewed = approved + flagged;
+      var remaining = total - reviewed;
+      document.getElementById('stat-approved').textContent = approved;
+      document.getElementById('stat-flagged').textContent = flagged;
+      document.getElementById('stat-remaining').textContent = remaining;
+      var pct = total > 0 ? ((reviewed / total) * 100).toFixed(1) : 0;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      // ETA
+      if (reviewTimes.length >= 2) {
+        var avg = reviewTimes.reduce(function(a,b){return a+b;},0) / reviewTimes.length;
+        var etaMs = remaining * avg;
+        var etaMin = Math.round(etaMs / 60000);
+        document.getElementById('stat-eta').textContent = etaMin < 60 ? etaMin + 'm' : Math.round(etaMin/60) + 'h ' + (etaMin%60) + 'm';
+      }
+      // Update filter tab counts
+      var tabs = document.querySelectorAll('.sc-filter-tab');
+      if (tabs.length >= 4) {
+        tabs[0].textContent = 'All (' + total + ')';
+        tabs[1].textContent = 'Pending (' + remaining + ')';
+        tabs[2].textContent = 'Flagged (' + flagged + ')';
+        tabs[3].textContent = 'Approved (' + approved + ')';
+      }
+    }
+
+    function filterCards(filter) {
+      currentFilter = filter;
+      var tabs = document.querySelectorAll('.sc-filter-tab');
+      for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+      if (filter === 'all') tabs[0].classList.add('active');
+      else if (filter === 'pending') tabs[1].classList.add('active');
+      else if (filter === 'flagged') tabs[2].classList.add('active');
+      else if (filter === 'approved') tabs[3].classList.add('active');
+      applyFilters();
+    }
+
+    function applyFilters() {
+      var party = document.getElementById('party-filter').value;
+      var search = (document.getElementById('search-input').value || '').toLowerCase();
+      var cards = document.querySelectorAll('.sc-card');
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        var key = card.getAttribute('data-key') || '';
+        var status = card.getAttribute('data-status') || '';
+        var headerText = (card.querySelector('.sc-card-header') || {}).textContent || '';
+        headerText = headerText.toLowerCase();
+        var show = true;
+        if (currentFilter !== 'all' && status !== currentFilter) show = false;
+        if (party !== 'all' && !key.endsWith('|' + party)) show = false;
+        if (search && headerText.indexOf(search) === -1) show = false;
+        card.style.display = show ? '' : 'none';
+      }
+    }
+
+    function resetProgress() {
+      if (!confirm('Reset ALL spot-check progress? This cannot be undone.')) return;
+      fetch('/api/admin/spot-check/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function() { location.reload(); })
+        .catch(function(e) { alert('Error: ' + e.message); });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Ignore when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+      if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); navigateCard(1); }
+      else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); navigateCard(-1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeIdx >= 0) {
+          var card = document.getElementById('card-' + activeIdx);
+          if (card) {
+            var key = card.getAttribute('data-key');
+            reviewCandidate(key, 'approved', activeIdx);
+          }
+        }
+      }
+      else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        if (activeIdx >= 0) showFlagInput(activeIdx);
+      }
+      else if (e.key === ' ') {
+        e.preventDefault();
+        if (activeIdx >= 0) toggleCard(activeIdx);
+      }
+      else if (e.key === 'Escape') {
+        if (activeIdx >= 0) hideFlagInput(activeIdx);
+      }
+    });
+
+    // Auto-select first pending card on load
+    (function() {
+      var cards = document.querySelectorAll('.sc-card[data-status="pending"]');
+      if (cards.length > 0) {
+        var idx = parseInt(cards[0].getAttribute('data-idx'));
+        setActiveCard(idx);
+      }
+    })();
+  </script>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8" } });
+}
+
 // MARK: - Admin AI Error Log Dashboard
 
 async function handleAdminErrors(request, env) {
@@ -7751,6 +8289,18 @@ export default {
         const deny = checkAdminAuth(request, env);
         if (deny) return deny;
         return handleAdminBenchmark(env);
+      }
+      // Admin spot-check dashboard (GET with Basic/Bearer auth)
+      if (url.pathname === "/admin/spot-check") {
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
+        return handleAdminSpotCheck(env);
+      }
+      // Admin spot-check export (GET with Basic/Bearer auth)
+      if (url.pathname === "/admin/spot-check/export") {
+        const deny = checkAdminAuth(request, env);
+        if (deny) return deny;
+        return handleSpotCheckExport(env);
       }
       // Admin election phase endpoint (GET with Basic/Bearer auth)
       if (url.pathname === "/api/admin/phase") {
@@ -8183,6 +8733,20 @@ export default {
       }
       await env.ELECTION_DATA.put("site_phase:" + state, phase);
       return jsonResponse({ state, phase, kvOverride: phase, message: "Phase set to " + phase });
+    }
+
+    // POST: /api/admin/spot-check/review — save a spot-check review decision
+    if (url.pathname === "/api/admin/spot-check/review") {
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
+      return handleSpotCheckReview(request, env);
+    }
+
+    // POST: /api/admin/spot-check/reset — reset spot-check progress
+    if (url.pathname === "/api/admin/spot-check/reset") {
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
+      return handleSpotCheckReset(env);
     }
 
     // POST: /api/admin/cleanup — list/delete stale KV keys
