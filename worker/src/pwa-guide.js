@@ -19,7 +19,7 @@ const SYSTEM_PROMPT =
   "SPANISH DIALECT: When generating Spanish content, use neutral Latin American Spanish (español neutro) accessible to all Spanish speakers. Avoid region-specific slang or colloquialisms. Use \"usted\" forms where appropriate. Prefer universally understood vocabulary over country-specific terms. " +
   "Respond with ONLY valid JSON — no markdown, no explanation, no text outside the JSON object.";
 
-const MODELS = ["claude-sonnet-4-6", "claude-sonnet-4-20250514"];
+const MODELS = ["claude-sonnet-4-6", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"];
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -768,6 +768,9 @@ async function callClaude(env, system, userMessage, lang, component, _isRetry, s
   var modelList = specificModel ? [specificModel] : MODELS;
   for (var i = 0; i < modelList.length; i++) {
     var model = modelList[i];
+    if (i > 0) {
+      console.log("[MODEL FALLBACK] Falling back from " + modelList[i - 1] + " to " + model);
+    }
     for (var attempt = 0; attempt <= 1; attempt++) {
       var res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -1669,6 +1672,9 @@ async function callClaudeStreaming(env, system, userMessage, lang, onText) {
 
   for (var i = 0; i < MODELS.length; i++) {
     var model = MODELS[i];
+    if (i > 0) {
+      console.log("[MODEL FALLBACK] Streaming: falling back from " + MODELS[i - 1] + " to " + model);
+    }
     for (var attempt = 0; attempt <= 1; attempt++) {
       var res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
