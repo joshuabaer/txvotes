@@ -28,6 +28,19 @@ export const STATE_CONFIG = {
     resultsUrl: null,
     runoffDate: null,
   },
+  co: {
+    name: 'Colorado',
+    abbr: 'CO',
+    electionDate: '2026-06-23',
+    electionName: 'Colorado Primary Election',
+    parties: ['republican', 'democrat'],
+    defaultParty: 'democrat',
+    fips: '08',
+    kvPrefix: 'co:',
+    pollsCloseTime: '19:00:00-06:00', // 7 PM Mountain Time
+    resultsUrl: null,
+    runoffDate: null,
+  },
 };
 
 // Valid election phases
@@ -79,7 +92,7 @@ export const DEFAULT_STATE = 'tx';
  * Returns null if no state prefix found.
  */
 export function parseStateFromPath(pathname) {
-  const match = pathname.match(/^\/(tx|dc)\/app(\/|$|\?|#)/);
+  const match = pathname.match(/^\/(tx|dc|co)\/app(\/|$|\?|#)/);
   return match ? match[1] : null;
 }
 
@@ -88,5 +101,5 @@ export function parseStateFromPath(pathname) {
  * e.g., /tx/app/api/guide -> /app/api/guide
  */
 export function stripStatePrefix(pathname) {
-  return pathname.replace(/^\/(tx|dc)\/app/, '/app');
+  return pathname.replace(/^\/(tx|dc|co)\/app/, '/app');
 }

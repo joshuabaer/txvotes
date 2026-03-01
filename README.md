@@ -36,7 +36,7 @@ worker/src/
 ├── rate-limit.js      # Rate limiting
 └── usage-logger.js    # Usage logging
 worker/tests/
-├── 19 test files      # 1629+ tests (vitest + happy-dom)
+├── 28 test files      # 2259+ tests (vitest + happy-dom)
 worker/public/
 ├── headshots/         # Candidate headshot images
 ├── og-image*.png/svg  # Open Graph social sharing images
@@ -96,7 +96,7 @@ npx wrangler secret put ADMIN_SECRET -c wrangler.txvotes.toml
 cd worker && npx vitest run
 ```
 
-1629+ tests across 19 test files covering interview flows, guide generation, routing, bias detection, token budgets, audit scoring, rate limiting, SSE streaming, public stats, and more.
+2259+ tests across 28 test files covering interview flows, guide generation, routing, bias detection, token budgets, audit scoring, rate limiting, SSE streaming, public stats, and more.
 
 ## Key Features
 

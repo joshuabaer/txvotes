@@ -3,8 +3,8 @@
 
 export function handlePWA(stateCode = 'tx') {
   const base = '/' + stateCode + '/app';
-  const stateTitle = stateCode === 'dc' ? 'DC Votes' : 'Texas Votes';
-  const stateDesc = stateCode === 'dc' ? 'Washington DC' : 'Texas';
+  const stateTitle = stateCode === 'dc' ? 'DC Votes' : stateCode === 'co' ? 'Colorado Votes' : 'Texas Votes';
+  const stateDesc = stateCode === 'dc' ? 'Washington DC' : stateCode === 'co' ? 'Colorado' : 'Texas';
   // Inject state config and rewrite /app paths to state-prefixed paths
   const stateHtml = APP_HTML
     .replace('<script>', '<script>var _STATE="' + stateCode + '";var _APP_BASE="' + base + '";')
@@ -92,9 +92,9 @@ export function handlePWA_Clear(redirectUrl = '/', title = 'Texas Votes', descri
 
 export function handlePWA_Manifest(stateCode = 'tx') {
   const base = '/' + stateCode + '/app';
-  const stateTitle = stateCode === 'dc' ? 'DC Votes' : 'Texas Votes';
-  const stateShort = stateCode === 'dc' ? 'DC Votes' : 'TX Votes';
-  const stateDesc = stateCode === 'dc' ? 'Washington DC' : 'Texas';
+  const stateTitle = stateCode === 'dc' ? 'DC Votes' : stateCode === 'co' ? 'Colorado Votes' : 'Texas Votes';
+  const stateShort = stateCode === 'dc' ? 'DC Votes' : stateCode === 'co' ? 'CO Votes' : 'TX Votes';
+  const stateDesc = stateCode === 'dc' ? 'Washington DC' : stateCode === 'co' ? 'Colorado' : 'Texas';
   // Rewrite start_url and names to state-prefixed path
   const manifest = MANIFEST
     .replace('"/app"', '"' + base + '"')
@@ -1317,6 +1317,61 @@ var APP_JS = [
     "'Improve access and security together with bipartisan oversight':'Mejorar el acceso y la seguridad junto con supervisi\\u00F3n bipartidista'," +
     "'Local control':'Control local'," +
     "'Let counties and cities set their own election rules and procedures':'Permitir que los condados y ciudades establezcan sus propias reglas y procedimientos electorales'," +
+    // Colorado deep dive questions
+    "'On water rights and the Colorado River?':'\\u00BFSobre derechos de agua y el R\\u00EDo Colorado?'," +
+    "'Protect state water compacts':'Proteger los pactos estatales de agua'," +
+    "'Defend Colorado\\u2019s share under existing interstate agreements':'Defender la porci\\u00F3n de Colorado bajo los acuerdos interestatales existentes'," +
+    "'Prioritize agriculture':'Priorizar la agricultura'," +
+    "'Ensure farmers and ranchers get the water they need':'Asegurar que agricultores y ganaderos obtengan el agua que necesitan'," +
+    "'Environmental conservation':'Conservaci\\u00F3n ambiental'," +
+    "'Protect rivers, wetlands, and ecosystems first':'Proteger r\\u00EDos, humedales y ecosistemas primero'," +
+    "'Infrastructure investment':'Inversi\\u00F3n en infraestructura'," +
+    "'Build new storage, recycling, and delivery systems':'Construir nuevos sistemas de almacenamiento, reciclaje y distribuci\\u00F3n'," +
+    "'On wildfire prevention and public lands?':'\\u00BFSobre prevenci\\u00F3n de incendios forestales y tierras p\\u00FAblicas?'," +
+    "'Expand forest management':'Ampliar el manejo forestal'," +
+    "'More thinning, controlled burns, and fuel reduction':'M\\u00E1s aclareo, quemas controladas y reducci\\u00F3n de combustible'," +
+    "'Increase firefighting resources':'Aumentar los recursos de combate de incendios'," +
+    "'Fund more crews, equipment, and community preparedness':'Financiar m\\u00E1s brigadas, equipos y preparaci\\u00F3n comunitaria'," +
+    "'Balance recreation and conservation':'Equilibrar recreaci\\u00F3n y conservaci\\u00F3n'," +
+    "'Protect wilderness while keeping trails and parks accessible':'Proteger \\u00E1reas silvestres manteniendo senderos y parques accesibles'," +
+    "'Federal-state collaboration':'Colaboraci\\u00F3n federal-estatal'," +
+    "'Work with federal agencies on coordinated land management':'Trabajar con agencias federales en manejo coordinado de tierras'," +
+    "'On TABOR and fiscal policy?':'\\u00BFSobre TABOR y pol\\u00EDtica fiscal?'," +
+    "'Keep TABOR limits strict':'Mantener los l\\u00EDmites de TABOR estrictos'," +
+    "'Maintain taxpayer protections and spending caps as written':'Mantener las protecciones al contribuyente y los topes de gasto tal como est\\u00E1n escritos'," +
+    "'Allow targeted exceptions':'Permitir excepciones espec\\u00EDficas'," +
+    "'Permit voter-approved exceptions for specific needs':'Permitir excepciones aprobadas por votantes para necesidades espec\\u00EDficas'," +
+    "'Reform revenue rules':'Reformar las reglas de ingresos'," +
+    "'Update TABOR to allow more flexible budgeting':'Actualizar TABOR para permitir presupuestos m\\u00E1s flexibles'," +
+    "'Repeal TABOR entirely':'Derogar TABOR por completo'," +
+    "'Remove constitutional spending limits to fund services':'Eliminar los l\\u00EDmites constitucionales de gasto para financiar servicios'," +
+    "'On affordable housing along the Front Range?':'\\u00BFSobre vivienda asequible a lo largo del Front Range?'," +
+    "'Increase density and supply':'Aumentar la densidad y la oferta'," +
+    "'Ease zoning, allow more building in metro areas':'Flexibilizar la zonificaci\\u00F3n, permitir m\\u00E1s construcci\\u00F3n en \\u00E1reas metropolitanas'," +
+    "'Rent stabilization measures':'Medidas de estabilizaci\\u00F3n de alquileres'," +
+    "'Cap rent increases to protect existing tenants':'Limitar los aumentos de alquiler para proteger a los inquilinos actuales'," +
+    "'Protect property rights':'Proteger los derechos de propiedad'," +
+    "'Let the market work, minimize government intervention':'Dejar que el mercado funcione, minimizar la intervenci\\u00F3n gubernamental'," +
+    "'Regional planning approach':'Enfoque de planificaci\\u00F3n regional'," +
+    "'Coordinate housing across cities and counties':'Coordinar vivienda entre ciudades y condados'," +
+    "'On Colorado\\u2019s energy transition?':'\\u00BFSobre la transici\\u00F3n energ\\u00E9tica de Colorado?'," +
+    "'Accelerate renewables transition':'Acelerar la transici\\u00F3n a renovables'," +
+    "'Move quickly to wind, solar, and storage':'Avanzar r\\u00E1pidamente hacia e\\u00F3lica, solar y almacenamiento'," +
+    "'Balanced coal phaseout':'Eliminaci\\u00F3n gradual y equilibrada del carb\\u00F3n'," +
+    "'Transition gradually to protect communities and jobs':'Transici\\u00F3n gradual para proteger comunidades y empleos'," +
+    "'Market-driven transition':'Transici\\u00F3n impulsada por el mercado'," +
+    "'Let economics determine the energy mix':'Dejar que la econom\\u00EDa determine la mezcla energ\\u00E9tica'," +
+    "'Protect energy workers first':'Proteger primero a los trabajadores energ\\u00E9ticos'," +
+    "'Prioritize retraining and support for displaced workers':'Priorizar la recapacitaci\\u00F3n y el apoyo para trabajadores desplazados'," +
+    "'On healthcare access in Colorado?':'\\u00BFSobre el acceso a la salud en Colorado?'," +
+    "'Market competition':'Competencia de mercado'," +
+    "'More competition among insurers to lower costs':'M\\u00E1s competencia entre aseguradoras para reducir costos'," +
+    "'Expand Medicaid and coverage':'Ampliar Medicaid y la cobertura'," +
+    "'Broaden public insurance programs for more residents':'Ampliar los programas de seguro p\\u00FAblico para m\\u00E1s residentes'," +
+    "'Universal coverage':'Cobertura universal'," +
+    "'Guarantee healthcare access regardless of income':'Garantizar el acceso a la salud sin importar el ingreso'," +
+    "'Community and rural focus':'Enfoque comunitario y rural'," +
+    "'Invest in rural clinics and community health centers':'Invertir en cl\\u00EDnicas rurales y centros de salud comunitarios'," +
     // County ballot coverage
     "'Local races for':'Carreras locales para'," +
     "'County are not yet available. Your ballot shows statewide and district races only.':'no est\\u00E1n disponibles a\\u00FAn. Tu boleta muestra solo las carreras estatales y de distrito.'," +
@@ -1605,16 +1660,56 @@ var APP_JS = [
     "]}" +
     "};",
 
+  // Colorado-specific deep dive questions
+  "var DEEP_DIVES_CO={" +
+    '"Water & Land":{q:"On water rights and the Colorado River?",opts:[' +
+      '{l:"Protect state water compacts",d:"Defend Colorado\\u2019s share under existing interstate agreements"},' +
+      '{l:"Prioritize agriculture",d:"Ensure farmers and ranchers get the water they need"},' +
+      '{l:"Environmental conservation",d:"Protect rivers, wetlands, and ecosystems first"},' +
+      '{l:"Infrastructure investment",d:"Build new storage, recycling, and delivery systems"}' +
+    "]}," +
+    '"Environment & Climate":{q:"On wildfire prevention and public lands?",opts:[' +
+      '{l:"Expand forest management",d:"More thinning, controlled burns, and fuel reduction"},' +
+      '{l:"Increase firefighting resources",d:"Fund more crews, equipment, and community preparedness"},' +
+      '{l:"Balance recreation and conservation",d:"Protect wilderness while keeping trails and parks accessible"},' +
+      '{l:"Federal-state collaboration",d:"Work with federal agencies on coordinated land management"}' +
+    "]}," +
+    '"Economy & Cost of Living":{q:"On TABOR and fiscal policy?",opts:[' +
+      '{l:"Keep TABOR limits strict",d:"Maintain taxpayer protections and spending caps as written"},' +
+      '{l:"Allow targeted exceptions",d:"Permit voter-approved exceptions for specific needs"},' +
+      '{l:"Reform revenue rules",d:"Update TABOR to allow more flexible budgeting"},' +
+      '{l:"Repeal TABOR entirely",d:"Remove constitutional spending limits to fund services"}' +
+    "]}," +
+    '"Housing":{q:"On affordable housing along the Front Range?",opts:[' +
+      '{l:"Increase density and supply",d:"Ease zoning, allow more building in metro areas"},' +
+      '{l:"Rent stabilization measures",d:"Cap rent increases to protect existing tenants"},' +
+      '{l:"Protect property rights",d:"Let the market work, minimize government intervention"},' +
+      '{l:"Regional planning approach",d:"Coordinate housing across cities and counties"}' +
+    "]}," +
+    '"Energy & Oil/Gas":{q:"On Colorado\\u2019s energy transition?",opts:[' +
+      '{l:"Accelerate renewables transition",d:"Move quickly to wind, solar, and storage"},' +
+      '{l:"Balanced coal phaseout",d:"Transition gradually to protect communities and jobs"},' +
+      '{l:"Market-driven transition",d:"Let economics determine the energy mix"},' +
+      '{l:"Protect energy workers first",d:"Prioritize retraining and support for displaced workers"}' +
+    "]}," +
+    '"Healthcare":{q:"On healthcare access in Colorado?",opts:[' +
+      '{l:"Market competition",d:"More competition among insurers to lower costs"},' +
+      '{l:"Expand Medicaid and coverage",d:"Broaden public insurance programs for more residents"},' +
+      '{l:"Universal coverage",d:"Guarantee healthcare access regardless of income"},' +
+      '{l:"Community and rural focus",d:"Invest in rural clinics and community health centers"}' +
+    "]}" +
+    "};",
+
   // ============ STATE ============
   // State code from URL injection (set by handlePWA); persisted in localStorage
   "var _stateCode=(typeof _STATE!=='undefined'?_STATE:'tx').toLowerCase();",
   "try{localStorage.setItem('tx_votes_state',_stateCode)}catch(e){}",
-  "var _stateAbbr=_stateCode==='dc'?'DC':'TX';",
-  "var _stateName=_stateCode==='dc'?'DC':'Texas';",
-  "var _stateFullName=_stateCode==='dc'?'Washington DC':'Texas';",
+  "var _stateAbbr=_stateCode==='dc'?'DC':_stateCode==='co'?'CO':'TX';",
+  "var _stateName=_stateCode==='dc'?'DC':_stateCode==='co'?'Colorado':'Texas';",
+  "var _stateFullName=_stateCode==='dc'?'Washington DC':_stateCode==='co'?'Colorado':'Texas';",
   "var _defaultCity=_stateCode==='dc'?'Washington':'';",
-  "var _defaultParty=_stateCode==='dc'?'democrat':'republican';",
-  "function _stateLabel(){return _stateCode==='dc'?'DC Votes':'Texas Votes'}",
+  "var _defaultParty=_stateCode==='dc'?'democrat':_stateCode==='co'?'democrat':'republican';",
+  "function _stateLabel(){return _stateCode==='dc'?'DC Votes':_stateCode==='co'?'Colorado Votes':'Texas Votes'}",
   "var S={" +
     "phase:0,issues:[],_pickedIssues:0,spectrum:null,policyViews:{},qualities:[],_pickedQuals:0,freeform:''," +
     "stateCode:_stateCode," +
@@ -1831,7 +1926,7 @@ var APP_JS = [
     "localStorage.setItem('tx_votes_selected_party',S.selectedParty);" +
     "localStorage.setItem('tx_votes_has_voted',S.hasVoted?'1':'');" +
     "if(Object.keys(S.overrides).length){localStorage.setItem('tx_votes_overrides',JSON.stringify(S.overrides))}else{localStorage.removeItem('tx_votes_overrides')}" +
-    "if(!localStorage.getItem('tx_votes_election_date'))localStorage.setItem('tx_votes_election_date',_stateCode==='dc'?'2026-06-16':'2026-03-03');" +
+    "if(!localStorage.getItem('tx_votes_election_date'))localStorage.setItem('tx_votes_election_date',_stateCode==='dc'?'2026-06-16':_stateCode==='co'?'2026-06-23':'2026-03-03');" +
     "}catch(e){" +
       "if(e&&e.name==='QuotaExceededError'){" +
         "showToast(t('Storage full. Some data may not be saved. Visit Profile to clear old data.'))" +
@@ -1871,7 +1966,7 @@ var APP_JS = [
     "if(S.repBallot||S.demBallot){S.guideComplete=true}" +
     // Check if election cycle has expired (>7 days past election date)
     "var _ed=localStorage.getItem('tx_votes_election_date');" +
-    "if(!_ed&&S.guideComplete){_ed=_stateCode==='dc'?'2026-06-16':'2026-03-03';localStorage.setItem('tx_votes_election_date',_ed)}" +
+    "if(!_ed&&S.guideComplete){_ed=_stateCode==='dc'?'2026-06-16':_stateCode==='co'?'2026-06-23':'2026-03-03';localStorage.setItem('tx_votes_election_date',_ed)}" +
     "if(_ed&&!localStorage.getItem('tx_votes_post_election_dismissed')){" +
       "var _edMs=new Date(_ed+'T00:00:00').getTime();" +
       "if(Date.now()-_edMs>7*24*60*60*1000){S.electionExpired=true}" +
@@ -2174,7 +2269,7 @@ var APP_JS = [
     "h+='<div class=\"form-group\"><label>'+t('Street Address')+'</label><input name=\"street\" placeholder=\"123 Congress Ave\" value=\"'+esc(S.address.street)+'\" autofocus></div>';" +
     "h+='<div class=\"form-row\">';" +
     "h+='<div class=\"form-group\"><label>'+t('City')+'</label><input name=\"city\" value=\"'+esc(S.address.city||_defaultCity)+'\"></div>';" +
-    "h+='<div class=\"form-group\" style=\"flex:.5\"><label>'+t('ZIP')+'</label><input name=\"zip\" placeholder=\"'+(_stateCode==='dc'?'20001':'78701')+'\" value=\"'+esc(S.address.zip)+'\" inputmode=\"numeric\" maxlength=\"5\"></div>';" +
+    "h+='<div class=\"form-group\" style=\"flex:.5\"><label>'+t('ZIP')+'</label><input name=\"zip\" placeholder=\"'+(_stateCode==='dc'?'20001':_stateCode==='co'?'80202':'78701')+'\" value=\"'+esc(S.address.zip)+'\" inputmode=\"numeric\" maxlength=\"5\"></div>';" +
     "h+='</div>';" +
     "h+='<div class=\"form-group\"><label>'+t('State')+'</label><input value=\"'+_stateAbbr+'\" disabled></div>';" +
     "h+='<div style=\"display:flex;align-items:flex-start;gap:10px;padding:12px;background:rgba(51,166,82,.05);border-radius:var(--rs);margin-top:8px\">';" +
@@ -3410,7 +3505,7 @@ var APP_JS = [
   "}",
 
   "function renderVoteInfo(){" +
-    "var election=_stateCode==='dc'?new Date(2026,5,16):new Date(2026,2,3);" + // DC: June 16; TX: March 3, 2026
+    "var election=_stateCode==='dc'?new Date(2026,5,16):_stateCode==='co'?new Date(2026,5,23):new Date(2026,2,3);" + // DC: June 16; CO: June 23; TX: March 3, 2026
     "var now=new Date();" +
     "var diff=Math.ceil((election-now)/(1000*60*60*24));" +
     "var h='<h2 style=\"font-size:22px;font-weight:800;margin-bottom:16px\"><span style=\"color:#fff\">&starf;</span> '+t('Voting Info')+'</h2>';" +
@@ -3634,7 +3729,7 @@ var APP_JS = [
     "else if(action==='next'){" +
       "if(S.phase===2){" +
         "S.ddQuestions=[];S.ddIndex=0;" +
-        "var topN=S.issues.slice(0,5);for(var i=0;i<topN.length;i++){if(DEEP_DIVES[topN[i]])S.ddQuestions.push(DEEP_DIVES[topN[i]])}" +
+        "var _ddMap=_stateCode==='co'?DEEP_DIVES_CO:DEEP_DIVES;var topN=S.issues.slice(0,5);for(var i=0;i<topN.length;i++){if(_ddMap[topN[i]])S.ddQuestions.push(_ddMap[topN[i]])}" +
       "}" +
       "if(S.phase===6){var ta=document.getElementById('freeform-input');S.freeform=ta?ta.value.trim():S.freeform}" +
       "S.phase++;trk('interview_phase',{d1:'phase_'+S.phase});render()" +
@@ -4266,14 +4361,14 @@ var APP_JS = [
     "ctx.fillStyle='#0D2738';ctx.font='bold italic 84px Georgia,serif';ctx.textAlign='center';ctx.textBaseline='top';" +
     "ctx.fillText('I Voted',W/2,fy+fh+8);" +
     // "Early!" text if during early voting
-    "var election=new Date(2026,2,3);var now=new Date();var diff=Math.ceil((election-now)/(1000*60*60*24));" +
+    "var election=_stateCode==='dc'?new Date(2026,5,16):_stateCode==='co'?new Date(2026,5,23):new Date(2026,2,3);var now=new Date();var diff=Math.ceil((election-now)/(1000*60*60*24));" +
     "if(diff>0){ctx.fillStyle='#CC1919';ctx.font='bold italic 48px Georgia,serif';ctx.fillText('Early!',W/2,fy+fh+88);}" +
     // "txvotes.app" at bottom
     "ctx.fillStyle='#888';ctx.font='24px -apple-system,sans-serif';ctx.fillText('txvotes.app',W/2,H-40);" +
     "ctx.restore();" +
     // Convert to blob and share
     "c.toBlob(function(blob){" +
-      "var vText='I voted in the Texas Primary! \\u{1F5F3}\\uFE0F\\n\\nBuild your personalized voting guide at https://txvotes.app';" +
+      "var vText='I voted in the '+(_stateCode==='dc'?'DC':_stateCode==='co'?'Colorado':'Texas')+' Primary! \\u{1F5F3}\\uFE0F\\n\\nBuild your personalized voting guide at https://txvotes.app';" +
       "if(navigator.share&&navigator.canShare){" +
         "var file=new File([blob],'i-voted.png',{type:'image/png'});" +
         "var shareData={title:'I Voted!',text:vText,files:[file]};" +

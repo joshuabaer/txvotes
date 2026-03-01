@@ -21,6 +21,10 @@ describe("STATE_CONFIG", () => {
     expect(STATE_CONFIG.dc).toBeDefined();
   });
 
+  it("contains co entry", () => {
+    expect(STATE_CONFIG.co).toBeDefined();
+  });
+
   it("TX has all required fields", () => {
     const tx = STATE_CONFIG.tx;
     expect(tx.name).toBe("Texas");
@@ -49,12 +53,29 @@ describe("STATE_CONFIG", () => {
     expect(dc.defaultParty).toBe("democrat");
   });
 
+  it("CO has all required fields", () => {
+    const co = STATE_CONFIG.co;
+    expect(co.name).toBe("Colorado");
+    expect(co.abbr).toBe("CO");
+    expect(co.electionDate).toBe("2026-06-23");
+    expect(co.electionName).toBe("Colorado Primary Election");
+    expect(co.fips).toBe("08");
+    expect(co.kvPrefix).toBe("co:");
+    expect(co.parties).toContain("republican");
+    expect(co.parties).toContain("democrat");
+    expect(co.defaultParty).toBe("democrat");
+  });
+
   it("TX kvPrefix is empty for backward compatibility", () => {
     expect(STATE_CONFIG.tx.kvPrefix).toBe("");
   });
 
   it("DC kvPrefix is 'dc:' for namespacing", () => {
     expect(STATE_CONFIG.dc.kvPrefix).toBe("dc:");
+  });
+
+  it("CO kvPrefix is 'co:' for namespacing", () => {
+    expect(STATE_CONFIG.co.kvPrefix).toBe("co:");
   });
 
   it("each state has a valid FIPS code", () => {
@@ -92,9 +113,10 @@ describe("VALID_STATES", () => {
     expect(Array.isArray(VALID_STATES)).toBe(true);
   });
 
-  it("contains tx and dc", () => {
+  it("contains tx, dc, and co", () => {
     expect(VALID_STATES).toContain("tx");
     expect(VALID_STATES).toContain("dc");
+    expect(VALID_STATES).toContain("co");
   });
 
   it("matches STATE_CONFIG keys", () => {
@@ -139,6 +161,18 @@ describe("parseStateFromPath", () => {
 
   it("parses /dc/app/ with trailing slash", () => {
     expect(parseStateFromPath("/dc/app/")).toBe("dc");
+  });
+
+  it("parses /co/app as co", () => {
+    expect(parseStateFromPath("/co/app")).toBe("co");
+  });
+
+  it("parses /co/app/ with trailing slash", () => {
+    expect(parseStateFromPath("/co/app/")).toBe("co");
+  });
+
+  it("parses /co/app/api/guide as co", () => {
+    expect(parseStateFromPath("/co/app/api/guide")).toBe("co");
   });
 
   it("parses /tx/app/api/guide as tx", () => {
@@ -208,6 +242,14 @@ describe("stripStatePrefix", () => {
 
   it("strips /dc/app to /app", () => {
     expect(stripStatePrefix("/dc/app")).toBe("/app");
+  });
+
+  it("strips /co/app to /app", () => {
+    expect(stripStatePrefix("/co/app")).toBe("/app");
+  });
+
+  it("strips /co/app/api/guide to /app/api/guide", () => {
+    expect(stripStatePrefix("/co/app/api/guide")).toBe("/app/api/guide");
   });
 
   it("strips /tx/app/api/guide to /app/api/guide", () => {
@@ -360,6 +402,17 @@ describe("getElectionPhase", () => {
   it("returns post-election for DC after its election", () => {
     const after = new Date("2026-06-18T12:00:00Z");
     expect(getElectionPhase("dc", { now: after })).toBe("post-election");
+  });
+
+  // CO election: June 23, 2026
+  it("returns pre-election for CO before its election", () => {
+    const before = new Date("2026-06-22T12:00:00Z");
+    expect(getElectionPhase("co", { now: before })).toBe("pre-election");
+  });
+
+  it("returns post-election for CO after its election", () => {
+    const after = new Date("2026-06-25T12:00:00Z");
+    expect(getElectionPhase("co", { now: after })).toBe("post-election");
   });
 
   // Edge cases

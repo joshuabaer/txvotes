@@ -264,6 +264,76 @@ describe("State-aware branding", () => {
 });
 
 // ===========================================================================
+// 4b. Address form defaults for CO
+// ===========================================================================
+describe("Address form defaults for CO", () => {
+  it("defaults address state to CO", () => {
+    bootApp({ start: true, state: "co" });
+    expect(S().address.state).toBe("CO");
+  });
+
+  it("defaults city to empty for CO", () => {
+    bootApp({ start: true, state: "co" });
+    expect(S().address.city).toBe("");
+  });
+
+  it("defaults selectedParty to democrat for CO", () => {
+    bootApp({ start: true, state: "co" });
+    expect(S().selectedParty).toBe("democrat");
+  });
+});
+
+// ===========================================================================
+// 4c. State-aware branding for CO
+// ===========================================================================
+describe("State-aware branding for CO", () => {
+  it("_stateLabel returns Colorado Votes when state=co", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._stateLabel()).toBe("Colorado Votes");
+  });
+
+  it("_stateAbbr is CO for state=co", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._stateAbbr).toBe("CO");
+  });
+
+  it("_stateName is Colorado for state=co", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._stateName).toBe("Colorado");
+  });
+
+  it("_stateFullName is Colorado for state=co", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._stateFullName).toBe("Colorado");
+  });
+
+  it("_defaultParty is democrat for state=co", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._defaultParty).toBe("democrat");
+  });
+
+  it("_defaultCity is empty for state=co", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._defaultCity).toBe("");
+  });
+});
+
+// ===========================================================================
+// 4d. CO state code initialization
+// ===========================================================================
+describe("CO state code initialization", () => {
+  it("initializes to co when _STATE='co'", () => {
+    bootApp({ start: true, state: "co" });
+    expect(S().stateCode).toBe("co");
+  });
+
+  it("persists co state in localStorage", () => {
+    bootApp({ start: true, state: "co" });
+    expect(localStorage.setItem).toHaveBeenCalledWith("tx_votes_state", "co");
+  });
+});
+
+// ===========================================================================
 // 5. handlePWA state injection
 // ===========================================================================
 describe("handlePWA state injection", () => {
@@ -296,6 +366,20 @@ describe("handlePWA state injection", () => {
     expect(body).toContain("Washington DC elections");
   });
 
+  it("injects _STATE='co' for CO", async () => {
+    const res = handlePWA("co");
+    const body = await res.text();
+    expect(body).toContain('var _STATE="co"');
+    expect(body).toContain('var _APP_BASE="/co/app"');
+    expect(body).toContain("<title>Colorado Votes</title>");
+  });
+
+  it("rewrites API paths for CO", async () => {
+    const res = handlePWA("co");
+    const body = await res.text();
+    expect(body).toContain("/co/app/api/");
+  });
+
   it("keeps Texas branding for TX", async () => {
     const res = handlePWA("tx");
     const body = await res.text();
@@ -322,6 +406,20 @@ describe("handlePWA_Manifest state injection", () => {
     expect(manifest.name).toBe("DC Votes");
     expect(manifest.short_name).toBe("DC Votes");
     expect(manifest.start_url).toBe("/dc/app");
+  });
+
+  it("returns Colorado Votes manifest for CO", async () => {
+    const res = handlePWA_Manifest("co");
+    const manifest = await res.json();
+    expect(manifest.name).toBe("Colorado Votes");
+    expect(manifest.short_name).toBe("CO Votes");
+    expect(manifest.start_url).toBe("/co/app");
+  });
+
+  it("description mentions Colorado for CO", async () => {
+    const res = handlePWA_Manifest("co");
+    const manifest = await res.json();
+    expect(manifest.description).toContain("Colorado");
   });
 
   it("description mentions Washington DC for DC", async () => {
@@ -396,15 +494,27 @@ describe("Address reset preserves state defaults", () => {
     bootApp({ start: true, state: "tx" });
     expect(window._defaultParty).toBe("republican");
   });
+
+  it("CO defaults: state=CO, city=empty", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._stateAbbr).toBe("CO");
+    expect(window._defaultCity).toBe("");
+  });
+
+  it("CO default party is democrat", () => {
+    bootApp({ start: true, state: "co" });
+    expect(window._defaultParty).toBe("democrat");
+  });
 });
 
 // ===========================================================================
 // 9. Election date awareness
 // ===========================================================================
 describe("Election date awareness", () => {
-  it("APP_JS contains both TX and DC election date constructors", () => {
+  it("APP_JS contains TX, DC, and CO election date constructors", () => {
     expect(APP_JS).toContain("new Date(2026,2,3)"); // March 3 TX
     expect(APP_JS).toContain("new Date(2026,5,16)"); // June 16 DC
+    expect(APP_JS).toContain("new Date(2026,5,23)"); // June 23 CO
   });
 
   it("TX save sets election date to 2026-03-03", () => {
@@ -417,6 +527,12 @@ describe("Election date awareness", () => {
     bootApp({ start: true, state: "dc" });
     window.save();
     expect(localStorage.setItem).toHaveBeenCalledWith("tx_votes_election_date", "2026-06-16");
+  });
+
+  it("CO save sets election date to 2026-06-23", () => {
+    bootApp({ start: true, state: "co" });
+    window.save();
+    expect(localStorage.setItem).toHaveBeenCalledWith("tx_votes_election_date", "2026-06-23");
   });
 });
 
