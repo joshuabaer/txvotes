@@ -31,7 +31,7 @@ function bufToHex(buffer) {
 }
 
 async function resolvePhase(url, env) {
-  var stateCode = url.pathname.startsWith("/dc/") ? "dc" : "tx";
+  var stateCode = url.pathname.startsWith("/dc/") ? "dc" : url.pathname.startsWith("/co/") ? "co" : "tx";
   var testPhase = url.searchParams.get("test_phase");
   var kvPhase = (testPhase && ELECTION_PHASES.includes(testPhase)) ? testPhase : await env.ELECTION_DATA.get("site_phase:" + stateCode);
   return getElectionPhase(stateCode, { kvPhase });

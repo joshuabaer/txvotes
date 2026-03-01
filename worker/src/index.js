@@ -8222,6 +8222,35 @@ export default {
       if (url.pathname === "/dc/app/api/polymarket") {
         return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
       }
+      // CO PWA routes
+      if (url.pathname === "/co/app/clear") {
+        return handlePWA_Clear("/", "Clear Data \u2014 Colorado Votes", "Reset your Colorado Votes data and start fresh.", "https://txvotes.app/og-image-clear.png");
+      }
+      if (url.pathname === "/co/app") {
+        return handlePWA("co");
+      }
+      if (url.pathname === "/co/app/sw.js") {
+        return handlePWA_SW("co");
+      }
+      if (url.pathname === "/co/app/manifest.json") {
+        return handlePWA_Manifest("co");
+      }
+      if (url.pathname === "/co/app/api/manifest") {
+        return handleManifest(env);
+      }
+      if (url.pathname === "/co/app/api/ballot") {
+        return handleBallotFetch(request, env);
+      }
+      if (url.pathname === "/co/app/api/phase") {
+        const coPhase = await resolveElectionPhase(url, env, 'co');
+        return jsonResponse({ phase: coPhase, resultsUrl: STATE_CONFIG.co.resultsUrl, runoffDate: STATE_CONFIG.co.runoffDate });
+      }
+      if (url.pathname === "/co/app/api/county-info") {
+        return handleCountyInfo(request, env);
+      }
+      if (url.pathname === "/co/app/api/polymarket") {
+        return new Response(JSON.stringify({ odds: {} }), { headers: { "Content-Type": "application/json" } });
+      }
       // Health check endpoint (public, no auth)
       if (url.pathname === "/health") {
         return handleHealthCheck(env);
@@ -8352,7 +8381,7 @@ export default {
     }
 
     // CORS preflight for PWA API routes (state-prefixed)
-    if (request.method === "OPTIONS" && (url.pathname.startsWith("/tx/app/api/") || url.pathname.startsWith("/dc/app/api/"))) {
+    if (request.method === "OPTIONS" && (url.pathname.startsWith("/tx/app/api/") || url.pathname.startsWith("/dc/app/api/") || url.pathname.startsWith("/co/app/api/"))) {
       return new Response(null, {
         status: 204,
         headers: {
@@ -8369,30 +8398,30 @@ export default {
     }
 
     // Analytics event endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/tx/app/api/ev" || url.pathname === "/dc/app/api/ev") {
+    if (url.pathname === "/tx/app/api/ev" || url.pathname === "/dc/app/api/ev" || url.pathname === "/co/app/api/ev") {
       return handleAnalyticsEvent(request, env);
     }
 
     // Override feedback endpoint (no auth — public, rate-limited)
-    if (url.pathname === "/tx/app/api/override-feedback" || url.pathname === "/dc/app/api/override-feedback") {
+    if (url.pathname === "/tx/app/api/override-feedback" || url.pathname === "/dc/app/api/override-feedback" || url.pathname === "/co/app/api/override-feedback") {
       return handleOverrideFeedback(request, env);
     }
 
     // PWA POST routes (no auth — server-side guide gen protects secrets)
     // Rate-limit guide and summary endpoints to prevent API proxy abuse
-    if (url.pathname === "/tx/app/api/guide" || url.pathname === "/dc/app/api/guide") {
+    if (url.pathname === "/tx/app/api/guide" || url.pathname === "/dc/app/api/guide" || url.pathname === "/co/app/api/guide") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_Guide(request, env);
     }
-    if (url.pathname === "/tx/app/api/guide-stream" || url.pathname === "/dc/app/api/guide-stream") {
+    if (url.pathname === "/tx/app/api/guide-stream" || url.pathname === "/dc/app/api/guide-stream" || url.pathname === "/co/app/api/guide-stream") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "guide", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
       return handlePWA_GuideStream(request, env);
     }
-    if (url.pathname === "/tx/app/api/summary" || url.pathname === "/dc/app/api/summary") {
+    if (url.pathname === "/tx/app/api/summary" || url.pathname === "/dc/app/api/summary" || url.pathname === "/co/app/api/summary") {
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const rl = await checkRateLimit(env, ip, "summary", 10, 60);
       if (!rl.allowed) return rateLimitResponse(rl.retryAfter);
@@ -8403,6 +8432,9 @@ export default {
     }
     if (url.pathname === "/dc/app/api/districts") {
       return handleDCDistricts(request, env);
+    }
+    if (url.pathname === "/co/app/api/districts") {
+      return handleDistricts(request, env);
     }
 
     // POST: /api/audit/run — trigger automated AI audit

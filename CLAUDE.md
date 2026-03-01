@@ -54,7 +54,7 @@ Git worktrees (`.claude/worktrees/`) do not include `node_modules`. Before runni
 cd worker && npm install && npx vitest run
 ```
 
-1629 tests across 19 test files:
+2259 tests across 28 test files:
 
 - **interview-flow.test.js** — Interview flow UI tests (happy-dom + vitest)
 - **index-helpers.test.js** — Helper functions, route patterns, candidate profiles, data quality
@@ -136,5 +136,5 @@ When making code changes, ALWAYS use the feature branch workflow:
 ## README
 
 - **Always update README.md** when making changes that affect architecture, file structure, test counts, features, or deployment
-- Keep test count (`1629+ tests across 19 test files`) current after adding/removing tests
+- Keep test count (`2259+ tests across 28 test files`) current after adding/removing tests
 - Keep file structure tree current after adding/removing source files

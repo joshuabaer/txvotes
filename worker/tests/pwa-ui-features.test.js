@@ -529,6 +529,167 @@ describe("Deep dive Spanish translations (TR dictionary)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// DEEP_DIVES_CO structure
+// ---------------------------------------------------------------------------
+describe("DEEP_DIVES_CO structure", () => {
+  const deepDivesMatch = APP_JS.match(/var DEEP_DIVES_CO=(\{[\s\S]*?\});/);
+
+  it("DEEP_DIVES_CO object exists in APP_JS", () => {
+    expect(deepDivesMatch).not.toBeNull();
+  });
+
+  const deepDiveStr = deepDivesMatch ? deepDivesMatch[1] : "{}";
+  let deepDives;
+  try {
+    deepDives = new Function("return " + deepDiveStr)();
+  } catch (e) {
+    deepDives = {};
+  }
+
+  const issues = Object.keys(deepDives);
+
+  it("has deep dives for at least 5 CO issues", () => {
+    expect(issues.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("each CO deep dive has exactly 4 options", () => {
+    for (const issue of issues) {
+      expect(deepDives[issue].opts).toHaveLength(4);
+    }
+  });
+
+  it("all CO deep dive option descriptions have balanced word counts (max 3:1 ratio)", () => {
+    for (const issue of issues) {
+      const opts = deepDives[issue].opts;
+      const wordCounts = opts.map(o => o.d.split(/\s+/).length);
+      const maxWords = Math.max(...wordCounts);
+      const minWords = Math.min(...wordCounts);
+      const ratio = maxWords / minWords;
+      expect(ratio).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("no CO deep dive description exceeds 15 words", () => {
+    for (const issue of issues) {
+      for (const opt of deepDives[issue].opts) {
+        const wordCount = opt.d.split(/\s+/).length;
+        expect(wordCount).toBeLessThanOrEqual(15);
+      }
+    }
+  });
+
+  it("all CO deep dive labels are under 40 characters", () => {
+    for (const issue of issues) {
+      for (const opt of deepDives[issue].opts) {
+        expect(opt.l.length).toBeLessThanOrEqual(40);
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEEP_DIVES_CO — loaded language check
+// ---------------------------------------------------------------------------
+describe("DEEP_DIVES_CO descriptions — no loaded language", () => {
+  const deepDivesMatch = APP_JS.match(/var DEEP_DIVES_CO=(\{[\s\S]*?\});/);
+  const deepDiveStr = deepDivesMatch ? deepDivesMatch[1] : "{}";
+  let deepDives;
+  try {
+    deepDives = new Function("return " + deepDiveStr)();
+  } catch (e) {
+    deepDives = {};
+  }
+
+  const LOADED_TERMS = [
+    "radical", "extremist", "dangerous", "socialist", "communist",
+    "fascist", "tyranny", "destruction", "oppression", "crushing",
+    "disastrous", "catastrophic", "reckless", "corrupt",
+    "appalling", "disgraceful", "un-American", "patriotic duty",
+    "freedom-hating", "job-killing",
+  ];
+
+  const issues = Object.keys(deepDives);
+
+  it("no CO deep dive question uses loaded terms", () => {
+    for (const issue of issues) {
+      const q = deepDives[issue].q.toLowerCase();
+      for (const term of LOADED_TERMS) {
+        expect(q).not.toContain(term);
+      }
+    }
+  });
+
+  it("no CO deep dive option label uses loaded terms", () => {
+    for (const issue of issues) {
+      for (const opt of deepDives[issue].opts) {
+        const label = opt.l.toLowerCase();
+        for (const term of LOADED_TERMS) {
+          expect(label).not.toContain(term);
+        }
+      }
+    }
+  });
+
+  it("no CO deep dive option description uses loaded terms", () => {
+    for (const issue of issues) {
+      for (const opt of deepDives[issue].opts) {
+        const desc = opt.d.toLowerCase();
+        for (const term of LOADED_TERMS) {
+          expect(desc).not.toContain(term);
+        }
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEEP_DIVES_CO — Spanish translations completeness
+// ---------------------------------------------------------------------------
+describe("DEEP_DIVES_CO Spanish translations (TR dictionary)", () => {
+  const deepDivesMatch = APP_JS.match(/var DEEP_DIVES_CO=(\{[\s\S]*?\});/);
+  const deepDiveStr = deepDivesMatch ? deepDivesMatch[1] : "{}";
+  let deepDives;
+  try {
+    deepDives = new Function("return " + deepDiveStr)();
+  } catch (e) {
+    deepDives = {};
+  }
+
+  const issues = Object.keys(deepDives);
+
+  function escapeForSearch(str) {
+    return str.replace(/[\u2019\u2014\u00E9\u00ED\u00F3\u00FA\u00E1\u00F1\u00BF\u00A1]/g, function(ch) {
+      return "\\u" + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0");
+    });
+  }
+
+  it("all CO deep dive question strings have Spanish translations in TR", () => {
+    for (const issue of issues) {
+      const q = escapeForSearch(deepDives[issue].q);
+      expect(APP_JS).toContain("'" + q + "'");
+    }
+  });
+
+  it("all CO deep dive option labels have Spanish translations in TR", () => {
+    for (const issue of issues) {
+      for (const opt of deepDives[issue].opts) {
+        const l = escapeForSearch(opt.l);
+        expect(APP_JS).toContain("'" + l + "'");
+      }
+    }
+  });
+
+  it("all CO deep dive option descriptions have Spanish translations in TR", () => {
+    for (const issue of issues) {
+      for (const opt of deepDives[issue].opts) {
+        const d = escapeForSearch(opt.d);
+        expect(APP_JS).toContain("'" + d + "'");
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error handling — API error messages shown to user
 // ---------------------------------------------------------------------------
 describe("Error handling — API error display", () => {
