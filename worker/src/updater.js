@@ -1,6 +1,6 @@
 // Daily election data updater — uses Claude with web_search to refresh candidate data.
 
-import { TOP_COUNTIES, seedCountyBallot, seedCountyInfo, seedPrecinctMap } from "./county-seeder.js";
+import { TOP_COUNTIES, TOP_COUNTIES_BY_STATE, seedCountyBallot, seedCountyInfo, seedPrecinctMap } from "./county-seeder.js";
 import { logTokenUsage } from "./usage-logger.js";
 import { checkSingleCandidateBalance } from "./balance-check.js";
 import { buildCondensedBallotDescription } from "./pwa-guide.js";
@@ -1831,20 +1831,24 @@ export function ballotFingerprint(ballotJson) {
 
 /**
  * Determines which counties to refresh today, based on a rotating schedule.
- * Cycles through TOP_COUNTIES (30 counties) in slices of 10, so each county
- * is refreshed every 3 days. Uses day-of-year to pick the slice.
+ * Cycles through the county list in slices of 10. Uses day-of-year to pick the slice.
+ * TX (30 counties) cycles every 3 days; CO (64 counties) cycles every 7 days.
  *
  * @param {Date} [date] - defaults to now
+ * @param {string} [stateCode='tx'] - state code to look up counties
  * @returns {{ fips: string, name: string }[]}
  */
-export function getCountyRefreshSlice(date) {
+export function getCountyRefreshSlice(date, stateCode = 'tx') {
+  const countyList = TOP_COUNTIES_BY_STATE[stateCode] || [];
+  if (countyList.length === 0) return [];
+
   const d = date || new Date();
   // Day-of-year: 0-365
   const start = new Date(d.getFullYear(), 0, 0);
   const diff = d - start;
   const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-  const totalCounties = TOP_COUNTIES.length;
+  const totalCounties = countyList.length;
   const batchSize = COUNTY_REFRESH_BATCH_SIZE;
   const totalSlices = Math.ceil(totalCounties / batchSize);
 
@@ -1853,7 +1857,7 @@ export function getCountyRefreshSlice(date) {
   const startIdx = sliceIndex * batchSize;
   const endIdx = Math.min(startIdx + batchSize, totalCounties);
 
-  return TOP_COUNTIES.slice(startIdx, endIdx);
+  return countyList.slice(startIdx, endIdx);
 }
 
 /**
@@ -1883,7 +1887,8 @@ export async function runCountyRefresh(env, options = {}) {
   }
 
   const dryRun = options.dryRun || false;
-  const counties = options.counties || getCountyRefreshSlice();
+  const stateCode = options.stateCode || 'tx';
+  const counties = options.counties || getCountyRefreshSlice(undefined, stateCode);
   const countyLog = [];
   const countyErrors = [];
   const countiesRefreshed = [];

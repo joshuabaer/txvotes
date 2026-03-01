@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   TOP_COUNTIES,
+  TOP_COUNTIES_BY_STATE,
   seedCountyInfo,
   seedCountyBallot,
   seedPrecinctMap,
@@ -10,6 +11,7 @@ import {
   resetProgress,
   extractJSON,
 } from "../src/county-seeder.js";
+import { CO_COUNTIES } from "../src/counties/co.js";
 
 // ---------------------------------------------------------------------------
 // TOP_COUNTIES data integrity
@@ -85,6 +87,104 @@ describe("TOP_COUNTIES", () => {
       const expected = officialFips[county.name];
       expect(county.fips).toBe(expected);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CO_COUNTIES data integrity
+// ---------------------------------------------------------------------------
+describe("CO_COUNTIES", () => {
+  it("contains exactly 64 counties", () => {
+    expect(CO_COUNTIES).toHaveLength(64);
+  });
+
+  it("every entry has fips and name", () => {
+    for (const county of CO_COUNTIES) {
+      expect(county.fips).toBeDefined();
+      expect(county.name).toBeDefined();
+      expect(typeof county.fips).toBe("string");
+      expect(typeof county.name).toBe("string");
+    }
+  });
+
+  it("all FIPS codes start with 08 (Colorado)", () => {
+    for (const county of CO_COUNTIES) {
+      expect(county.fips.startsWith("08")).toBe(true);
+    }
+  });
+
+  it("all FIPS codes are 5 digits", () => {
+    for (const county of CO_COUNTIES) {
+      expect(county.fips).toMatch(/^\d{5}$/);
+    }
+  });
+
+  it("has no duplicate FIPS codes", () => {
+    const fipsCodes = CO_COUNTIES.map((c) => c.fips);
+    expect(new Set(fipsCodes).size).toBe(fipsCodes.length);
+  });
+
+  it("has no duplicate county names", () => {
+    const names = CO_COUNTIES.map((c) => c.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("includes Denver (most populous) and El Paso (second most populous)", () => {
+    const names = CO_COUNTIES.map((c) => c.name);
+    expect(names).toContain("Denver");
+    expect(names).toContain("El Paso");
+  });
+
+  it("Denver is first (most populous)", () => {
+    expect(CO_COUNTIES[0].name).toBe("Denver");
+    expect(CO_COUNTIES[0].fips).toBe("08031");
+  });
+
+  it("spot-check: Jefferson FIPS is 08059", () => {
+    const jefferson = CO_COUNTIES.find((c) => c.name === "Jefferson");
+    expect(jefferson.fips).toBe("08059");
+  });
+
+  it("spot-check: Arapahoe FIPS is 08005", () => {
+    const arapahoe = CO_COUNTIES.find((c) => c.name === "Arapahoe");
+    expect(arapahoe.fips).toBe("08005");
+  });
+
+  it("FIPS codes match official US Census data for spot-check set", () => {
+    const officialFips = {
+      "Denver": "08031", "El Paso": "08041", "Arapahoe": "08005",
+      "Jefferson": "08059", "Adams": "08001", "Larimer": "08069",
+      "Douglas": "08035", "Boulder": "08013", "Weld": "08123",
+      "Pueblo": "08101", "Mesa": "08077", "Broomfield": "08014",
+    };
+    for (const [name, expectedFips] of Object.entries(officialFips)) {
+      const county = CO_COUNTIES.find((c) => c.name === name);
+      expect(county, `County ${name} not found`).toBeDefined();
+      expect(county.fips).toBe(expectedFips);
+    }
+  });
+
+  it("includes Broomfield with even FIPS 08014", () => {
+    const broomfield = CO_COUNTIES.find((c) => c.name === "Broomfield");
+    expect(broomfield).toBeDefined();
+    expect(broomfield.fips).toBe("08014");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TOP_COUNTIES_BY_STATE
+// ---------------------------------------------------------------------------
+describe("TOP_COUNTIES_BY_STATE", () => {
+  it("has tx entry matching TOP_COUNTIES", () => {
+    expect(TOP_COUNTIES_BY_STATE.tx).toBe(TOP_COUNTIES);
+  });
+
+  it("has co entry matching CO_COUNTIES", () => {
+    expect(TOP_COUNTIES_BY_STATE.co).toBe(CO_COUNTIES);
+  });
+
+  it("does not have dc entry (DC has no counties)", () => {
+    expect(TOP_COUNTIES_BY_STATE.dc).toBeUndefined();
   });
 });
 
