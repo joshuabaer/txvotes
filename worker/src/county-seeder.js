@@ -14,6 +14,7 @@ import { extractSourcesFromResponse, mergeSources, validateRaceUpdate } from "./
 import { logTokenUsage } from "./usage-logger.js";
 import { buildCondensedBallotDescription } from "./pwa-guide.js";
 import { ELECTION_SUFFIX } from "./state-config.js";
+import { CO_COUNTIES } from "./counties/co.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -151,6 +152,13 @@ export const TOP_COUNTIES = [
   { fips: "48329", name: "Midland" },
   { fips: "48135", name: "Ector" },
 ];
+
+// Per-state county lists for the rotating county refresh
+// DC has no counties (single city-state jurisdiction) — omitted intentionally
+export const TOP_COUNTIES_BY_STATE = {
+  tx: TOP_COUNTIES,
+  co: CO_COUNTIES,
+};
 
 /**
  * Seeds county-specific voting info (hours, locations, phone, etc.)
