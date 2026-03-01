@@ -63,6 +63,7 @@ function buildMockEnv(kvOverrides = {}) {
     },
     ADMIN_SECRET: "test-secret-123",
     ANTHROPIC_API_KEY: "sk-test",
+    RESEND_API_KEY: "re_test_mock_key",
   };
 }
 
@@ -383,10 +384,33 @@ describe("sendStatsEmail", () => {
     vi.restoreAllMocks();
   });
 
-  it("sends email via MailChannels API with correct payload", async () => {
+  it("returns error when no API key provided", async () => {
+    const stats = {
+      date: "2026-02-28",
+      generatedAt: "2026-02-28T13:00:00Z",
+      frequency: "daily",
+      guideGenerations: 10,
+      cacheHitRate: null,
+      errorRate: null,
+      balanceScore: 90,
+      completenessPercent: 85,
+      totalRaces: 20,
+      totalCandidates: 80,
+      fairnessScore: 8.0,
+      apiCost: null,
+      cronStatus: null,
+      errors: [],
+    };
+
+    const result = await sendStatsEmail(stats);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("RESEND_API_KEY not configured");
+  });
+
+  it("sends email via Resend API with correct payload", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
-      status: 202,
-      text: async () => "Accepted",
+      status: 200,
+      json: async () => ({ id: "email_123" }),
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -407,24 +431,27 @@ describe("sendStatsEmail", () => {
       errors: [],
     };
 
-    const result = await sendStatsEmail(stats);
+    const result = await sendStatsEmail(stats, { apiKey: "re_test_123" });
 
     expect(result.success).toBe(true);
-    expect(result.status).toBe(202);
+    expect(result.status).toBe(200);
+    expect(result.id).toBe("email_123");
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe("https://api.mailchannels.net/tx/v1/send");
+    expect(url).toBe("https://api.resend.com/emails");
     expect(options.method).toBe("POST");
+    expect(options.headers.Authorization).toBe("Bearer re_test_123");
 
     const body = JSON.parse(options.body);
-    expect(body.from.email).toBe("stats@txvotes.app");
-    expect(body.personalizations[0].to[0].email).toBe("admin@usvotes.app");
+    expect(body.from).toContain("stats@usvotes.app");
+    expect(body.to).toContain("admin@usvotes.app");
+    expect(body.to).toContain("josh@baer5.com");
     expect(body.subject).toContain("Daily Stats");
-    expect(body.content[0].type).toBe("text/html");
+    expect(body.html).toBeTruthy();
   });
 
-  it("handles MailChannels failure gracefully", async () => {
+  it("handles Resend failure gracefully", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       status: 400,
       text: async () => "Bad request",
@@ -447,7 +474,7 @@ describe("sendStatsEmail", () => {
       errors: [],
     };
 
-    const result = await sendStatsEmail(stats);
+    const result = await sendStatsEmail(stats, { apiKey: "re_test_123" });
 
     expect(result.success).toBe(false);
     expect(result.status).toBe(400);
@@ -474,14 +501,14 @@ describe("sendStatsEmail", () => {
       errors: [],
     };
 
-    const result = await sendStatsEmail(stats);
+    const result = await sendStatsEmail(stats, { apiKey: "re_test_123" });
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Network timeout");
   });
 
   it("uses custom recipient when provided", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ status: 202, text: async () => "" });
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ id: "email_456" }) });
     vi.stubGlobal("fetch", mockFetch);
 
     const stats = {
@@ -501,14 +528,14 @@ describe("sendStatsEmail", () => {
       errors: [],
     };
 
-    await sendStatsEmail(stats, { toEmail: "custom@example.com" });
+    await sendStatsEmail(stats, { toEmail: "custom@example.com", apiKey: "re_test_123" });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.personalizations[0].to[0].email).toBe("custom@example.com");
+    expect(body.to).toContain("custom@example.com");
   });
 
   it("sets Hourly subject during election window", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ status: 202, text: async () => "" });
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ id: "email_789" }) });
     vi.stubGlobal("fetch", mockFetch);
 
     const stats = {
@@ -528,7 +555,7 @@ describe("sendStatsEmail", () => {
       errors: [],
     };
 
-    await sendStatsEmail(stats);
+    await sendStatsEmail(stats, { apiKey: "re_test_123" });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.subject).toContain("Hourly Stats");
@@ -554,7 +581,7 @@ describe("runStatsEmail", () => {
   });
 
   it("sends email at 13:00 UTC in daily mode", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ status: 202, text: async () => "" });
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ id: "email_test" }) });
     vi.stubGlobal("fetch", mockFetch);
 
     const env = buildMockEnv();
@@ -566,7 +593,7 @@ describe("runStatsEmail", () => {
   });
 
   it("sends email every hour during election window", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ status: 202, text: async () => "" });
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ id: "email_test" }) });
     vi.stubGlobal("fetch", mockFetch);
 
     const env = buildMockEnv();
@@ -578,7 +605,7 @@ describe("runStatsEmail", () => {
   });
 
   it("includes guide generations in result", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ status: 202, text: async () => "" });
+    const mockFetch = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ id: "email_test" }) });
     vi.stubGlobal("fetch", mockFetch);
 
     // Use a date whose usage_log key matches the mock KV data

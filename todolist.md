@@ -76,7 +76,7 @@ _From data audit. 65 statewide candidates, most fields 95%+ filled._
 ### Audit Score Improvements
 _Latest audit (Feb 23): ChatGPT 7.5, Gemini 7.5, Claude 8.2, Grok 7.8 (avg 7.8/10). Dimension averages: Bias 8.3, Accuracy 7.0, Framing 8.0, Pros/Cons 7.3, Transparency 9.3. Lowest: Accuracy (7.0) and Pros/Cons (7.3)._
 
-- [ ] Add human spot-checking of AI-generated candidate data — manual review process for AI-generated summaries, pros/cons, and endorsements to catch errors
+- [x] Add human spot-checking of AI-generated candidate data — `/admin/spot-check` dashboard with confidence-sorted candidates (ai-inferred first), keyboard shortcuts (Enter=approve, F=flag, arrows=navigate), party/status filters, KV-persisted progress, JSON export of flagged items. 36 new tests. PR #14 merged. Deployed.
 - [x] Add automated balance checks for pros/cons — balance-check.js module, /api/balance-check endpoint, integrated into data quality dashboard (53 tests)
 - [x] Surface collected pros/cons directly in recommendation output — strengths (green) and concerns (orange) boxes in ballot recommendation view
 - [x] Create simplified transparency page for non-technical users — /how-it-works with 4-step walkthrough, plain language, linked from all transparency pages
@@ -238,7 +238,7 @@ _From speed optimization research (Feb 23). Current guide generation takes 10-30
 
 #### Model Choice
 - [x] **Default to Gemini 2.5 Flash for guide generation** — Already wired up as an option (`llm=gemini`). Decision: keep Claude Sonnet as default for superior recommendation quality and JSON compliance. Gemini available via `?gemini` flag for users who prefer speed. Cost comparison added to LLM experiment page.
-- [ ] **Use Claude Haiku 3.5 as a fast fallback** — When Sonnet is rate-limited or overloaded (429/529), fall back to Haiku instead of retrying the same slow model. Haiku is ~3x faster than Sonnet with acceptable quality for recommendation generation. Add to MODELS array as a third option. _Estimated: eliminates 5-15s retry delays on overload._
+- [x] **Use Claude Haiku 3.5 as a fast fallback** — Added `claude-haiku-4-5-20251001` as third entry in MODELS array. Fallback chain: Sonnet 4.6 → Sonnet 4 → Haiku 3.5. `[MODEL FALLBACK]` logging in both callClaude and callClaudeStreaming. Explicit model selection (`?claude-opus`) bypasses fallback. 7 new tests. PR #12 merged. Deployed.
 
 #### Prompt Size Reduction
 - [x] **Strip pros/cons/endorsements from uncontested races** — Uncontested races now only include candidate name + incumbent status. 20-30% token reduction for ballots with 5+ uncontested races.
@@ -326,7 +326,8 @@ _Phase 1 (multi-state infrastructure) complete. Plan at `docs/plans/plan_dc_prim
 
 ### Infrastructure
 
-- [ ] **Email daily stats summaries to admin@usvotes.app** — Send stats summary email at 7am daily. During the last 48 hours before the election (March 1-3, 2026), switch to hourly emails. Include key metrics: guide generations, unique visitors, cache hit rates, error rates, balance scores.
+- [x] **Email daily stats summaries to admin@usvotes.app** — stats-email.js module sends via MailChannels. Daily at 7am CT, hourly during 48h election window (March 1-3). Includes guide generations, cache hit rates, error rates, balance scores, API costs. Hourly cron added to wrangler.txvotes.toml. PR #13 merged. Deployed.
+- [x] **Add MailChannels SPF DNS record for txvotes.app** — TXT record `v=spf1 a mx include:relay.mailchannels.net ~all` added to Cloudflare DNS. Stats emails now functional.
 - [ ] Replace atxvotes-api worker with Cloudflare redirect rule — atxvotes.app only does 301 redirects to txvotes.app now (cron moved to usvotes-api). Replace the worker with a Cloudflare Bulk Redirect rule to eliminate the redundant worker entirely.
 - [ ] Rename txvotes-api worker to usvotes-api in Cloudflare dashboard — config already uses `usvotes-api` but deploying requires the old name since `txvotes-api` owns the routes. Unassign routes from `txvotes-api` in the dashboard, then deploy with `usvotes-api` name. Temporarily reverted in wrangler.txvotes.toml to keep deploys working.
 - [ ] **Set up tx.usvotes.app and dc.usvotes.app subdomains** — Configure Cloudflare DNS for usvotes.app with `tx` and `dc` subdomains pointing to the usvotes-api worker. Add route patterns in wrangler.txvotes.toml for `tx.usvotes.app/*` and `dc.usvotes.app/*`. Should work identically to txvotes.app and dcvotes.app respectively.

@@ -8714,6 +8714,20 @@ export default {
       return handleSpotCheckReset(env);
     }
 
+    // POST: /api/admin/test-email — send a test stats email immediately
+    if (url.pathname === "/api/admin/test-email") {
+      const deny = checkAdminAuth(request, env);
+      if (deny) return deny;
+      const { collectEmailStats, sendStatsEmail, formatStatsEmail } = await import("./stats-email.js");
+      const body = await request.json().catch(() => ({}));
+      const stats = await collectEmailStats(env, { now: new Date() });
+      stats.frequency = "test";
+      const result = await sendStatsEmail(stats, { apiKey: env.RESEND_API_KEY, toEmail: body.to });
+      return new Response(JSON.stringify({ ...result, stats }, null, 2), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // POST: /api/admin/cleanup — list/delete stale KV keys
     if (url.pathname === "/api/admin/cleanup") {
       const deny = checkAdminAuth(request, env);

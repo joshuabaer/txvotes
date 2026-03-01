@@ -1,9 +1,9 @@
-// Stats email — sends daily/hourly stats summary emails via MailChannels.
+// Stats email — sends daily/hourly stats summary emails via Resend.
 //
 // Daily at 7am CT (13:00 UTC) — summary of previous 24h metrics.
 // During the last 48 hours before election (March 1-3, 2026), switches to hourly.
 //
-// Uses MailChannels Send API (free for Cloudflare Workers with SPF DNS record).
+// Uses Resend API (free tier: 100 emails/day). Requires RESEND_API_KEY secret.
 // Reads from Analytics Engine and KV to collect metrics.
 
 import { getUsageLog, estimateCost } from "./usage-logger.js";
@@ -14,9 +14,9 @@ import { ELECTION_SUFFIX } from "./state-config.js";
 const ELECTION_DATE = "2026-03-03";
 
 // Email config
-const FROM_EMAIL = "stats@txvotes.app";
+const FROM_EMAIL = "stats@usvotes.app";
 const FROM_NAME = "Texas Votes Stats";
-const TO_EMAIL = "admin@usvotes.app";
+const TO_EMAILS = ["admin@usvotes.app", "josh@baer5.com"];
 
 /**
  * Determine whether we should send stats emails hourly (last 48h before election)
@@ -382,42 +382,39 @@ function escapeHtmlEmail(str) {
  * @returns {object} { success: boolean, status?: number, error?: string }
  */
 export async function sendStatsEmail(stats, options = {}) {
-  const to = (options && options.toEmail) || TO_EMAIL;
+  const to = (options && options.toEmail) ? [options.toEmail] : TO_EMAILS;
   const from = (options && options.fromEmail) || FROM_EMAIL;
+  const apiKey = (options && options.apiKey) || null;
   const isHourly = stats.frequency === "hourly";
-  const periodLabel = isHourly ? "Hourly" : "Daily";
+  const periodLabel = stats.frequency === "test" ? "Test" : isHourly ? "Hourly" : "Daily";
 
   const subject = `${periodLabel} Stats \u2014 Texas Votes \u2014 ${stats.date}`;
   const html = formatStatsEmail(stats);
 
+  if (!apiKey) {
+    return { success: false, error: "RESEND_API_KEY not configured" };
+  }
+
   const payload = {
-    personalizations: [
-      {
-        to: [{ email: to, name: "Texas Votes Admin" }],
-      },
-    ],
-    from: {
-      email: from,
-      name: FROM_NAME,
-    },
+    from: `${FROM_NAME} <${from}>`,
+    to: Array.isArray(to) ? to : [to],
     subject,
-    content: [
-      {
-        type: "text/html",
-        value: html,
-      },
-    ],
+    html,
   };
 
   try {
-    const resp = await fetch("https://api.mailchannels.net/tx/v1/send", {
+    const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(payload),
     });
 
-    if (resp.status === 202 || resp.status === 200) {
-      return { success: true, status: resp.status };
+    if (resp.status === 200) {
+      const data = await resp.json();
+      return { success: true, status: resp.status, id: data.id };
     }
 
     const text = await resp.text();
@@ -449,7 +446,7 @@ export async function runStatsEmail(env, options = {}) {
   const stats = await collectEmailStats(env, { now });
 
   // Send email
-  const result = await sendStatsEmail(stats);
+  const result = await sendStatsEmail(stats, { apiKey: env.RESEND_API_KEY });
 
   return {
     sent: result.success,
